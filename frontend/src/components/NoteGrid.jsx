@@ -2,7 +2,6 @@ import { useState } from 'react';
 import NoteCard from './NoteCard';
 import NoteModal from './NoteModal';
 import { useNotesStore } from '../stores/notesStore';
-import './NoteGrid.css';
 
 export default function NoteGrid({ notes, showRestore, showDelete }) {
     const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, restoreNote, deleteNote } = useNotesStore();
@@ -21,12 +20,19 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         setSelectedNote(null);
     };
 
+    // Grid classes - responsive columns, list mode forces single column
+    const gridClass = viewMode === 'list'
+        ? 'max-w-[600px]'
+        : 'columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-4';
+
     const renderNotes = (noteList, title) => (
         <>
             {title && noteList.length > 0 && (
-                <div className="note-section-title">{title}</div>
+                <div className="text-xs font-semibold text-theme-muted uppercase tracking-wide mb-3 mt-6 first:mt-0">
+                    {title}
+                </div>
             )}
-            <div className={`note-grid ${viewMode}`}>
+            <div className={gridClass}>
                 {noteList.map((note) => (
                     <NoteCard
                         key={note.id}
@@ -47,21 +53,21 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
 
     if (notes.length === 0) {
         return (
-            <div className="note-grid-empty">
-                <svg viewBox="0 0 100 100" className="note-grid-empty-icon">
+            <div className="flex flex-col items-center justify-center py-20 px-6 text-theme-muted">
+                <svg viewBox="0 0 100 100" className="w-20 h-20 mb-4 opacity-50">
                     <rect x="20" y="15" width="60" height="70" rx="6" fill="none" stroke="currentColor" strokeWidth="3" />
                     <line x1="32" y1="35" x2="68" y2="35" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                     <line x1="32" y1="50" x2="60" y2="50" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                     <line x1="32" y1="65" x2="52" y2="65" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                 </svg>
-                <p>No notes here</p>
+                <p className="text-base">No notes here</p>
             </div>
         );
     }
 
     return (
         <>
-            <div className="note-grid-container">
+            <div className="w-full">
                 {pinnedNotes.length > 0 && !showDelete && renderNotes(pinnedNotes, 'Pinned')}
                 {renderNotes(otherNotes, pinnedNotes.length > 0 && !showDelete ? 'Others' : null)}
             </div>
@@ -72,4 +78,3 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         </>
     );
 }
-

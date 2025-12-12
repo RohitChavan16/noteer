@@ -19,14 +19,21 @@ const validateRegister = [
     body('name').optional().trim().isLength({ max: 255 }),
 ];
 
-// Generate JWT token
+// Generate JWT token (no expiration - tokens are permanent)
 function generateToken(user) {
     return jwt.sign(
         { id: user.id, email: user.email, role: user.role },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        process.env.JWT_SECRET
     );
 }
+
+// GET /api/auth/config - Get public auth config
+router.get('/config', (req, res) => {
+    res.json({
+        registrationEnabled: process.env.REGISTRATION_ENABLED !== 'false',
+        oidcEnabled: process.env.OIDC_ENABLED === 'true',
+    });
+});
 
 // POST /api/auth/login
 router.post('/login', validateLogin, async (req, res, next) => {
@@ -53,7 +60,13 @@ router.post('/login', validateLogin, async (req, res, next) => {
         const token = generateToken(user);
         res.json({
             token,
-            user: { id: user.id, email: user.email, name: user.name, role: user.role },
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                isOidc: !!user.oidc_subject,
+            },
         });
     } catch (error) {
         next(error);
@@ -63,6 +76,13 @@ router.post('/login', validateLogin, async (req, res, next) => {
 // POST /api/auth/register
 router.post('/register', validateRegister, async (req, res, next) => {
     try {
+        // Check if registration is enabled
+        if (process.env.REGISTRATION_ENABLED === 'false') {
+            return res.status(403).json({
+                error: 'Registration is disabled. Please contact an administrator.'
+            });
+        }
+
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({ errors: errors.array() });
@@ -87,7 +107,13 @@ router.post('/register', validateRegister, async (req, res, next) => {
 
         res.status(201).json({
             token,
-            user: { id: user.id, email: user.email, name: user.name, role: user.role },
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                isOidc: false,
+            },
         });
     } catch (error) {
         next(error);

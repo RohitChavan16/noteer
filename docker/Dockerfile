@@ -33,21 +33,21 @@ COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Create PostgreSQL data directory
+# Create PostgreSQL data directory and Noteer data directory
 RUN mkdir -p /var/lib/postgresql/data && \
     chown -R postgres:postgres /var/lib/postgresql && \
     mkdir -p /run/postgresql && \
-    chown -R postgres:postgres /run/postgresql
+    chown -R postgres:postgres /run/postgresql && \
+    mkdir -p /var/lib/noteer
 
 # Create log directory
 RUN mkdir -p /var/log/supervisor
 
-# Environment variables with defaults
+# Environment variables with defaults (JWT_SECRET auto-generated if not set)
 ENV NODE_ENV=production \
     PORT=3000 \
     DATABASE_URL=postgresql://noteer:noteer@localhost:5432/noteer \
-    JWT_SECRET=change-me-in-production \
-    JWT_EXPIRES_IN=7d
+    REGISTRATION_ENABLED=true
 
 # Expose port
 EXPOSE 3000

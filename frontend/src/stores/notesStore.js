@@ -3,6 +3,9 @@ import { useAuthStore } from './authStore';
 
 const API_URL = '/api';
 
+// Helper to get authFetch from authStore
+const getAuthFetch = () => useAuthStore.getState().authFetch;
+
 export const useNotesStore = create((set, get) => ({
     notes: [],
     isLoading: false,
@@ -22,9 +25,8 @@ export const useNotesStore = create((set, get) => ({
             if (options.label) params.append('label', options.label);
             if (options.search) params.append('search', options.search);
 
-            const res = await fetch(`${API_URL}/notes?${params}`, {
-                headers: useAuthStore.getState().getAuthHeader(),
-            });
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes?${params}`);
 
             if (!res.ok) throw new Error('Failed to fetch notes');
 
@@ -37,12 +39,10 @@ export const useNotesStore = create((set, get) => ({
 
     createNote: async (noteData) => {
         try {
-            const res = await fetch(`${API_URL}/notes`, {
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...useAuthStore.getState().getAuthHeader(),
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(noteData),
             });
 
@@ -59,12 +59,10 @@ export const useNotesStore = create((set, get) => ({
 
     updateNote: async (id, noteData) => {
         try {
-            const res = await fetch(`${API_URL}/notes/${id}`, {
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes/${id}`, {
                 method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...useAuthStore.getState().getAuthHeader(),
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(noteData),
             });
 
@@ -83,9 +81,9 @@ export const useNotesStore = create((set, get) => ({
 
     trashNote: async (id) => {
         try {
-            const res = await fetch(`${API_URL}/notes/${id}/trash`, {
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes/${id}/trash`, {
                 method: 'POST',
-                headers: useAuthStore.getState().getAuthHeader(),
             });
 
             if (!res.ok) throw new Error('Failed to trash note');
@@ -100,9 +98,9 @@ export const useNotesStore = create((set, get) => ({
 
     restoreNote: async (id) => {
         try {
-            const res = await fetch(`${API_URL}/notes/${id}/restore`, {
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes/${id}/restore`, {
                 method: 'POST',
-                headers: useAuthStore.getState().getAuthHeader(),
             });
 
             if (!res.ok) throw new Error('Failed to restore note');
@@ -117,9 +115,9 @@ export const useNotesStore = create((set, get) => ({
 
     deleteNote: async (id) => {
         try {
-            const res = await fetch(`${API_URL}/notes/${id}`, {
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes/${id}`, {
                 method: 'DELETE',
-                headers: useAuthStore.getState().getAuthHeader(),
             });
 
             if (!res.ok) throw new Error('Failed to delete note');

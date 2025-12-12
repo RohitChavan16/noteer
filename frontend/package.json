@@ -10,18 +10,20 @@
         "lint": "eslint src --ext js,jsx"
     },
     "dependencies": {
+        "@tailwindcss/vite": "^4.1.18",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
         "react-router-dom": "^7.0.2",
+        "tailwindcss": "^4.1.18",
         "zustand": "^5.0.2"
     },
     "devDependencies": {
         "@types/react": "^18.3.16",
         "@types/react-dom": "^18.3.5",
         "@vitejs/plugin-react": "^4.3.4",
-        "vite": "^6.0.3",
         "eslint": "^9.16.0",
         "eslint-plugin-react": "^7.37.2",
-        "eslint-plugin-react-hooks": "^5.1.0"
+        "eslint-plugin-react-hooks": "^5.1.0",
+        "vite": "^6.0.3"
     }
 }

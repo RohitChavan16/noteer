@@ -8,26 +8,40 @@ export const useThemeStore = create(
 
             toggleTheme: () => {
                 const newTheme = get().theme === 'dark' ? 'light' : 'dark';
-                document.documentElement.setAttribute('data-theme', newTheme);
+                // Use class instead of data-theme for standard Tailwind dark mode
+                if (newTheme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
                 set({ theme: newTheme });
             },
 
             setTheme: (theme) => {
-                document.documentElement.setAttribute('data-theme', theme);
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
                 set({ theme });
             },
 
             initTheme: () => {
                 const { theme } = get();
-                document.documentElement.setAttribute('data-theme', theme);
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
             },
         }),
         {
             name: 'noteer-theme',
             onRehydrateStorage: () => (state) => {
-                // Apply theme on rehydration
-                if (state) {
-                    document.documentElement.setAttribute('data-theme', state.theme);
+                if (state?.theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
                 }
             },
         }

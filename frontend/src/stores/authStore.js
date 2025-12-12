@@ -58,8 +58,48 @@ export const useAuthStore = create(
                 }
             },
 
+            updateProfile: async (updates) => {
+                const { user, token } = get();
+                if (!user || !token) return { success: false, error: 'Not authenticated' };
+
+                set({ isLoading: true, error: null });
+                try {
+                    const res = await fetch(`${API_URL}/users/${user.id}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify(updates),
+                    });
+
+                    // Handle 401 - auto logout
+                    if (res.status === 401) {
+                        get().logout();
+                        return { success: false, error: 'Session expired' };
+                    }
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                        throw new Error(data.error || 'Update failed');
+                    }
+
+                    set({
+                        user: { ...user, name: data.name, email: data.email },
+                        isLoading: false
+                    });
+                    return { success: true };
+                } catch (error) {
+                    set({ error: error.message, isLoading: false });
+                    return { success: false, error: error.message };
+                }
+            },
+
             logout: () => {
                 set({ user: null, token: null, isAuthenticated: false });
+                // Force redirect to login
+                window.location.href = '/login';
             },
 
             clearError: () => set({ error: null }),
@@ -67,6 +107,27 @@ export const useAuthStore = create(
             getAuthHeader: () => {
                 const { token } = get();
                 return token ? { Authorization: `Bearer ${token}` } : {};
+            },
+
+            // Authenticated fetch wrapper - automatically handles 401
+            authFetch: async (url, options = {}) => {
+                const { token, logout } = get();
+
+                const res = await fetch(url, {
+                    ...options,
+                    headers: {
+                        ...options.headers,
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                });
+
+                // Auto logout on 401 Unauthorized or 403 Forbidden
+                if (res.status === 401 || res.status === 403) {
+                    logout();
+                    throw new Error('Session expired');
+                }
+
+                return res;
             },
         }),
         {

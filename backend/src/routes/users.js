@@ -13,7 +13,7 @@ router.use(authenticateToken);
 router.get('/', requireRole('admin'), async (req, res, next) => {
     try {
         const result = await query(
-            'SELECT id, email, name, role, created_at FROM users ORDER BY created_at DESC'
+            'SELECT id, email, name, role, oidc_subject, created_at FROM users ORDER BY created_at DESC'
         );
         res.json(result.rows);
     } catch (error) {
@@ -32,7 +32,7 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
         }
 
         const result = await query(
-            'SELECT id, email, name, role, created_at FROM users WHERE id = $1',
+            'SELECT id, email, name, role, oidc_subject, oidc_issuer, created_at FROM users WHERE id = $1',
             [id]
         );
 
@@ -40,16 +40,21 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        res.json(result.rows[0]);
+        const user = result.rows[0];
+        res.json({
+            ...user,
+            isOidc: !!user.oidc_subject,
+        });
     } catch (error) {
         next(error);
     }
 });
 
-// PATCH /api/users/:id - Update user
+// PATCH /api/users/:id - Update user (name, email, password)
 router.patch('/:id', [
     param('id').isInt(),
     body('name').optional().trim().isLength({ max: 255 }),
+    body('email').optional().isEmail().normalizeEmail(),
     body('password').optional().isLength({ min: 6 }),
     body('role').optional().isIn(['admin', 'user']),
 ], async (req, res, next) => {
@@ -60,16 +65,39 @@ router.patch('/:id', [
         }
 
         const { id } = req.params;
-        const { name, password, role } = req.body;
+        const { name, email, password, role } = req.body;
 
         // Users can only update themselves unless admin
         if (req.user.role !== 'admin' && req.user.id !== parseInt(id)) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
+        // Check if user is OIDC managed
+        const userResult = await query('SELECT oidc_subject FROM users WHERE id = $1', [id]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const isOidcUser = !!userResult.rows[0].oidc_subject;
+
+        // OIDC users cannot change email or password
+        if (isOidcUser && (email || password)) {
+            return res.status(403).json({
+                error: 'OIDC users cannot change email or password. Profile is managed by identity provider.'
+            });
+        }
+
         // Only admins can change roles
         if (role && req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Only admins can change roles' });
+        }
+
+        // Check email uniqueness if changing email
+        if (email) {
+            const existing = await query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, id]);
+            if (existing.rows.length > 0) {
+                return res.status(409).json({ error: 'Email already in use' });
+            }
         }
 
         const updates = [];
@@ -80,7 +108,11 @@ router.patch('/:id', [
             updates.push(`name = $${paramIndex++}`);
             params.push(name);
         }
-        if (password) {
+        if (email && !isOidcUser) {
+            updates.push(`email = $${paramIndex++}`);
+            params.push(email);
+        }
+        if (password && !isOidcUser) {
             updates.push(`password_hash = $${paramIndex++}`);
             params.push(await bcrypt.hash(password, 12));
         }
@@ -98,15 +130,15 @@ router.patch('/:id', [
 
         const result = await query(
             `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} 
-       RETURNING id, email, name, role, created_at`,
+       RETURNING id, email, name, role, oidc_subject, created_at`,
             params
         );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json(result.rows[0]);
+        const updatedUser = result.rows[0];
+        res.json({
+            ...updatedUser,
+            isOidc: !!updatedUser.oidc_subject,
+        });
     } catch (error) {
         next(error);
     }

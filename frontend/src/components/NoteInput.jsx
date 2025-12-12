@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
-import './NoteInput.css';
 
 const NOTE_COLORS = [
     { id: 'default', label: 'Default' },
@@ -39,84 +38,85 @@ export default function NoteInput() {
     };
 
     const handleBlur = (e) => {
-        // Don't collapse if clicking inside the input area
         if (e.currentTarget.contains(e.relatedTarget)) return;
         handleSubmit();
     };
 
     if (!isExpanded) {
         return (
-            <div className="note-input collapsed" onClick={() => setIsExpanded(true)}>
-                <span className="note-input-placeholder">Take a note...</span>
-                <div className="note-input-icons">
-                    <button className="note-input-icon" title="New list">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="8" y1="6" x2="21" y2="6" />
-                            <line x1="8" y1="12" x2="21" y2="12" />
-                            <line x1="8" y1="18" x2="21" y2="18" />
-                            <rect x="3" y="4" width="4" height="4" rx="1" />
-                            <rect x="3" y="10" width="4" height="4" rx="1" />
-                            <rect x="3" y="16" width="4" height="4" rx="1" />
-                        </svg>
-                    </button>
+            <div className="flex justify-center mb-8">
+                <div
+                    className="w-full max-w-[550px] border border-theme rounded-full shadow-lg transition-all duration-150 flex items-center h-12 px-5 cursor-text bg-theme-card hover:shadow-xl"
+                    onClick={() => setIsExpanded(true)}
+                >
+                    <span className="flex-1 text-theme-muted text-[0.95rem]">Vytvořit poznámku...</span>
+                    {/* Single decorative icon */}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-theme-muted">
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
                 </div>
             </div>
         );
     }
 
     return (
-        <div
-            className="note-input expanded"
-            style={{ backgroundColor: `var(--note-${color})` }}
-            onBlur={handleBlur}
-            tabIndex={-1}
-        >
-            <input
-                type="text"
-                className="note-input-title"
-                placeholder="Title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                autoFocus
-            />
-            <textarea
-                className="note-input-content"
-                placeholder="Take a note..."
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={3}
-            />
+        <div className="flex justify-center mb-8">
+            <div
+                className="w-full max-w-[550px] border border-theme rounded-2xl shadow-lg transition-all duration-150 p-4"
+                style={{ backgroundColor: `var(--note-${color})` }}
+                onBlur={handleBlur}
+                tabIndex={-1}
+            >
+                <input
+                    type="text"
+                    className="w-full border-none bg-transparent text-theme-primary text-base font-medium py-1 mb-1 focus:outline-none placeholder:text-theme-muted"
+                    placeholder="Název"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    autoFocus
+                />
+                <textarea
+                    className="w-full border-none bg-transparent text-theme-primary text-sm leading-relaxed resize-none py-1 min-h-[80px] focus:outline-none placeholder:text-theme-muted"
+                    placeholder="Vytvořit poznámku..."
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    rows={3}
+                />
 
-            <div className="note-input-toolbar">
-                <div className="note-input-colors-wrapper">
+                <div className="flex justify-between items-center mt-2 pt-2">
+                    <div className="relative">
+                        <button
+                            className="w-8 h-8 border-none bg-transparent text-theme-secondary rounded-full cursor-pointer flex items-center justify-center transition-all duration-150 hover:bg-white/10 hover:text-theme-primary"
+                            onClick={() => setShowColors(!showColors)}
+                            title="Barva pozadí"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-[18px] h-[18px]">
+                                <circle cx="12" cy="12" r="10" />
+                                <circle cx="12" cy="12" r="4" fill="currentColor" />
+                            </svg>
+                        </button>
+                        {showColors && (
+                            <div className="absolute bottom-full left-0 bg-theme-card border border-theme rounded-lg p-2 flex gap-1.5 flex-wrap w-[200px] shadow-lg mb-2 z-10">
+                                {NOTE_COLORS.map((c) => (
+                                    <button
+                                        key={c.id}
+                                        className={`w-7 h-7 border-2 rounded-full cursor-pointer transition-all duration-150 hover:scale-110 ${color === c.id ? 'border-accent' : 'border-transparent'}`}
+                                        style={{ backgroundColor: `var(--note-${c.id})` }}
+                                        onClick={() => { setColor(c.id); setShowColors(false); }}
+                                        title={c.label}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     <button
-                        className="note-input-color-btn"
-                        onClick={() => setShowColors(!showColors)}
-                        title="Background color"
+                        className="py-2 px-4 border-none bg-transparent text-theme-secondary text-sm font-medium rounded-lg cursor-pointer transition-all duration-150 hover:bg-white/10 hover:text-theme-primary"
+                        onClick={handleSubmit}
                     >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10" />
-                            <circle cx="12" cy="12" r="4" fill="currentColor" />
-                        </svg>
+                        Zavřít
                     </button>
-                    {showColors && (
-                        <div className="note-input-colors">
-                            {NOTE_COLORS.map((c) => (
-                                <button
-                                    key={c.id}
-                                    className={`note-color-option ${color === c.id ? 'active' : ''}`}
-                                    style={{ backgroundColor: `var(--note-${c.id})` }}
-                                    onClick={() => { setColor(c.id); setShowColors(false); }}
-                                    title={c.label}
-                                />
-                            ))}
-                        </div>
-                    )}
                 </div>
-
-                <button className="note-input-close" onClick={handleSubmit}>
-                    Close
-                </button>
             </div>
         </div>
     );

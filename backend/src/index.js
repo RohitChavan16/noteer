@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import https from 'https';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -15,6 +16,49 @@ import { initializeDatabase } from './db/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Auto-generate JWT secret if not provided
+const JWT_SECRET_FILE = '/var/lib/noteer/jwt-secret';
+
+function getOrGenerateJwtSecret() {
+  // If JWT_SECRET is explicitly set in env, use it
+  if (process.env.JWT_SECRET && process.env.JWT_SECRET !== 'change-this-to-a-secure-random-string') {
+    return process.env.JWT_SECRET;
+  }
+
+  // Try to load from file
+  try {
+    if (fs.existsSync(JWT_SECRET_FILE)) {
+      const secret = fs.readFileSync(JWT_SECRET_FILE, 'utf8').trim();
+      if (secret.length >= 32) {
+        console.log('🔑 Loaded JWT secret from file');
+        return secret;
+      }
+    }
+  } catch (err) {
+    // File doesn't exist or can't be read, generate new secret
+  }
+
+  // Generate new secret
+  const newSecret = crypto.randomBytes(64).toString('hex');
+
+  // Try to save to file for persistence
+  try {
+    const dir = dirname(JWT_SECRET_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(JWT_SECRET_FILE, newSecret, { mode: 0o600 });
+    console.log('🔑 Generated and saved new JWT secret');
+  } catch (err) {
+    console.warn('⚠️ Could not save JWT secret to file, using ephemeral secret');
+  }
+
+  return newSecret;
+}
+
+// Set JWT_SECRET in process.env for use by other modules
+process.env.JWT_SECRET = getOrGenerateJwtSecret();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
