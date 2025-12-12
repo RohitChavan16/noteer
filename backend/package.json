@@ -1,0 +1,35 @@
+{
+  "name": "noteer-backend",
+  "version": "0.1.0",
+  "description": "Noteer - Self-hosted notes application backend",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "cors": "^2.8.5",
+    "helmet": "^8.0.0",
+    "pg": "^8.13.1",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "openid-client": "^6.1.3",
+    "dotenv": "^16.4.7",
+    "express-validator": "^7.2.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.16.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bigtcze/noteer.git"
+  }
+}

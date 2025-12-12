@@ -1,0 +1,186 @@
+.note-input {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    margin-bottom: 32px;
+    max-width: 600px;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-fast);
+}
+
+.note-input.collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    cursor: text;
+    background: var(--bg-card);
+}
+
+.note-input.collapsed:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+.note-input-placeholder {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+}
+
+.note-input-icons {
+    display: flex;
+    gap: 4px;
+}
+
+.note-input-icon {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.note-input-icon:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.note-input-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.note-input.expanded {
+    padding: 12px 16px;
+    background: var(--bg-card);
+}
+
+.note-input-title {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 4px 0;
+    margin-bottom: 4px;
+}
+
+.note-input-title::placeholder {
+    color: var(--text-muted);
+}
+
+.note-input-title:focus {
+    outline: none;
+}
+
+.note-input-content {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    resize: none;
+    padding: 4px 0;
+    min-height: 60px;
+}
+
+.note-input-content::placeholder {
+    color: var(--text-muted);
+}
+
+.note-input-content:focus {
+    outline: none;
+}
+
+.note-input-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+.note-input-colors-wrapper {
+    position: relative;
+}
+
+.note-input-color-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.note-input-color-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.note-input-color-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.note-input-colors {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    width: 200px;
+    box-shadow: var(--shadow-lg);
+    margin-bottom: 8px;
+    z-index: 10;
+}
+
+.note-color-option {
+    width: 28px;
+    height: 28px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.note-color-option:hover {
+    transform: scale(1.1);
+}
+
+.note-color-option.active {
+    border-color: var(--accent);
+}
+
+.note-input-close {
+    padding: 8px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.note-input-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}

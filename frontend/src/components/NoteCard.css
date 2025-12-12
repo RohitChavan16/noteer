@@ -1,0 +1,156 @@
+.note-card {
+    position: relative;
+    padding: 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    break-inside: avoid;
+    margin-bottom: 16px;
+}
+
+.note-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.note-card.pinned {
+    border-color: var(--accent);
+}
+
+.note-pin-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+}
+
+.note-pin-badge svg {
+    width: 100%;
+    height: 100%;
+}
+
+.note-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.note-content {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    white-space: pre-wrap;
+}
+
+.note-checklist {
+    list-style: none;
+    margin-top: 8px;
+}
+
+.note-checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.note-checklist li.checked {
+    color: var(--text-muted);
+    text-decoration: line-through;
+}
+
+.note-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color-light);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.note-checklist li.checked .note-checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.note-checkbox svg {
+    width: 12px;
+    height: 12px;
+    color: white;
+}
+
+.note-checklist-more {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.note-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.note-label {
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.note-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 12px;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+}
+
+.note-card:hover .note-actions {
+    opacity: 1;
+}
+
+.note-action-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.note-action-btn:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.note-action-btn.danger:hover {
+    background: var(--danger-muted);
+    color: var(--danger);
+}
+
+.note-action-btn svg {
+    width: 16px;
+    height: 16px;
+}

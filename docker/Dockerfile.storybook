@@ -1,0 +1,16 @@
+# Storybook development container
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy frontend files
+COPY frontend/package*.json ./
+RUN npm install
+
+COPY frontend/ ./
+
+# Expose Storybook port
+EXPOSE 6006
+
+# Start Storybook
+CMD ["npm", "run", "storybook", "--", "--host", "0.0.0.0"]
