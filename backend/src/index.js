@@ -47,9 +47,9 @@ app.get('/api/health', (req, res) => {
 // Error handler
 app.use(errorHandler);
 
-// SPA fallback for production
+// SPA fallback for production (Express 5.x syntax)
 if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
+  app.get('/{*path}', (req, res) => {
     res.sendFile(join(__dirname, '../../frontend/dist/index.html'));
   });
 }
@@ -58,7 +58,7 @@ if (process.env.NODE_ENV === 'production') {
 async function start() {
   try {
     await initializeDatabase();
-    
+
     if (process.env.SSL_ENABLED === 'true' && process.env.SSL_CERT_PATH && process.env.SSL_KEY_PATH) {
       const httpsOptions = {
         cert: fs.readFileSync(process.env.SSL_CERT_PATH),

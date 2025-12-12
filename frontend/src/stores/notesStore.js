@@ -137,7 +137,11 @@ export const useNotesStore = create((set, get) => ({
     },
 
     archiveNote: async (id) => {
-        return get().updateNote(id, { is_archived: true });
+        const result = await get().updateNote(id, { is_archived: true });
+        if (result) {
+            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
+        }
+        return result;
     },
 
     unarchiveNote: async (id) => {
