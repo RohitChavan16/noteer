@@ -1,39 +1,50 @@
 import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box } from '@mantine/core';
+import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash } from '@tabler/icons-react';
 
 const NOTE_COLORS = {
-    default: undefined,
-    red: 'red.1',
-    orange: 'orange.1',
-    yellow: 'yellow.1',
-    green: 'green.1',
-    teal: 'teal.1',
-    blue: 'blue.1',
-    purple: 'grape.1',
-    pink: 'pink.1',
-    brown: 'orange.2',
-    gray: 'gray.2',
+    default: { light: undefined, dark: undefined },
+    red: { light: 'red.1', dark: 'red.9' },
+    orange: { light: 'orange.1', dark: 'orange.9' },
+    yellow: { light: 'yellow.1', dark: 'yellow.9' },
+    green: { light: 'green.1', dark: 'green.9' },
+    teal: { light: 'teal.1', dark: 'teal.9' },
+    blue: { light: 'blue.1', dark: 'blue.9' },
+    purple: { light: 'grape.1', dark: 'grape.9' },
+    pink: { light: 'pink.1', dark: 'pink.9' },
+    brown: { light: 'orange.2', dark: 'orange.9' },
+    gray: { light: 'gray.2', dark: 'gray.8' },
 };
 
-const NOTE_COLORS_DARK = {
-    default: undefined,
-    red: 'red.9',
-    orange: 'orange.9',
-    yellow: 'yellow.9',
-    green: 'green.9',
-    teal: 'teal.9',
-    blue: 'blue.9',
-    purple: 'grape.9',
-    pink: 'pink.9',
-    brown: 'orange.9',
-    gray: 'gray.8',
+const formatDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffDays === 1) {
+        return 'Yesterday';
+    } else if (diffDays < 7) {
+        return date.toLocaleDateString([], { weekday: 'short' });
+    } else {
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
 };
 
-export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onRestore, onDelete, showRestore, showDelete }) {
+export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onDelete, showRestore, showDelete }) {
+    const { colorScheme } = useMantineColorScheme();
+    const isDark = colorScheme === 'dark';
+
     const handleAction = (e, action) => {
         e.stopPropagation();
         action();
     };
+
+    const bgColor = NOTE_COLORS[note.color]?.[isDark ? 'dark' : 'light'];
+    const lastModified = formatDate(note.updated_at || note.created_at);
 
     return (
         <Card
@@ -43,13 +54,16 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onR
             withBorder
             onClick={() => onClick?.(note)}
             style={{ cursor: 'pointer', breakInside: 'avoid', marginBottom: 16 }}
-            bg={NOTE_COLORS[note.color]}
+            bg={bgColor}
             styles={(theme) => ({
                 root: {
                     transition: 'transform 0.15s, box-shadow 0.15s',
                     '&:hover': {
                         transform: 'translateY(-2px)',
                         boxShadow: theme.shadows.md,
+                    },
+                    '&:hover .note-actions': {
+                        opacity: 1,
                     },
                     borderColor: note.is_pinned ? 'var(--mantine-color-blue-5)' : undefined,
                 },
@@ -89,8 +103,10 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onR
                             />
                             <Text
                                 size="sm"
-                                c={item.is_checked ? 'dimmed' : undefined}
-                                td={item.is_checked ? 'line-through' : undefined}
+                                style={{
+                                    textDecoration: item.is_checked ? 'line-through' : 'none',
+                                    opacity: item.is_checked ? 0.6 : 1,
+                                }}
                             >
                                 {item.content}
                             </Text>
@@ -110,6 +126,11 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onR
                         </Badge>
                     ))}
                 </Group>
+            )}
+
+            {/* Last modified date */}
+            {lastModified && (
+                <Text size="xs" c="dimmed" mt="sm">{lastModified}</Text>
             )}
 
             <Group gap="xs" mt="sm" className="note-actions" style={{ opacity: 0, transition: 'opacity 0.15s' }}>
@@ -163,18 +184,12 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onR
                         color="red"
                         size="sm"
                         onClick={(e) => handleAction(e, () => onDelete(note.id))}
-                        title="Delete permanently"
+                        title="Delete forever"
                     >
                         <IconTrash size={16} />
                     </ActionIcon>
                 )}
             </Group>
-
-            <style>{`
-                .mantine-Card-root:hover .note-actions {
-                    opacity: 1 !important;
-                }
-            `}</style>
         </Card>
     );
 }

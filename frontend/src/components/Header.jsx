@@ -28,8 +28,8 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
     };
 
     return (
-        <Group h="100%" px="md" justify="space-between">
-            <Group>
+        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
+            <Group gap="xs" wrap="nowrap">
                 <Burger
                     opened={isMenuOpen}
                     onClick={onMenuToggle}
@@ -48,11 +48,12 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                     }
                     value={localSearch}
                     onChange={handleSearch}
-                    w={{ base: 200, sm: 300, md: 400 }}
+                    w={{ base: 140, xs: 180, sm: 300, md: 400 }}
+                    size="sm"
                 />
             </Group>
 
-            <Group gap="xs">
+            <Group gap={4} wrap="nowrap">
                 <SegmentedControl
                     value={viewMode}
                     onChange={setViewMode}
@@ -64,7 +65,7 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                 />
                 <ActionIcon
                     variant="subtle"
-                    size="lg"
+                    size="md"
                     onClick={toggleColorScheme}
                     title={`Switch to ${colorScheme === 'dark' ? 'light' : 'dark'} mode`}
                 >

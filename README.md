@@ -39,7 +39,6 @@ docker run -d \
   --name noteer \
   -p 3000:3000 \
   -v noteer-data:/var/lib/postgresql/data \
-  -e JWT_SECRET=your-secret-key-min-32-chars \
   -e ADMIN_EMAIL=admin@example.com \
   -e ADMIN_PASSWORD=your-secure-password \
   ghcr.io/bigtcze/noteer:latest
@@ -62,7 +61,6 @@ services:
     volumes:
       - noteer-data:/var/lib/postgresql/data
     environment:
-      - JWT_SECRET=your-secret-key-min-32-chars
       - ADMIN_EMAIL=admin@example.com
       - ADMIN_PASSWORD=your-secure-password
       # Optional OIDC
@@ -84,8 +82,6 @@ volumes:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3000` | Application port |
-| `JWT_SECRET` | - | **Required**. Secret key for JWT tokens (min 32 chars) |
-| `JWT_EXPIRES_IN` | `7d` | JWT token expiration |
 | `ADMIN_EMAIL` | `admin@example.com` | Admin user email |
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
 | `OIDC_ENABLED` | `false` | Enable OIDC authentication |
@@ -146,7 +142,6 @@ docker run -d \
   -e SSL_ENABLED=true \
   -e SSL_CERT_PATH=/certs/cert.pem \
   -e SSL_KEY_PATH=/certs/key.pem \
-  -e JWT_SECRET=your-secret-key \
   ghcr.io/bigtcze/noteer:latest
 ```
 
@@ -207,9 +202,6 @@ cd ../frontend && npm run dev  # Terminal 2
 ### Testing
 
 ```bash
-# Run Storybook for UI development
-cd frontend && npm run storybook
-
 # Run Playwright E2E tests
 npx playwright test
 ```

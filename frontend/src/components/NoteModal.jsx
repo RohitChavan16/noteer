@@ -1,33 +1,48 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
-import { Modal, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Button } from '@mantine/core';
-import { IconPalette } from '@tabler/icons-react';
+import { useMantineColorScheme } from '@mantine/core';
+import { Modal, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Checkbox, Text, Box } from '@mantine/core';
+import { IconPalette, IconGripVertical, IconPlus, IconX } from '@tabler/icons-react';
 
 const NOTE_COLORS = [
-    { id: 'default', name: 'Default', color: '#ffffff', darkColor: '#1a1b1e' },
-    { id: 'red', name: 'Red', color: '#ffe3e3', darkColor: '#c92a2a' },
-    { id: 'orange', name: 'Orange', color: '#ffe8cc', darkColor: '#d9480f' },
-    { id: 'yellow', name: 'Yellow', color: '#fff3bf', darkColor: '#e67700' },
-    { id: 'green', name: 'Green', color: '#d3f9d8', darkColor: '#2f9e44' },
-    { id: 'teal', name: 'Teal', color: '#c3fae8', darkColor: '#12b886' },
-    { id: 'blue', name: 'Blue', color: '#d0ebff', darkColor: '#1971c2' },
-    { id: 'purple', name: 'Purple', color: '#e5dbff', darkColor: '#7048e8' },
-    { id: 'pink', name: 'Pink', color: '#ffdeeb', darkColor: '#c2255c' },
-    { id: 'brown', name: 'Brown', color: '#ffd8a8', darkColor: '#e8590c' },
-    { id: 'gray', name: 'Gray', color: '#e9ecef', darkColor: '#495057' },
+    { id: 'default', color: '#ffffff', darkColor: '#25262b' },
+    { id: 'red', color: '#ffe3e3', darkColor: '#5c2323' },
+    { id: 'orange', color: '#ffe8cc', darkColor: '#5c3a1d' },
+    { id: 'yellow', color: '#fff3bf', darkColor: '#5c4a1d' },
+    { id: 'green', color: '#d3f9d8', darkColor: '#1d4a2a' },
+    { id: 'teal', color: '#c3fae8', darkColor: '#1d4a4a' },
+    { id: 'blue', color: '#d0ebff', darkColor: '#1d3a5c' },
+    { id: 'purple', color: '#e5dbff', darkColor: '#3d2a5c' },
+    { id: 'pink', color: '#ffdeeb', darkColor: '#5c2a3d' },
+    { id: 'brown', color: '#ffd8a8', darkColor: '#5c3a1d' },
+    { id: 'gray', color: '#e9ecef', darkColor: '#373a40' },
 ];
 
+const formatDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export default function NoteModal({ note, onClose }) {
+    const { colorScheme } = useMantineColorScheme();
+    const isDark = colorScheme === 'dark';
+
     const { updateNote } = useNotesStore();
     const [title, setTitle] = useState(note?.title || '');
     const [content, setContent] = useState(note?.content || '');
+    const [items, setItems] = useState(note?.items || []);
     const [color, setColor] = useState(note?.color || 'default');
     const [showColors, setShowColors] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [newItem, setNewItem] = useState('');
+
+    const isChecklist = note?.type === 'checklist' || (note?.items && note.items.length > 0);
 
     const getCurrentColor = () => {
         const c = NOTE_COLORS.find(nc => nc.id === color);
-        return c ? c.color : NOTE_COLORS[0].color;
+        return isDark ? (c?.darkColor || NOTE_COLORS[0].darkColor) : (c?.color || NOTE_COLORS[0].color);
     };
 
     const handleSave = async () => {
@@ -35,14 +50,41 @@ export default function NoteModal({ note, onClose }) {
 
         const hasChanges = title !== (note?.title || '') ||
             content !== (note?.content || '') ||
-            color !== (note?.color || 'default');
+            color !== (note?.color || 'default') ||
+            JSON.stringify(items) !== JSON.stringify(note?.items || []);
 
         if (hasChanges) {
             setIsSaving(true);
-            await updateNote(note.id, { title, content, color });
+            await updateNote(note.id, { title, content, color, items });
             setIsSaving(false);
         }
         onClose();
+    };
+
+    const addItem = () => {
+        if (newItem.trim()) {
+            setItems([...items, { content: newItem.trim(), is_checked: false }]);
+            setNewItem('');
+        }
+    };
+
+    const handleItemKeyDown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addItem();
+        }
+    };
+
+    const removeItem = (index) => {
+        setItems(items.filter((_, i) => i !== index));
+    };
+
+    const toggleItemCheck = (index) => {
+        setItems(items.map((item, i) => i === index ? { ...item, is_checked: !item.is_checked } : item));
+    };
+
+    const updateItemContent = (index, content) => {
+        setItems(items.map((item, i) => i === index ? { ...item, content } : item));
     };
 
     if (!note) return null;
@@ -66,47 +108,99 @@ export default function NoteModal({ note, onClose }) {
                     variant="unstyled"
                     styles={{ input: { fontWeight: 600, fontSize: '1.25rem' } }}
                 />
-                <Textarea
-                    placeholder="Take a note..."
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    variant="unstyled"
-                    minRows={6}
-                    autosize
-                />
+
+                {isChecklist ? (
+                    <Stack gap={4}>
+                        {items.map((item, index) => (
+                            <Group key={index} gap="xs" wrap="nowrap">
+                                <IconGripVertical size={14} style={{ opacity: 0.4, cursor: 'grab' }} />
+                                <Checkbox
+                                    checked={item.is_checked}
+                                    onChange={() => toggleItemCheck(index)}
+                                    size="xs"
+                                />
+                                <TextInput
+                                    value={item.content}
+                                    onChange={(e) => updateItemContent(index, e.target.value)}
+                                    variant="unstyled"
+                                    size="sm"
+                                    style={{ flex: 1 }}
+                                    styles={{
+                                        input: {
+                                            textDecoration: item.is_checked ? 'line-through' : 'none',
+                                            opacity: item.is_checked ? 0.6 : 1
+                                        }
+                                    }}
+                                />
+                                <ActionIcon variant="subtle" size="xs" onClick={() => removeItem(index)}>
+                                    <IconX size={12} />
+                                </ActionIcon>
+                            </Group>
+                        ))}
+                        <Group gap="xs" wrap="nowrap">
+                            <Box w={14} />
+                            <IconPlus size={14} style={{ opacity: 0.4 }} />
+                            <TextInput
+                                placeholder="List item"
+                                value={newItem}
+                                onChange={(e) => setNewItem(e.target.value)}
+                                onKeyDown={handleItemKeyDown}
+                                variant="unstyled"
+                                size="sm"
+                                style={{ flex: 1 }}
+                            />
+                        </Group>
+                    </Stack>
+                ) : (
+                    <Textarea
+                        placeholder="Take a note..."
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        variant="unstyled"
+                        minRows={6}
+                        autosize
+                    />
+                )}
 
                 <Group justify="space-between">
-                    <Popover opened={showColors} onChange={setShowColors} position="top-start">
-                        <Popover.Target>
-                            <ActionIcon
-                                variant="subtle"
-                                onClick={() => setShowColors(!showColors)}
-                                title="Change color"
-                            >
-                                <IconPalette size={18} />
-                            </ActionIcon>
-                        </Popover.Target>
-                        <Popover.Dropdown>
-                            <Group gap="xs">
-                                {NOTE_COLORS.map((c) => (
-                                    <ColorSwatch
-                                        key={c.id}
-                                        color={c.color}
-                                        onClick={() => { setColor(c.id); setShowColors(false); }}
-                                        style={{
-                                            cursor: 'pointer',
-                                            border: color === c.id ? '2px solid var(--mantine-color-blue-5)' : '1px solid var(--mantine-color-gray-3)'
-                                        }}
-                                        size={24}
-                                        title={c.name}
-                                    />
-                                ))}
-                            </Group>
-                        </Popover.Dropdown>
-                    </Popover>
+                    <Group gap="xs">
+                        <Popover opened={showColors} onChange={setShowColors} position="top-start">
+                            <Popover.Target>
+                                <ActionIcon
+                                    variant="subtle"
+                                    onClick={() => setShowColors(!showColors)}
+                                    title="Background color"
+                                >
+                                    <IconPalette size={18} />
+                                </ActionIcon>
+                            </Popover.Target>
+                            <Popover.Dropdown>
+                                <Group gap="xs">
+                                    {NOTE_COLORS.map((c) => (
+                                        <ColorSwatch
+                                            key={c.id}
+                                            color={isDark ? c.darkColor : c.color}
+                                            onClick={() => { setColor(c.id); setShowColors(false); }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                border: color === c.id ? '2px solid var(--mantine-color-blue-5)' : '1px solid var(--mantine-color-gray-5)'
+                                            }}
+                                            size={24}
+                                        />
+                                    ))}
+                                </Group>
+                            </Popover.Dropdown>
+                        </Popover>
+                    </Group>
+
+                    {note.updated_at && (
+                        <Text size="xs" c="dimmed" ta="center">
+                            Edited {formatDate(note.updated_at)}
+                        </Text>
+                    )}
 
                     <Button variant="subtle" onClick={handleSave} loading={isSaving}>
-                        {isSaving ? 'Saving...' : 'Close'}
+                        Close
                     </Button>
                 </Group>
             </Stack>
