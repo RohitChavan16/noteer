@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore } from '@tabler/icons-react';
@@ -37,6 +38,7 @@ const formatDate = (dateString) => {
 export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
+    const [isHovered, setIsHovered] = useState(false);
 
     const handleAction = (e, action) => {
         console.log('NoteCard action clicked', note.id);
@@ -54,8 +56,11 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             radius="md"
             withBorder
             onClick={() => onClick?.(note)}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             style={{ cursor: 'pointer', breakInside: 'avoid', marginBottom: 16 }}
             bg={bgColor}
+            className="note-card"
             styles={(theme) => ({
                 root: {
                     transition: 'transform 0.15s, box-shadow 0.15s',
@@ -129,7 +134,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             )}
 
             <Group mt="sm" justify="space-between" align="center">
-                <Group gap="xs" style={{ position: 'relative', zIndex: 2 }}>
+                <Group gap="xs" style={{ opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
                     {onPin && (
                         <ActionIcon
                             variant="subtle"

@@ -147,6 +147,7 @@ export default function NoteModal({ note, onClose }) {
                                 value={newItem}
                                 onChange={(e) => setNewItem(e.target.value)}
                                 onKeyDown={handleItemKeyDown}
+                                onBlur={addItem}
                                 variant="unstyled"
                                 size="sm"
                                 maxLength={500}
