@@ -1,0 +1,24 @@
+{
+  "name": "noteer",
+  "version": "1.0.0",
+  "description": "<div align=\"center\">",
+  "main": "playwright.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bigtcze/noteer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/bigtcze/noteer/issues"
+  },
+  "homepage": "https://github.com/bigtcze/noteer#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
+  }
+}
