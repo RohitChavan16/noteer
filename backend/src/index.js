@@ -35,7 +35,7 @@ function getOrGenerateJwtSecret() {
         return secret;
       }
     }
-  } catch (err) {
+  } catch (_err) {
     // File doesn't exist or can't be read, generate new secret
   }
 
@@ -50,7 +50,7 @@ function getOrGenerateJwtSecret() {
     }
     fs.writeFileSync(JWT_SECRET_FILE, newSecret, { mode: 0o600 });
     console.log('🔑 Generated and saved new JWT secret');
-  } catch (err) {
+  } catch (_err) {
     console.warn('⚠️ Could not save JWT secret to file, using ephemeral secret');
   }
 
