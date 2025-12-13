@@ -5,7 +5,7 @@ import {
     Box, Title, Text, Paper, TextInput, PasswordInput, Button, Stack,
     Alert, Group, SegmentedControl, Badge, Divider
 } from '@mantine/core';
-import { IconAlertCircle, IconCheck, IconMoon, IconSun, IconInfoCircle } from '@tabler/icons-react';
+import { IconAlertCircle, IconCheck, IconInfoCircle } from '@tabler/icons-react';
 
 export default function SettingsPage() {
     const { user, updateProfile, isLoading } = useAuthStore();

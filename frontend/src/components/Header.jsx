@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMantineColorScheme } from '@mantine/core';
-import { Group, TextInput, ActionIcon, Burger, SegmentedControl, Box } from '@mantine/core';
+import { Group, TextInput, ActionIcon, Burger, SegmentedControl } from '@mantine/core';
 import { useNotesStore } from '../stores/notesStore';
 import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList } from '@tabler/icons-react';
 
