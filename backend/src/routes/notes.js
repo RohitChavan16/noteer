@@ -210,6 +210,42 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
             return res.status(403).json({ error: 'Cannot update note in trash. Restore it first.' });
         }
 
+        // --- VERSIONING START ---
+        // Save current state as a version before updating
+        const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
+
+        // 1. Get full current state
+        const currentState = await query(
+            `SELECT n.*, 
+                    COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
+                    COALESCE((SELECT json_agg(l.name) FROM note_labels nl JOIN labels l ON nl.label_id = l.id WHERE nl.note_id = n.id), '[]'::json) as labels
+             FROM notes n
+             WHERE n.id = $1`,
+            [id]
+        );
+
+        if (currentState.rows.length > 0) {
+            const noteData = currentState.rows[0];
+            // 2. Insert into note_versions
+            await query(
+                'INSERT INTO note_versions (note_id, data) VALUES ($1, $2)',
+                [id, JSON.stringify(noteData)]
+            );
+
+            // 3. Cleanup old versions (keep last N)
+            await query(
+                `DELETE FROM note_versions 
+                 WHERE id IN (
+                    SELECT id FROM note_versions 
+                    WHERE note_id = $1 
+                    ORDER BY created_at DESC 
+                    OFFSET $2
+                 )`,
+                [id, versionLimit]
+            );
+        }
+        // --- VERSIONING END ---
+
         const result = await query(
             `UPDATE notes SET ${updates.join(', ')} 
        WHERE id = $${paramIndex++} AND user_id = $${paramIndex}
@@ -323,6 +359,120 @@ router.delete('/:id', param('id').isInt(), async (req, res, next) => {
         }
 
         res.status(204).send();
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/notes/:id/versions - List versions
+router.get('/:id/versions', param('id').isInt(), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        // Verify ownership
+        const noteCheck = await query('SELECT 1 FROM notes WHERE id = $1 AND user_id = $2', [id, userId]);
+        if (noteCheck.rows.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+        const result = await query(
+            'SELECT id, created_at FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC',
+            [id]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /api/notes/:id/versions/:versionId/restore - Restore version
+router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('versionId').isInt()], async (req, res, next) => {
+    try {
+        const { id, versionId } = req.params;
+        const userId = req.user.id;
+
+        // Verify ownership
+        const noteCheck = await query('SELECT 1 FROM notes WHERE id = $1 AND user_id = $2', [id, userId]);
+        if (noteCheck.rows.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+        // Get version data
+        const versionResult = await query(
+            'SELECT data FROM note_versions WHERE id = $1 AND note_id = $2',
+            [versionId, id]
+        );
+
+        if (versionResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Version not found' });
+        }
+
+        const versionData = versionResult.rows[0].data;
+
+        // --- SAVE CURRENT STATE FIRST (as a new version) ---
+        const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
+        const currentState = await query(
+            `SELECT n.*, 
+                    COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
+                    COALESCE((SELECT json_agg(l.name) FROM note_labels nl JOIN labels l ON nl.label_id = l.id WHERE nl.note_id = n.id), '[]'::json) as labels
+             FROM notes n
+             WHERE n.id = $1`,
+            [id]
+        );
+        if (currentState.rows.length > 0) {
+            await query(
+                'INSERT INTO note_versions (note_id, data) VALUES ($1, $2)',
+                [id, JSON.stringify(currentState.rows[0])]
+            );
+            await query(
+                `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
+                [id, versionLimit]
+            );
+        }
+        // ----------------------------------------------------
+
+        // Restore core fields
+        await query(
+            `UPDATE notes SET 
+                title = $1, content = $2, type = $3, color = $4, is_pinned = $5, reminder_at = $6, updated_at = CURRENT_TIMESTAMP
+             WHERE id = $7`,
+            [versionData.title, versionData.content, versionData.type, versionData.color, versionData.is_pinned, versionData.reminder_at, id]
+        );
+
+        // Restore items
+        await query('DELETE FROM note_items WHERE note_id = $1', [id]);
+        if (versionData.items && Array.isArray(versionData.items) && versionData.items.length > 0) {
+            for (let i = 0; i < versionData.items.length; i++) {
+                const item = versionData.items[i];
+                await query(
+                    'INSERT INTO note_items (note_id, content, is_checked, position) VALUES ($1, $2, $3, $4)',
+                    [id, item.content, item.is_checked, item.position]
+                );
+            }
+        }
+
+        // Restore labels
+        await query('DELETE FROM note_labels WHERE note_id = $1', [id]);
+        if (versionData.labels && Array.isArray(versionData.labels) && versionData.labels.length > 0) {
+            for (const labelName of versionData.labels) {
+                // Ensure label exists (it might have been deleted globally, though unlikely if we don't delete labels)
+                // Re-using logic from check
+                let labelResult = await query(
+                    'SELECT id FROM labels WHERE user_id = $1 AND name = $2',
+                    [userId, labelName]
+                );
+                if (labelResult.rows.length === 0) {
+                    labelResult = await query(
+                        'INSERT INTO labels (user_id, name) VALUES ($1, $2) RETURNING id',
+                        [userId, labelName]
+                    );
+                }
+                await query(
+                    'INSERT INTO note_labels (note_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+                    [id, labelResult.rows[0].id]
+                );
+            }
+        }
+
+        res.json({ message: 'Restored successfully' });
     } catch (error) {
         next(error);
     }

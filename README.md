@@ -20,6 +20,7 @@
 - 📋 **Notes & Checklists** - Create notes with rich text and interactive checklists
 - 🏷️ **Labels** - Organize notes with customizable labels
 - 📌 **Pin & Archive** - Pin important notes, archive completed ones
+- 🕒 **Version History** - Store file versions and restore/rollback to previous states
 - 🎨 **Color Coding** - 11 beautiful colors to categorize your notes
 - 🌓 **Dark & Light Mode** - Easy on the eyes, day or night (dark mode default)
 - 🔒 **Secure Authentication** - Local login or OIDC (Authentik, Authelia, PocketID, etc.)
@@ -84,6 +85,7 @@ volumes:
 | `PORT` | `3000` | Application port |
 | `ADMIN_EMAIL` | `admin@example.com` | Admin user email |
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
+| `NOTE_VERSION_LIMIT` | `10` | Max stored versions per note (FIFO) |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
 | `OIDC_ENABLED` | `false` | Enable OIDC authentication |
 | `OIDC_ISSUER_URL` | - | OIDC provider URL |

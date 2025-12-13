@@ -83,6 +83,14 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_notes_archived ON notes(is_archived);
     CREATE INDEX IF NOT EXISTS idx_notes_trashed ON notes(is_trashed);
     CREATE INDEX IF NOT EXISTS idx_note_items_note_id ON note_items(note_id);
+
+    CREATE TABLE IF NOT EXISTS note_versions (
+      id SERIAL PRIMARY KEY,
+      note_id INTEGER REFERENCES notes(id) ON DELETE CASCADE,
+      data JSONB NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_note_versions_note_id ON note_versions(note_id);
   `);
 
   // Migration: Add type column if it doesn't exist (for existing databases)

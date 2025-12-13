@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box } from '@mantine/core';
+import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
-import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore } from '@tabler/icons-react';
+import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory } from '@tabler/icons-react';
 
 const NOTE_COLORS = {
     default: { light: undefined, dark: undefined },
@@ -35,7 +35,7 @@ const formatDate = (dateString) => {
     }
 };
 
-export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle }) {
+export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
     const [isHovered, setIsHovered] = useState(false);
@@ -200,6 +200,30 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         >
                             <IconTrash size={16} />
                         </ActionIcon>
+                    )}
+
+                    {onVersionHistory && (
+                        <Menu shadow="md" width={200} position="bottom-end">
+                            <Menu.Target>
+                                <ActionIcon
+                                    variant="subtle"
+                                    size="sm"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="More options"
+                                >
+                                    <IconDotsVertical size={16} />
+                                </ActionIcon>
+                            </Menu.Target>
+
+                            <Menu.Dropdown>
+                                <Menu.Item
+                                    leftSection={<IconHistory size={14} />}
+                                    onClick={(e) => handleAction(e, () => onVersionHistory(note.id))}
+                                >
+                                    Version history
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
                     )}
                 </Group>
 

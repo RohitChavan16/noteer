@@ -149,4 +149,25 @@ export const useNotesStore = create((set, get) => ({
         }
         return result;
     },
+
+    getNoteVersions: async (id) => {
+        try {
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes/${id}/versions`);
+            if (!res.ok) throw new Error('Failed to fetch versions');
+            return await res.json();
+        } catch (error) {
+            console.error(error);
+            return [];
+        }
+    },
+
+    restoreNoteVersion: async (id, versionId) => {
+        const authFetch = getAuthFetch();
+        const res = await authFetch(`${API_URL}/notes/${id}/versions/${versionId}/restore`, {
+            method: 'POST'
+        });
+        if (!res.ok) throw new Error('Failed to restore version');
+        return await res.json();
+    },
 }));

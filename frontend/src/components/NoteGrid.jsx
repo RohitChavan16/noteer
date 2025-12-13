@@ -3,11 +3,13 @@ import { Box, Text, Stack, Center } from '@mantine/core';
 import { IconNote } from '@tabler/icons-react';
 import NoteCard from './NoteCard';
 import NoteModal from './NoteModal';
+import VersionHistoryModal from './VersionHistoryModal';
 import { useNotesStore } from '../stores/notesStore';
 
 export default function NoteGrid({ notes, showRestore, showDelete }) {
     const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote } = useNotesStore();
     const [selectedNote, setSelectedNote] = useState(null);
+    const [versionHistoryNoteId, setVersionHistoryNoteId] = useState(null);
 
     const isTrash = showDelete;
     const isArchive = showRestore && !showDelete;
@@ -67,6 +69,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                         onTrash={!isTrash ? trashNote : undefined}
                         onDelete={isTrash ? deleteNote : undefined}
                         onItemToggle={!isTrash ? handleItemToggle : undefined}
+                        onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
                     />
                 ))}
             </Box>
@@ -94,6 +97,12 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
             {selectedNote && (
                 <NoteModal note={selectedNote} onClose={handleModalClose} />
             )}
+
+            <VersionHistoryModal
+                opened={!!versionHistoryNoteId}
+                onClose={() => setVersionHistoryNoteId(null)}
+                noteId={versionHistoryNoteId}
+            />
 
             <style>{`
                 @media (max-width: 992px) {
