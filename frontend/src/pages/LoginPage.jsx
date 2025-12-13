@@ -56,6 +56,7 @@ export default function LoginPage() {
                                 placeholder="you@example.com"
                                 required
                                 autoFocus
+                                maxLength={255}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                             />
@@ -65,6 +66,7 @@ export default function LoginPage() {
                                 placeholder="••••••••"
                                 required
                                 minLength={6}
+                                maxLength={128}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                             />

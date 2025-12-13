@@ -106,6 +106,7 @@ export default function NoteModal({ note, onClose }) {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     variant="unstyled"
+                    maxLength={200}
                     styles={{ input: { fontWeight: 600, fontSize: '1.25rem' } }}
                 />
 
@@ -124,6 +125,7 @@ export default function NoteModal({ note, onClose }) {
                                     onChange={(e) => updateItemContent(index, e.target.value)}
                                     variant="unstyled"
                                     size="sm"
+                                    maxLength={500}
                                     style={{ flex: 1 }}
                                     styles={{
                                         input: {
@@ -147,6 +149,7 @@ export default function NoteModal({ note, onClose }) {
                                 onKeyDown={handleItemKeyDown}
                                 variant="unstyled"
                                 size="sm"
+                                maxLength={500}
                                 style={{ flex: 1 }}
                             />
                         </Group>

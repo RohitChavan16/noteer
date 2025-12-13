@@ -50,6 +50,7 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                     onChange={handleSearch}
                     w={{ base: 140, xs: 180, sm: 300, md: 400 }}
                     size="sm"
+                    maxLength={200}
                 />
             </Group>
 

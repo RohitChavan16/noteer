@@ -34,7 +34,7 @@ const formatDate = (dateString) => {
     }
 };
 
-export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete }) {
+export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
 
@@ -92,27 +92,29 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
 
             {note.items && note.items.length > 0 && (
                 <Stack gap="xs" mt="sm">
-                    {note.items.slice(0, 5).map((item, idx) => (
-                        <Group key={idx} gap="xs">
-                            <Checkbox
-                                checked={item.is_checked}
-                                readOnly
-                                size="xs"
-                            />
+                    {note.items.map((item, idx) => (
+                        <Group key={idx} gap="xs" wrap="nowrap">
+                            <Box onClick={(e) => e.stopPropagation()}>
+                                <Checkbox
+                                    checked={item.is_checked}
+                                    onChange={() => onItemToggle && onItemToggle(note.id, idx)}
+                                    size="xs"
+                                    styles={{ input: { cursor: 'pointer' } }}
+                                />
+                            </Box>
                             <Text
                                 size="sm"
                                 style={{
                                     textDecoration: item.is_checked ? 'line-through' : 'none',
                                     opacity: item.is_checked ? 0.6 : 1,
+                                    flex: 1,
+                                    wordBreak: 'break-word',
                                 }}
                             >
                                 {item.content}
                             </Text>
                         </Group>
                     ))}
-                    {note.items.length > 5 && (
-                        <Text size="sm" c="dimmed" fs="italic">+{note.items.length - 5} more</Text>
-                    )}
                 </Stack>
             )}
 

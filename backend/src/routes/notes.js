@@ -195,6 +195,21 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
         params.push(id, userId);
+
+        // First check if note exists and is not trashed
+        const existingNote = await query(
+            'SELECT id, is_trashed FROM notes WHERE id = $1 AND user_id = $2',
+            [id, userId]
+        );
+
+        if (existingNote.rows.length === 0) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        if (existingNote.rows[0].is_trashed) {
+            return res.status(403).json({ error: 'Cannot update note in trash. Restore it first.' });
+        }
+
         const result = await query(
             `UPDATE notes SET ${updates.join(', ')} 
        WHERE id = $${paramIndex++} AND user_id = $${paramIndex}

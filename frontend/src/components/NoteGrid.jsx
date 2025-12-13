@@ -6,7 +6,7 @@ import NoteModal from './NoteModal';
 import { useNotesStore } from '../stores/notesStore';
 
 export default function NoteGrid({ notes, showRestore, showDelete }) {
-    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote } = useNotesStore();
+    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote } = useNotesStore();
     const [selectedNote, setSelectedNote] = useState(null);
 
     const isTrash = showDelete;
@@ -24,6 +24,16 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
 
     const handleModalClose = () => {
         setSelectedNote(null);
+    };
+
+    const handleItemToggle = async (noteId, itemIndex) => {
+        const note = notes.find(n => n.id === noteId);
+        if (!note || !note.items) return;
+
+        const updatedItems = note.items.map((item, idx) =>
+            idx === itemIndex ? { ...item, is_checked: !item.is_checked } : item
+        );
+        await updateNote(noteId, { items: updatedItems });
     };
 
     const gridStyles = viewMode === 'list'
@@ -56,6 +66,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                         onRestore={isTrash ? restoreNote : undefined}
                         onTrash={!isTrash ? trashNote : undefined}
                         onDelete={isTrash ? deleteNote : undefined}
+                        onItemToggle={!isTrash ? handleItemToggle : undefined}
                     />
                 ))}
             </Box>

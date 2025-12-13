@@ -64,6 +64,7 @@ export default function RegisterPage() {
                                 type="text"
                                 placeholder="Your name"
                                 autoFocus
+                                maxLength={255}
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                             />
@@ -73,6 +74,7 @@ export default function RegisterPage() {
                                 type="email"
                                 placeholder="you@example.com"
                                 required
+                                maxLength={255}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                             />
@@ -82,6 +84,7 @@ export default function RegisterPage() {
                                 placeholder="••••••••"
                                 required
                                 minLength={6}
+                                maxLength={128}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                             />
@@ -91,6 +94,7 @@ export default function RegisterPage() {
                                 placeholder="••••••••"
                                 required
                                 minLength={6}
+                                maxLength={128}
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 error={passwordMismatch ? 'Passwords do not match' : null}

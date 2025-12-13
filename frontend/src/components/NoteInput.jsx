@@ -169,6 +169,7 @@ export default function NoteInput() {
                         onChange={(e) => setTitle(e.target.value)}
                         variant="unstyled"
                         autoFocus
+                        maxLength={200}
                         styles={{ input: { fontWeight: 600, fontSize: '1rem' } }}
                     />
 
@@ -196,6 +197,7 @@ export default function NoteInput() {
                                         onChange={(e) => updateItemContent(index, e.target.value)}
                                         variant="unstyled"
                                         size="sm"
+                                        maxLength={500}
                                         style={{ flex: 1 }}
                                         styles={{
                                             input: {
@@ -219,6 +221,7 @@ export default function NoteInput() {
                                     onKeyDown={handleItemKeyDown}
                                     variant="unstyled"
                                     size="sm"
+                                    maxLength={500}
                                     style={{ flex: 1 }}
                                 />
                             </Group>

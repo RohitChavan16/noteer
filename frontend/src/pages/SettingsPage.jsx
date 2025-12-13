@@ -92,6 +92,7 @@ export default function SettingsPage() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="Your name"
+                            maxLength={255}
                         />
 
                         <TextInput
@@ -101,6 +102,7 @@ export default function SettingsPage() {
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="your@email.com"
                             disabled={isOidc}
+                            maxLength={255}
                         />
 
                         {!isOidc && (
@@ -114,6 +116,7 @@ export default function SettingsPage() {
                                     onChange={(e) => setNewPassword(e.target.value)}
                                     placeholder="••••••••"
                                     minLength={6}
+                                    maxLength={128}
                                 />
 
                                 <PasswordInput
@@ -122,6 +125,7 @@ export default function SettingsPage() {
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     placeholder="••••••••"
                                     minLength={6}
+                                    maxLength={128}
                                 />
                             </>
                         )}
