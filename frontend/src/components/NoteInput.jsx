@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
+import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center } from '@mantine/core';
+import { IconPlus, IconPalette } from '@tabler/icons-react';
 
 const NOTE_COLORS = [
-    { id: 'default', label: 'Default' },
-    { id: 'red', label: 'Red' },
-    { id: 'orange', label: 'Orange' },
-    { id: 'yellow', label: 'Yellow' },
-    { id: 'green', label: 'Green' },
-    { id: 'teal', label: 'Teal' },
-    { id: 'blue', label: 'Blue' },
-    { id: 'purple', label: 'Purple' },
-    { id: 'pink', label: 'Pink' },
-    { id: 'brown', label: 'Brown' },
-    { id: 'gray', label: 'Gray' },
+    { id: 'default', color: '#ffffff', darkColor: '#1a1b1e' },
+    { id: 'red', color: '#ffe3e3', darkColor: '#c92a2a' },
+    { id: 'orange', color: '#ffe8cc', darkColor: '#d9480f' },
+    { id: 'yellow', color: '#fff3bf', darkColor: '#e67700' },
+    { id: 'green', color: '#d3f9d8', darkColor: '#2f9e44' },
+    { id: 'teal', color: '#c3fae8', darkColor: '#12b886' },
+    { id: 'blue', color: '#d0ebff', darkColor: '#1971c2' },
+    { id: 'purple', color: '#e5dbff', darkColor: '#7048e8' },
+    { id: 'pink', color: '#ffdeeb', darkColor: '#c2255c' },
+    { id: 'brown', color: '#ffd8a8', darkColor: '#e8590c' },
+    { id: 'gray', color: '#e9ecef', darkColor: '#495057' },
 ];
 
 export default function NoteInput() {
@@ -22,6 +24,11 @@ export default function NoteInput() {
     const [color, setColor] = useState('default');
     const [showColors, setShowColors] = useState(false);
     const { createNote } = useNotesStore();
+
+    const getCurrentColor = () => {
+        const c = NOTE_COLORS.find(nc => nc.id === color);
+        return c ? c.color : NOTE_COLORS[0].color;
+    };
 
     const handleSubmit = async () => {
         if (!title.trim() && !content.trim()) {
@@ -44,80 +51,89 @@ export default function NoteInput() {
 
     if (!isExpanded) {
         return (
-            <div className="flex justify-center mb-8">
-                <div
-                    className="w-full max-w-[550px] border border-theme rounded-full shadow-lg transition-all duration-150 flex items-center h-12 px-5 cursor-text bg-theme-card hover:shadow-xl"
+            <Center mb="xl">
+                <Paper
+                    shadow="md"
+                    radius="xl"
+                    p="sm"
+                    px="lg"
+                    withBorder
                     onClick={() => setIsExpanded(true)}
+                    style={{ cursor: 'text', maxWidth: 550, width: '100%' }}
                 >
-                    <span className="flex-1 text-theme-muted text-[0.95rem]">Vytvořit poznámku...</span>
-                    {/* Single decorative icon */}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-theme-muted">
-                        <path d="M12 5v14M5 12h14" />
-                    </svg>
-                </div>
-            </div>
+                    <Group justify="space-between">
+                        <Box c="dimmed">Vytvořit poznámku...</Box>
+                        <IconPlus size={18} color="var(--mantine-color-dimmed)" />
+                    </Group>
+                </Paper>
+            </Center>
         );
     }
 
     return (
-        <div className="flex justify-center mb-8">
-            <div
-                className="w-full max-w-[550px] border border-theme rounded-2xl shadow-lg transition-all duration-150 p-4"
-                style={{ backgroundColor: `var(--note-${color})` }}
+        <Center mb="xl">
+            <Paper
+                shadow="lg"
+                radius="md"
+                p="md"
+                withBorder
                 onBlur={handleBlur}
                 tabIndex={-1}
+                style={{ maxWidth: 550, width: '100%', backgroundColor: getCurrentColor() }}
             >
-                <input
-                    type="text"
-                    className="w-full border-none bg-transparent text-theme-primary text-base font-medium py-1 mb-1 focus:outline-none placeholder:text-theme-muted"
-                    placeholder="Název"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    autoFocus
-                />
-                <textarea
-                    className="w-full border-none bg-transparent text-theme-primary text-sm leading-relaxed resize-none py-1 min-h-[80px] focus:outline-none placeholder:text-theme-muted"
-                    placeholder="Vytvořit poznámku..."
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    rows={3}
-                />
+                <Stack gap="xs">
+                    <TextInput
+                        placeholder="Název"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        variant="unstyled"
+                        autoFocus
+                        styles={{ input: { fontWeight: 500, fontSize: '1rem' } }}
+                    />
+                    <Textarea
+                        placeholder="Vytvořit poznámku..."
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        variant="unstyled"
+                        minRows={3}
+                        autosize
+                    />
 
-                <div className="flex justify-between items-center mt-2 pt-2">
-                    <div className="relative">
-                        <button
-                            className="w-8 h-8 border-none bg-transparent text-theme-secondary rounded-full cursor-pointer flex items-center justify-center transition-all duration-150 hover:bg-white/10 hover:text-theme-primary"
-                            onClick={() => setShowColors(!showColors)}
-                            title="Barva pozadí"
-                        >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-[18px] h-[18px]">
-                                <circle cx="12" cy="12" r="10" />
-                                <circle cx="12" cy="12" r="4" fill="currentColor" />
-                            </svg>
-                        </button>
-                        {showColors && (
-                            <div className="absolute bottom-full left-0 bg-theme-card border border-theme rounded-lg p-2 flex gap-1.5 flex-wrap w-[200px] shadow-lg mb-2 z-10">
-                                {NOTE_COLORS.map((c) => (
-                                    <button
-                                        key={c.id}
-                                        className={`w-7 h-7 border-2 rounded-full cursor-pointer transition-all duration-150 hover:scale-110 ${color === c.id ? 'border-accent' : 'border-transparent'}`}
-                                        style={{ backgroundColor: `var(--note-${c.id})` }}
-                                        onClick={() => { setColor(c.id); setShowColors(false); }}
-                                        title={c.label}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    <Group justify="space-between" mt="xs">
+                        <Popover opened={showColors} onChange={setShowColors} position="top-start">
+                            <Popover.Target>
+                                <ActionIcon
+                                    variant="subtle"
+                                    onClick={() => setShowColors(!showColors)}
+                                    title="Barva pozadí"
+                                >
+                                    <IconPalette size={18} />
+                                </ActionIcon>
+                            </Popover.Target>
+                            <Popover.Dropdown>
+                                <Group gap="xs">
+                                    {NOTE_COLORS.map((c) => (
+                                        <ColorSwatch
+                                            key={c.id}
+                                            color={c.color}
+                                            onClick={() => { setColor(c.id); setShowColors(false); }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                border: color === c.id ? '2px solid var(--mantine-color-blue-5)' : '1px solid var(--mantine-color-gray-3)'
+                                            }}
+                                            size={24}
+                                        />
+                                    ))}
+                                </Group>
+                            </Popover.Dropdown>
+                        </Popover>
 
-                    <button
-                        className="py-2 px-4 border-none bg-transparent text-theme-secondary text-sm font-medium rounded-lg cursor-pointer transition-all duration-150 hover:bg-white/10 hover:text-theme-primary"
-                        onClick={handleSubmit}
-                    >
-                        Zavřít
-                    </button>
-                </div>
-            </div>
-        </div>
+                        <ActionIcon variant="subtle" onClick={handleSubmit}>
+                            Zavřít
+                        </ActionIcon>
+                    </Group>
+                </Stack>
+            </Paper>
+        </Center>
     );
 }

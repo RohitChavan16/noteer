@@ -1,15 +1,32 @@
+import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box } from '@mantine/core';
+import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash } from '@tabler/icons-react';
+
 const NOTE_COLORS = {
-    default: 'var(--note-default)',
-    red: 'var(--note-red)',
-    orange: 'var(--note-orange)',
-    yellow: 'var(--note-yellow)',
-    green: 'var(--note-green)',
-    teal: 'var(--note-teal)',
-    blue: 'var(--note-blue)',
-    purple: 'var(--note-purple)',
-    pink: 'var(--note-pink)',
-    brown: 'var(--note-brown)',
-    gray: 'var(--note-gray)',
+    default: undefined,
+    red: 'red.1',
+    orange: 'orange.1',
+    yellow: 'yellow.1',
+    green: 'green.1',
+    teal: 'teal.1',
+    blue: 'blue.1',
+    purple: 'grape.1',
+    pink: 'pink.1',
+    brown: 'orange.2',
+    gray: 'gray.2',
+};
+
+const NOTE_COLORS_DARK = {
+    default: undefined,
+    red: 'red.9',
+    orange: 'orange.9',
+    yellow: 'yellow.9',
+    green: 'green.9',
+    teal: 'teal.9',
+    blue: 'blue.9',
+    purple: 'grape.9',
+    pink: 'pink.9',
+    brown: 'orange.9',
+    gray: 'gray.8',
 };
 
 export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onRestore, onDelete, showRestore, showDelete }) {
@@ -19,132 +36,145 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onR
     };
 
     return (
-        <article
-            className={`relative p-4 rounded-xl border cursor-pointer transition-all duration-150 break-inside-avoid mb-4 hover:shadow-lg hover:-translate-y-0.5 group ${note.is_pinned ? 'border-accent' : 'border-theme'}`}
-            style={{ backgroundColor: NOTE_COLORS[note.color] || NOTE_COLORS.default }}
+        <Card
+            shadow="sm"
+            padding="md"
+            radius="md"
+            withBorder
             onClick={() => onClick?.(note)}
+            style={{ cursor: 'pointer', breakInside: 'avoid', marginBottom: 16 }}
+            bg={NOTE_COLORS[note.color]}
+            styles={(theme) => ({
+                root: {
+                    transition: 'transform 0.15s, box-shadow 0.15s',
+                    '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: theme.shadows.md,
+                    },
+                    borderColor: note.is_pinned ? 'var(--mantine-color-blue-5)' : undefined,
+                },
+            })}
         >
             {note.is_pinned && (
-                <div className="absolute top-2 right-2 w-5 h-5 text-accent">
-                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-                        <path d="M16 3H8c-.55 0-1 .45-1 1v1h10V4c0-.55-.45-1-1-1zm2 3H6c-.55 0-1 .45-1 1v3c0 1.66 1.34 3 3 3h.1l-.6 6.4c-.05.53.36 1 .9 1h7.2c.54 0 .95-.47.9-1L16 13h.1c1.66 0 3-1.34 3-3V7c0-.55-.45-1-1-1z" />
-                    </svg>
-                </div>
+                <ActionIcon
+                    variant="transparent"
+                    color="blue"
+                    size="sm"
+                    style={{ position: 'absolute', top: 8, right: 8 }}
+                >
+                    <IconPinFilled size={16} />
+                </ActionIcon>
             )}
 
             {note.title && (
-                <h3 className="text-base font-semibold text-theme-primary mb-2 leading-snug">
+                <Text fw={600} size="md" mb="xs">
                     {note.title}
-                </h3>
+                </Text>
             )}
 
             {note.content && (
-                <p className="text-sm text-theme-secondary leading-relaxed line-clamp-6 whitespace-pre-wrap">
+                <Text size="sm" c="dimmed" lineClamp={6} style={{ whiteSpace: 'pre-wrap' }}>
                     {note.content}
-                </p>
+                </Text>
             )}
 
             {note.items && note.items.length > 0 && (
-                <ul className="list-none mt-2">
+                <Stack gap="xs" mt="sm">
                     {note.items.slice(0, 5).map((item, idx) => (
-                        <li
-                            key={idx}
-                            className={`flex items-start gap-2 py-1 text-sm ${item.is_checked ? 'text-theme-muted line-through' : 'text-theme-secondary'}`}
-                        >
-                            <span className={`w-4 h-4 border-2 rounded shrink-0 mt-0.5 flex items-center justify-center ${item.is_checked ? 'bg-accent border-accent' : 'border-theme-light'}`}>
-                                {item.is_checked && (
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="w-3 h-3">
-                                        <polyline points="20 6 9 17 4 12" />
-                                    </svg>
-                                )}
-                            </span>
-                            <span>{item.content}</span>
-                        </li>
+                        <Group key={idx} gap="xs">
+                            <Checkbox
+                                checked={item.is_checked}
+                                readOnly
+                                size="xs"
+                            />
+                            <Text
+                                size="sm"
+                                c={item.is_checked ? 'dimmed' : undefined}
+                                td={item.is_checked ? 'line-through' : undefined}
+                            >
+                                {item.content}
+                            </Text>
+                        </Group>
                     ))}
                     {note.items.length > 5 && (
-                        <li className="text-theme-muted italic text-sm py-1">+{note.items.length - 5} more</li>
+                        <Text size="sm" c="dimmed" fs="italic">+{note.items.length - 5} more</Text>
                     )}
-                </ul>
+                </Stack>
             )}
 
             {note.labels && note.labels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
+                <Group gap="xs" mt="sm">
                     {note.labels.map((label, idx) => (
-                        <span key={idx} className="px-2 py-1 bg-theme-card-hover rounded text-xs text-theme-secondary">
+                        <Badge key={idx} size="sm" variant="light">
                             {label}
-                        </span>
+                        </Badge>
                     ))}
-                </div>
+                </Group>
             )}
 
-            <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <Group gap="xs" mt="sm" className="note-actions" style={{ opacity: 0, transition: 'opacity 0.15s' }}>
                 {onPin && !showDelete && (
-                    <button
-                        className="w-8 h-8 border-none bg-theme-card-hover text-theme-secondary rounded-full cursor-pointer flex items-center justify-center transition-all duration-150 hover:bg-theme-card hover:text-theme-primary"
+                    <ActionIcon
+                        variant="subtle"
+                        size="sm"
                         onClick={(e) => handleAction(e, () => onPin(note.id, !note.is_pinned))}
                         title={note.is_pinned ? 'Unpin' : 'Pin'}
                     >
-                        <svg viewBox="0 0 24 24" fill={note.is_pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <path d="M16 3H8c-.55 0-1 .45-1 1v1h10V4c0-.55-.45-1-1-1zm2 3H6c-.55 0-1 .45-1 1v3c0 1.66 1.34 3 3 3h.1l-.6 6.4c-.05.53.36 1 .9 1h7.2c.54 0 .95-.47.9-1L16 13h.1c1.66 0 3-1.34 3-3V7c0-.55-.45-1-1-1z" />
-                        </svg>
-                    </button>
+                        {note.is_pinned ? <IconPinFilled size={16} /> : <IconPin size={16} />}
+                    </ActionIcon>
                 )}
 
-                {onArchive && !showDelete && (
-                    <button
-                        className="w-8 h-8 border-none bg-theme-card-hover text-theme-secondary rounded-full cursor-pointer flex items-center justify-center transition-all duration-150 hover:bg-theme-card hover:text-theme-primary"
+                {onArchive && !showDelete && !showRestore && (
+                    <ActionIcon
+                        variant="subtle"
+                        size="sm"
                         onClick={(e) => handleAction(e, () => onArchive(note.id))}
                         title="Archive"
                     >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <polyline points="21 8 21 21 3 21 3 8" />
-                            <rect x="1" y="3" width="22" height="5" />
-                            <line x1="10" y1="12" x2="14" y2="12" />
-                        </svg>
-                    </button>
+                        <IconArchive size={16} />
+                    </ActionIcon>
                 )}
 
-                {showRestore && onRestore && (
-                    <button
-                        className="w-8 h-8 border-none bg-theme-card-hover text-theme-secondary rounded-full cursor-pointer flex items-center justify-center transition-all duration-150 hover:bg-theme-card hover:text-theme-primary"
-                        onClick={(e) => handleAction(e, () => onRestore(note.id))}
-                        title="Restore"
+                {showRestore && onArchive && (
+                    <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        onClick={(e) => handleAction(e, () => onArchive(note.id))}
+                        title="Unarchive"
                     >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                            <path d="M3 3v5h5" />
-                        </svg>
-                    </button>
+                        <IconArchiveOff size={16} />
+                    </ActionIcon>
                 )}
 
                 {onTrash && !showDelete && (
-                    <button
-                        className="w-8 h-8 border-none bg-theme-card-hover text-theme-secondary rounded-full cursor-pointer flex items-center justify-center transition-all duration-150 hover:bg-theme-card hover:text-theme-primary"
+                    <ActionIcon
+                        variant="subtle"
+                        size="sm"
                         onClick={(e) => handleAction(e, () => onTrash(note.id))}
                         title="Move to trash"
                     >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                        </svg>
-                    </button>
+                        <IconTrash size={16} />
+                    </ActionIcon>
                 )}
 
                 {showDelete && onDelete && (
-                    <button
-                        className="w-8 h-8 border-none bg-theme-card-hover text-theme-secondary rounded-full cursor-pointer flex items-center justify-center transition-all duration-150 hover:bg-red-100 hover:text-red-500"
+                    <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        size="sm"
                         onClick={(e) => handleAction(e, () => onDelete(note.id))}
                         title="Delete permanently"
                     >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                            <line x1="10" y1="11" x2="10" y2="17" />
-                            <line x1="14" y1="11" x2="14" y2="17" />
-                        </svg>
-                    </button>
+                        <IconTrash size={16} />
+                    </ActionIcon>
                 )}
-            </div>
-        </article>
+            </Group>
+
+            <style>{`
+                .mantine-Card-root:hover .note-actions {
+                    opacity: 1 !important;
+                }
+            `}</style>
+        </Card>
     );
 }

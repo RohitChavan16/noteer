@@ -1,10 +1,15 @@
 import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
-import { useThemeStore } from '../stores/themeStore';
+import { useMantineColorScheme } from '@mantine/core';
+import {
+    Box, Title, Text, Paper, TextInput, PasswordInput, Button, Stack,
+    Alert, Group, SegmentedControl, Badge, Divider
+} from '@mantine/core';
+import { IconAlertCircle, IconCheck, IconMoon, IconSun, IconInfoCircle } from '@tabler/icons-react';
 
 export default function SettingsPage() {
     const { user, updateProfile, isLoading } = useAuthStore();
-    const { theme, setTheme } = useThemeStore();
+    const { colorScheme, setColorScheme } = useMantineColorScheme();
 
     const [name, setName] = useState(user?.name || '');
     const [email, setEmail] = useState(user?.email || '');
@@ -43,173 +48,154 @@ export default function SettingsPage() {
         }
     };
 
-    const themeButtonClass = (isActive) => `flex items-center gap-2 py-2 px-4 border rounded-lg bg-transparent text-sm cursor-pointer transition-all duration-150 ${isActive ? 'border-accent bg-accent-light text-accent' : 'border-theme text-theme-secondary hover:border-theme-light hover:text-theme-primary'}`;
+    const getAlertColor = (type) => {
+        if (type === 'success') return 'green';
+        if (type === 'error') return 'red';
+        return 'blue';
+    };
 
-    const inputClass = "w-full h-10 px-3 border border-theme rounded-lg bg-theme-input text-theme-primary text-sm transition-all duration-150 focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-50 disabled:cursor-not-allowed";
+    const getAlertIcon = (type) => {
+        if (type === 'success') return <IconCheck size={16} />;
+        if (type === 'error') return <IconAlertCircle size={16} />;
+        return <IconInfoCircle size={16} />;
+    };
 
     return (
-        <div className="max-w-[700px]">
-            <h1 className="text-xl font-semibold text-theme-primary mb-6">Settings</h1>
+        <Box maw={700}>
+            <Title order={3} mb="lg">Settings</Title>
 
             {/* Profile Section */}
-            <section className="bg-theme-card border border-theme rounded-xl p-6 mb-6">
-                <h2 className="text-sm font-semibold text-theme-muted uppercase tracking-wide mb-4">Profile</h2>
+            <Paper shadow="xs" radius="md" p="lg" withBorder mb="md">
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">Profile</Text>
 
                 {isOidc && (
-                    <div className="mb-4 p-3 bg-blue-100 border border-blue-200 rounded-lg text-sm text-blue-700">
+                    <Alert icon={<IconInfoCircle size={16} />} color="blue" variant="light" mb="md">
                         Your profile is managed by your identity provider (SSO). Email and password cannot be changed here.
-                    </div>
+                    </Alert>
                 )}
 
                 {message.text && (
-                    <div className={`mb-4 p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700 border border-green-200' :
-                        message.type === 'error' ? 'bg-red-100 text-red-700 border border-red-200' :
-                            'bg-theme-card-hover text-theme-secondary border border-theme'
-                        }`}>
+                    <Alert
+                        icon={getAlertIcon(message.type)}
+                        color={getAlertColor(message.type)}
+                        variant="light"
+                        mb="md"
+                    >
                         {message.text}
-                    </div>
+                    </Alert>
                 )}
 
-                <form onSubmit={handleSaveProfile} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-theme-secondary mb-1">Name</label>
-                        <input
-                            type="text"
+                <form onSubmit={handleSaveProfile}>
+                    <Stack gap="sm">
+                        <TextInput
+                            label="Name"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            className={inputClass}
                             placeholder="Your name"
                         />
-                    </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-theme-secondary mb-1">Email</label>
-                        <input
+                        <TextInput
+                            label="Email"
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className={inputClass}
                             placeholder="your@email.com"
                             disabled={isOidc}
                         />
-                    </div>
 
-                    {!isOidc && (
-                        <>
-                            <div className="border-t border-theme pt-4 mt-4">
-                                <p className="text-sm text-theme-muted mb-3">Change Password (leave empty to keep current)</p>
-                            </div>
+                        {!isOidc && (
+                            <>
+                                <Divider my="sm" label="Change Password" labelPosition="left" />
+                                <Text size="sm" c="dimmed">Leave empty to keep current password</Text>
 
-                            <div>
-                                <label className="block text-sm font-medium text-theme-secondary mb-1">New Password</label>
-                                <input
-                                    type="password"
+                                <PasswordInput
+                                    label="New Password"
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
-                                    className={inputClass}
                                     placeholder="••••••••"
                                     minLength={6}
                                 />
-                            </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-theme-secondary mb-1">Confirm New Password</label>
-                                <input
-                                    type="password"
+                                <PasswordInput
+                                    label="Confirm New Password"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className={inputClass}
                                     placeholder="••••••••"
                                     minLength={6}
                                 />
-                            </div>
-                        </>
-                    )}
+                            </>
+                        )}
 
-                    <div className="pt-2">
-                        <button
-                            type="submit"
-                            disabled={isLoading}
-                            className="px-4 py-2 bg-accent hover:bg-accent-hover text-white font-medium rounded-lg transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isLoading ? 'Saving...' : 'Save Changes'}
-                        </button>
-                    </div>
+                        <Button type="submit" loading={isLoading} mt="sm">
+                            Save Changes
+                        </Button>
+                    </Stack>
                 </form>
-            </section>
+            </Paper>
 
             {/* Appearance Section */}
-            <section className="bg-theme-card border border-theme rounded-xl p-6 mb-6">
-                <h2 className="text-sm font-semibold text-theme-muted uppercase tracking-wide mb-4">Appearance</h2>
+            <Paper shadow="xs" radius="md" p="lg" withBorder mb="md">
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">Appearance</Text>
 
-                <div className="flex items-center justify-between py-3">
-                    <div className="flex flex-col gap-0.5">
-                        <span className="font-medium text-theme-primary">Theme</span>
-                        <span className="text-sm text-theme-muted">Choose your preferred color scheme</span>
-                    </div>
-                    <div className="flex gap-2">
-                        <button
-                            className={themeButtonClass(theme === 'dark')}
-                            onClick={() => setTheme('dark')}
-                        >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-[18px] h-[18px]">
-                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                            </svg>
-                            Dark
-                        </button>
-                        <button
-                            className={themeButtonClass(theme === 'light')}
-                            onClick={() => setTheme('light')}
-                        >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-[18px] h-[18px]">
-                                <circle cx="12" cy="12" r="5" />
-                                <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
-                            </svg>
-                            Light
-                        </button>
-                    </div>
-                </div>
-            </section>
+                <Group justify="space-between" align="center">
+                    <Box>
+                        <Text fw={500}>Theme</Text>
+                        <Text size="sm" c="dimmed">Choose your preferred color scheme</Text>
+                    </Box>
+                    <SegmentedControl
+                        value={colorScheme}
+                        onChange={setColorScheme}
+                        data={[
+                            { value: 'dark', label: 'Dark' },
+                            { value: 'light', label: 'Light' },
+                        ]}
+                    />
+                </Group>
+            </Paper>
 
             {/* Account Info Section */}
-            <section className="bg-theme-card border border-theme rounded-xl p-6 mb-6">
-                <h2 className="text-sm font-semibold text-theme-muted uppercase tracking-wide mb-4">Account</h2>
+            <Paper shadow="xs" radius="md" p="lg" withBorder mb="md">
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">Account</Text>
 
-                <div className="flex items-center justify-between py-3 border-b border-theme">
-                    <span className="font-medium text-theme-primary">Role</span>
-                    <span className="capitalize py-1 px-2.5 bg-accent-light text-accent rounded text-sm font-medium">{user?.role}</span>
-                </div>
+                <Group justify="space-between" py="sm" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
+                    <Text fw={500}>Role</Text>
+                    <Badge variant="light" tt="capitalize">{user?.role}</Badge>
+                </Group>
 
                 {isOidc && (
-                    <div className="flex items-center justify-between py-3">
-                        <span className="font-medium text-theme-primary">Authentication</span>
-                        <span className="py-1 px-2.5 bg-blue-100 text-blue-700 rounded text-sm font-medium">SSO / OIDC</span>
-                    </div>
+                    <Group justify="space-between" py="sm">
+                        <Text fw={500}>Authentication</Text>
+                        <Badge color="blue" variant="light">SSO / OIDC</Badge>
+                    </Group>
                 )}
-            </section>
+            </Paper>
 
             {/* About Section */}
-            <section className="bg-theme-card border border-theme rounded-xl p-6">
-                <h2 className="text-sm font-semibold text-theme-muted uppercase tracking-wide mb-4">About</h2>
+            <Paper shadow="xs" radius="md" p="lg" withBorder>
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">About</Text>
 
-                <div className="flex gap-5 items-start">
-                    <div className="w-16 h-16 shrink-0">
-                        <svg viewBox="0 0 100 100" className="w-full h-full text-accent">
-                            <rect x="15" y="10" width="70" height="80" rx="8" fill="currentColor" />
-                            <line x1="28" y1="30" x2="72" y2="30" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                            <line x1="28" y1="45" x2="65" y2="45" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                            <line x1="28" y1="60" x2="58" y2="60" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 className="text-2xl font-bold text-accent mb-1">Noteer</h3>
-                        <p className="text-sm text-theme-secondary">Version 0.1.0</p>
-                        <p className="text-sm text-theme-muted mt-2">
+                <Group gap="lg" align="flex-start">
+                    <Box
+                        component="svg"
+                        viewBox="0 0 100 100"
+                        w={56}
+                        h={56}
+                        c="blue"
+                    >
+                        <rect x="15" y="10" width="70" height="80" rx="8" fill="currentColor" />
+                        <line x1="28" y1="30" x2="72" y2="30" stroke="white" strokeWidth="4" strokeLinecap="round" />
+                        <line x1="28" y1="45" x2="65" y2="45" stroke="white" strokeWidth="4" strokeLinecap="round" />
+                        <line x1="28" y1="60" x2="58" y2="60" stroke="white" strokeWidth="4" strokeLinecap="round" />
+                    </Box>
+                    <Box>
+                        <Title order={2} c="blue" mb={4}>Noteer</Title>
+                        <Text size="sm" c="dimmed">Version 0.1.0</Text>
+                        <Text size="sm" c="dimmed" mt="xs">
                             A self-hosted notes application for organizing your thoughts, ideas, and tasks.
-                        </p>
-                    </div>
-                </div>
-            </section>
-        </div>
+                        </Text>
+                    </Box>
+                </Group>
+            </Paper>
+        </Box>
     );
 }

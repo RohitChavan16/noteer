@@ -10,11 +10,12 @@
         "lint": "eslint src --ext js,jsx"
     },
     "dependencies": {
-        "@tailwindcss/vite": "^4.1.18",
+        "@mantine/core": "^8.3.10",
+        "@mantine/hooks": "^8.3.10",
+        "@tabler/icons-react": "^3.35.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
         "react-router-dom": "^7.0.2",
-        "tailwindcss": "^4.1.18",
         "zustand": "^5.0.2"
     },
     "devDependencies": {

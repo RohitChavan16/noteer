@@ -1,33 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNotesStore } from '../stores/notesStore';
+import { Modal, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Button } from '@mantine/core';
+import { IconPalette } from '@tabler/icons-react';
 
 const NOTE_COLORS = [
-    { id: 'default', name: 'Default' },
-    { id: 'red', name: 'Red' },
-    { id: 'orange', name: 'Orange' },
-    { id: 'yellow', name: 'Yellow' },
-    { id: 'green', name: 'Green' },
-    { id: 'teal', name: 'Teal' },
-    { id: 'blue', name: 'Blue' },
-    { id: 'purple', name: 'Purple' },
-    { id: 'pink', name: 'Pink' },
-    { id: 'brown', name: 'Brown' },
-    { id: 'gray', name: 'Gray' },
+    { id: 'default', name: 'Default', color: '#ffffff', darkColor: '#1a1b1e' },
+    { id: 'red', name: 'Red', color: '#ffe3e3', darkColor: '#c92a2a' },
+    { id: 'orange', name: 'Orange', color: '#ffe8cc', darkColor: '#d9480f' },
+    { id: 'yellow', name: 'Yellow', color: '#fff3bf', darkColor: '#e67700' },
+    { id: 'green', name: 'Green', color: '#d3f9d8', darkColor: '#2f9e44' },
+    { id: 'teal', name: 'Teal', color: '#c3fae8', darkColor: '#12b886' },
+    { id: 'blue', name: 'Blue', color: '#d0ebff', darkColor: '#1971c2' },
+    { id: 'purple', name: 'Purple', color: '#e5dbff', darkColor: '#7048e8' },
+    { id: 'pink', name: 'Pink', color: '#ffdeeb', darkColor: '#c2255c' },
+    { id: 'brown', name: 'Brown', color: '#ffd8a8', darkColor: '#e8590c' },
+    { id: 'gray', name: 'Gray', color: '#e9ecef', darkColor: '#495057' },
 ];
-
-const COLOR_VALUES = {
-    default: 'var(--note-default)',
-    red: 'var(--note-red)',
-    orange: 'var(--note-orange)',
-    yellow: 'var(--note-yellow)',
-    green: 'var(--note-green)',
-    teal: 'var(--note-teal)',
-    blue: 'var(--note-blue)',
-    purple: 'var(--note-purple)',
-    pink: 'var(--note-pink)',
-    brown: 'var(--note-brown)',
-    gray: 'var(--note-gray)',
-};
 
 export default function NoteModal({ note, onClose }) {
     const { updateNote } = useNotesStore();
@@ -36,23 +24,11 @@ export default function NoteModal({ note, onClose }) {
     const [color, setColor] = useState(note?.color || 'default');
     const [showColors, setShowColors] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const modalRef = useRef(null);
-    const contentRef = useRef(null);
 
-    useEffect(() => {
-        const handleEsc = (e) => {
-            if (e.key === 'Escape') {
-                handleSave();
-            }
-        };
-        document.addEventListener('keydown', handleEsc);
-        return () => document.removeEventListener('keydown', handleEsc);
-    }, [title, content, color]);
-
-    useEffect(() => {
-        // Focus content area on open
-        contentRef.current?.focus();
-    }, []);
+    const getCurrentColor = () => {
+        const c = NOTE_COLORS.find(nc => nc.id === color);
+        return c ? c.color : NOTE_COLORS[0].color;
+    };
 
     const handleSave = async () => {
         if (isSaving) return;
@@ -69,77 +45,71 @@ export default function NoteModal({ note, onClose }) {
         onClose();
     };
 
-    const handleOverlayClick = (e) => {
-        if (e.target === e.currentTarget) {
-            handleSave();
-        }
-    };
-
     if (!note) return null;
 
     return (
-        <div
-            className="fixed inset-0 bg-black/70 flex items-center justify-center z-[1000] p-4 backdrop-blur-sm"
-            onClick={handleOverlayClick}
+        <Modal
+            opened={!!note}
+            onClose={handleSave}
+            size="lg"
+            centered
+            withCloseButton={false}
+            styles={{
+                content: { backgroundColor: getCurrentColor() },
+            }}
         >
-            <div
-                ref={modalRef}
-                className="w-full max-w-[600px] max-h-[80vh] rounded-xl flex flex-col shadow-2xl animate-[modalSlideIn_0.2s_ease-out] border border-gray-200 dark:border-oled-border"
-                style={{ backgroundColor: COLOR_VALUES[color] || COLOR_VALUES.default }}
-            >
-                <input
-                    type="text"
-                    className="w-full pt-4 px-4 pb-2 border-none bg-transparent text-xl font-semibold text-gray-900 dark:text-gray-100 outline-none placeholder:text-gray-400 dark:placeholder:text-gray-500"
+            <Stack gap="md">
+                <TextInput
                     placeholder="Title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    variant="unstyled"
+                    styles={{ input: { fontWeight: 600, fontSize: '1.25rem' } }}
                 />
-                <textarea
-                    ref={contentRef}
-                    className="flex-1 w-full py-2 px-4 border-none bg-transparent text-[0.95rem] text-gray-900 dark:text-gray-100 outline-none resize-none min-h-[200px] leading-relaxed placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                <Textarea
                     placeholder="Take a note..."
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
+                    variant="unstyled"
+                    minRows={6}
+                    autosize
                 />
 
-                <div className="flex items-center justify-between py-3 px-4 border-t border-white/10">
-                    <div className="flex gap-2">
-                        <div className="relative">
-                            <button
-                                className="w-9 h-9 border-none bg-transparent rounded-full cursor-pointer flex items-center justify-center transition-colors duration-150 hover:bg-white/10 group"
+                <Group justify="space-between">
+                    <Popover opened={showColors} onChange={setShowColors} position="top-start">
+                        <Popover.Target>
+                            <ActionIcon
+                                variant="subtle"
                                 onClick={() => setShowColors(!showColors)}
                                 title="Change color"
                             >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-200">
-                                    <circle cx="12" cy="12" r="10" />
-                                    <path d="M12 2a10 10 0 0 0 0 20" fill="currentColor" opacity="0.3" />
-                                </svg>
-                            </button>
-                            {showColors && (
-                                <div className="absolute bottom-full left-0 bg-white dark:bg-oled-dark rounded-lg p-2 grid grid-cols-4 gap-1 shadow-lg border border-gray-200 dark:border-oled-border mb-2">
-                                    {NOTE_COLORS.map((c) => (
-                                        <button
-                                            key={c.id}
-                                            className={`w-7 h-7 rounded-full border-2 cursor-pointer transition-all duration-150 hover:scale-110 ${color === c.id ? 'border-accent' : 'border-transparent'}`}
-                                            style={{ backgroundColor: COLOR_VALUES[c.id] }}
-                                            onClick={() => { setColor(c.id); setShowColors(false); }}
-                                            title={c.name}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                                <IconPalette size={18} />
+                            </ActionIcon>
+                        </Popover.Target>
+                        <Popover.Dropdown>
+                            <Group gap="xs">
+                                {NOTE_COLORS.map((c) => (
+                                    <ColorSwatch
+                                        key={c.id}
+                                        color={c.color}
+                                        onClick={() => { setColor(c.id); setShowColors(false); }}
+                                        style={{
+                                            cursor: 'pointer',
+                                            border: color === c.id ? '2px solid var(--mantine-color-blue-5)' : '1px solid var(--mantine-color-gray-3)'
+                                        }}
+                                        size={24}
+                                        title={c.name}
+                                    />
+                                ))}
+                            </Group>
+                        </Popover.Dropdown>
+                    </Popover>
 
-                    <button
-                        className="py-2 px-5 border-none bg-transparent text-gray-700 dark:text-gray-200 text-[0.9rem] font-medium cursor-pointer rounded-md transition-colors duration-150 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={handleSave}
-                        disabled={isSaving}
-                    >
+                    <Button variant="subtle" onClick={handleSave} loading={isSaving}>
                         {isSaving ? 'Saving...' : 'Close'}
-                    </button>
-                </div>
-            </div>
-        </div>
+                    </Button>
+                </Group>
+            </Stack>
+        </Modal>
     );
 }

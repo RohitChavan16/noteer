@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useNotesStore } from '../stores/notesStore';
+import { Box, Center, Loader, Text, Stack, Title } from '@mantine/core';
 import NoteGrid from '../components/NoteGrid';
 
 export default function TrashPage() {
@@ -10,18 +11,20 @@ export default function TrashPage() {
     }, [fetchNotes]);
 
     return (
-        <div className="max-w-full">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Trash</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-500 mb-6">Notes in trash are automatically deleted after 7 days</p>
+        <Box>
+            <Title order={3} mb="xs">Trash</Title>
+            <Text c="dimmed" size="sm" mb="lg">Notes in trash are automatically deleted after 7 days</Text>
 
             {isLoading ? (
-                <div className="flex flex-col items-center justify-center py-15 px-6 text-gray-400 dark:text-gray-600">
-                    <div className="w-8 h-8 border-3 border-gray-200 dark:border-oled-border border-t-accent rounded-full animate-spin mb-3" />
-                    <p>Loading notes...</p>
-                </div>
+                <Center py="xl">
+                    <Stack align="center">
+                        <Loader size="md" />
+                        <Text c="dimmed">Loading notes...</Text>
+                    </Stack>
+                </Center>
             ) : (
                 <NoteGrid notes={notes} showRestore showDelete />
             )}
-        </div>
+        </Box>
     );
 }
