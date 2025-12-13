@@ -12,6 +12,7 @@ router.use(authenticateToken);
 const validateNote = [
     body('title').optional().trim().isLength({ max: 500 }),
     body('content').optional().trim(),
+    body('type').optional().isIn(['note', 'checklist']),
     body('color').optional().isIn(['default', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'gray']),
     body('is_pinned').optional().isBoolean(),
     body('reminder_at').optional().isISO8601(),
@@ -24,12 +25,19 @@ router.get('/', async (req, res, next) => {
         const userId = req.user.id;
 
         let sql = `
-      SELECT n.*, array_agg(l.name) FILTER (WHERE l.name IS NOT NULL) as labels
-      FROM notes n
-      LEFT JOIN note_labels nl ON n.id = nl.note_id
-      LEFT JOIN labels l ON nl.label_id = l.id
-      WHERE n.user_id = $1
-    `;
+            SELECT n.*, 
+                   array_agg(DISTINCT l.name) FILTER (WHERE l.name IS NOT NULL) as labels,
+                   COALESCE((
+                       SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
+                       FROM note_items ni
+                       WHERE ni.note_id = n.id
+                   ), '[]'::json) as items
+            FROM notes n
+            LEFT JOIN note_labels nl ON n.id = nl.note_id
+            LEFT JOIN labels l ON nl.label_id = l.id
+            WHERE n.user_id = $1
+        `;
+
         const params = [userId];
         let paramIndex = 2;
 
@@ -49,10 +57,10 @@ router.get('/', async (req, res, next) => {
 
         if (label) {
             sql += ` AND EXISTS (
-        SELECT 1 FROM note_labels nl2 
-        JOIN labels l2 ON nl2.label_id = l2.id 
-        WHERE nl2.note_id = n.id AND l2.name = $${paramIndex}
-      )`;
+                SELECT 1 FROM note_labels nl2 
+                JOIN labels l2 ON nl2.label_id = l2.id 
+                WHERE nl2.note_id = n.id AND l2.name = $${paramIndex}
+            )`;
             params.push(label);
             paramIndex++;
         }
@@ -106,14 +114,14 @@ router.post('/', validateNote, async (req, res, next) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { title, content, color, is_pinned, reminder_at, items, labels } = req.body;
+        const { title, content, type, color, is_pinned, reminder_at, items, labels } = req.body;
         const userId = req.user.id;
 
         const result = await query(
-            `INSERT INTO notes (user_id, title, content, color, is_pinned, reminder_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO notes (user_id, title, content, type, color, is_pinned, reminder_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-            [userId, title || '', content || '', color || 'default', is_pinned || false, reminder_at || null]
+            [userId, title || '', content || '', type || 'note', color || 'default', is_pinned || false, reminder_at || null]
         );
 
         const note = result.rows[0];
@@ -149,6 +157,10 @@ router.post('/', validateNote, async (req, res, next) => {
             }
         }
 
+        // Attach items and labels to response
+        note.items = items || [];
+        note.labels = labels || [];
+
         res.status(201).json(note);
     } catch (error) {
         next(error);
@@ -165,7 +177,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         const { id } = req.params;
         const userId = req.user.id;
-        const { title, content, color, is_pinned, is_archived, reminder_at, items, labels } = req.body;
+        const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels } = req.body;
 
         // Build dynamic update
         const updates = [];
@@ -174,6 +186,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         if (title !== undefined) { updates.push(`title = $${paramIndex++}`); params.push(title); }
         if (content !== undefined) { updates.push(`content = $${paramIndex++}`); params.push(content); }
+        if (type !== undefined) { updates.push(`type = $${paramIndex++}`); params.push(type); }
         if (color !== undefined) { updates.push(`color = $${paramIndex++}`); params.push(color); }
         if (is_pinned !== undefined) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
         if (is_archived !== undefined) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
@@ -225,7 +238,11 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
             }
         }
 
-        res.json(result.rows[0]);
+        const responseNote = { ...result.rows[0] };
+        if (items) responseNote.items = items;
+        if (labels) responseNote.labels = labels;
+
+        res.json(responseNote);
     } catch (error) {
         next(error);
     }

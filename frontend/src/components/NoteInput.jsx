@@ -51,17 +51,23 @@ export default function NoteInput() {
                 }
                 await createNote({ title, content, color });
             } else {
-                if (!title.trim() && items.length === 0) {
+                // Include newItem if user was typing when they clicked away
+                const finalItems = newItem.trim()
+                    ? [...items, { content: newItem.trim(), is_checked: false }]
+                    : items;
+
+                if (!title.trim() && finalItems.length === 0) {
                     resetForm();
                     return;
                 }
-                await createNote({ title, items, color, type: 'checklist' });
+                await createNote({ title, items: finalItems, color, type: 'checklist' });
             }
             resetForm();
         } finally {
             isSubmittingRef.current = false;
         }
     };
+
 
     const resetForm = () => {
         setTitle('');

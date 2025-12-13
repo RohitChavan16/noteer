@@ -6,28 +6,28 @@ const { Pool } = pg;
 let pool;
 
 export function getPool() {
-    if (!pool) {
-        pool = new Pool({
-            connectionString: process.env.DATABASE_URL,
-        });
-    }
-    return pool;
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+  }
+  return pool;
 }
 
 export async function query(text, params) {
-    const client = await getPool().connect();
-    try {
-        return await client.query(text, params);
-    } finally {
-        client.release();
-    }
+  const client = await getPool().connect();
+  try {
+    return await client.query(text, params);
+  } finally {
+    client.release();
+  }
 }
 
 export async function initializeDatabase() {
-    console.log('📦 Initializing database...');
+  console.log('📦 Initializing database...');
 
-    // Create tables
-    await query(`
+  // Create tables
+  await query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
@@ -45,6 +45,7 @@ export async function initializeDatabase() {
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       title VARCHAR(500),
       content TEXT,
+      type VARCHAR(50) DEFAULT 'note',
       color VARCHAR(50) DEFAULT 'default',
       is_pinned BOOLEAN DEFAULT FALSE,
       is_archived BOOLEAN DEFAULT FALSE,
@@ -84,19 +85,35 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_note_items_note_id ON note_items(note_id);
   `);
 
-    // Create admin user if not exists
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'changeme';
+  // Migration: Add type column if it doesn't exist (for existing databases)
+  await query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'notes' AND column_name = 'type'
+        ) THEN
+          ALTER TABLE notes ADD COLUMN type VARCHAR(50) DEFAULT 'note';
+          -- Set type to 'checklist' for notes that have items
+          UPDATE notes SET type = 'checklist'
+          WHERE id IN (SELECT DISTINCT note_id FROM note_items);
+        END IF;
+      END $$;
+    `);
 
-    const existingAdmin = await query('SELECT id FROM users WHERE email = $1', [adminEmail]);
-    if (existingAdmin.rows.length === 0) {
-        const passwordHash = await bcrypt.hash(adminPassword, 12);
-        await query(
-            'INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4)',
-            [adminEmail, passwordHash, 'Administrator', 'admin']
-        );
-        console.log(`👤 Created admin user: ${adminEmail}`);
-    }
+  // Create admin user if not exists
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'changeme';
 
-    console.log('✅ Database initialized');
+  const existingAdmin = await query('SELECT id FROM users WHERE email = $1', [adminEmail]);
+  if (existingAdmin.rows.length === 0) {
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
+    await query(
+      'INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4)',
+      [adminEmail, passwordHash, 'Administrator', 'admin']
+    );
+    console.log(`👤 Created admin user: ${adminEmail}`);
+  }
+
+  console.log('✅ Database initialized');
 }

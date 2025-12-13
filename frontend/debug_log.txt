@@ -1,0 +1,197 @@
+START: Note actions test
+REQ: GET http://127.0.0.1:3000/login 200
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 200
+REQ: POST http://127.0.0.1:3000/api/auth/login 200
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+1. Login successful
+2. Creating Note...
+REQ: POST http://127.0.0.1:3000/api/notes 201
+   Note created
+3. Pinning Note...
+BROWSER: NoteCard action clicked 2
+REQ: PATCH http://127.0.0.1:3000/api/notes/2 200
+   Note pinned
+4. Archiving Note...
+BROWSER: NoteCard action clicked 2
+REQ: PATCH http://127.0.0.1:3000/api/notes/2 200
+   Note archived
+5. Verifying Archive Page...
+REQ: GET http://127.0.0.1:3000/archive 200
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/api/notes?archived=true 200
+   Found in archive
+6. Unarchiving Note...
+BROWSER: NoteCard action clicked 2
+REQ: PATCH http://127.0.0.1:3000/api/notes/2 200
+   Unarchived
+7. Verifying Dashboard...
+REQ: GET http://127.0.0.1:3000/ 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+   Back in dashboard
+8. Trashing Note...
+BROWSER: NoteCard action clicked 2
+REQ: POST http://127.0.0.1:3000/api/notes/2/trash 200
+   Note trashed
+9. Verifying Trash Page...
+REQ: GET http://127.0.0.1:3000/trash 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes?trashed=true 200
+START: Note actions test
+REQ: GET http://127.0.0.1:3000/login 200
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 200
+REQ: POST http://127.0.0.1:3000/api/auth/login 200
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+1. Login successful
+2. Creating Note...
+REQ: POST http://127.0.0.1:3000/api/notes 201
+   Note created
+3. Pinning Note...
+BROWSER: NoteCard action clicked 3
+REQ: PATCH http://127.0.0.1:3000/api/notes/3 200
+   Note pinned
+4. Archiving Note...
+BROWSER: NoteCard action clicked 3
+REQ: PATCH http://127.0.0.1:3000/api/notes/3 200
+   Note archived
+5. Verifying Archive Page...
+REQ: GET http://127.0.0.1:3000/archive 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes?archived=true 200
+   Found in archive
+6. Unarchiving Note...
+BROWSER: NoteCard action clicked 3
+REQ: PATCH http://127.0.0.1:3000/api/notes/3 200
+   Unarchived
+7. Verifying Dashboard...
+REQ: GET http://127.0.0.1:3000/ 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+   Back in dashboard
+8. Trashing Note...
+BROWSER: NoteCard action clicked 3
+REQ: POST http://127.0.0.1:3000/api/notes/3/trash 200
+   Note trashed
+9. Verifying Trash Page...
+REQ: GET http://127.0.0.1:3000/trash 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes?trashed=true 200
+START: Note actions test
+REQ: GET http://127.0.0.1:3000/login 200
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 200
+REQ: POST http://127.0.0.1:3000/api/auth/login 200
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+1. Login successful
+2. Creating Note...
+REQ: POST http://127.0.0.1:3000/api/notes 201
+   Note created
+3. Pinning Note...
+BROWSER: NoteCard action clicked 4
+REQ: PATCH http://127.0.0.1:3000/api/notes/4 200
+   Note pinned
+4. Archiving Note...
+BROWSER: NoteCard action clicked 4
+REQ: PATCH http://127.0.0.1:3000/api/notes/4 200
+   Note archived
+5. Verifying Archive Page...
+REQ: GET http://127.0.0.1:3000/archive 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes?archived=true 200
+   Found in archive
+6. Unarchiving Note...
+BROWSER: NoteCard action clicked 4
+REQ: PATCH http://127.0.0.1:3000/api/notes/4 200
+   Unarchived
+7. Verifying Dashboard...
+REQ: GET http://127.0.0.1:3000/ 200
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+   Back in dashboard
+8. Trashing Note...
+BROWSER: NoteCard action clicked 4
+REQ: POST http://127.0.0.1:3000/api/notes/4/trash 200
+   Note trashed
+9. Verifying Trash Page...
+REQ: GET http://127.0.0.1:3000/trash 200
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/assets/index-CCczVxL7.js 304
+REQ: GET http://127.0.0.1:3000/api/notes?trashed=true 200
+START: Note actions test
+REQ: GET http://127.0.0.1:3000/login 200
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 200
+REQ: GET http://127.0.0.1:3000/assets/index-DdWBUAGt.js 200
+REQ: POST http://127.0.0.1:3000/api/auth/login 200
+BROWSER: Fetched notes: []
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+1. Login successful
+2. Creating Note...
+REQ: POST http://127.0.0.1:3000/api/notes 201
+   Note created
+3. Pinning Note...
+BROWSER: NoteCard action clicked 5
+REQ: PATCH http://127.0.0.1:3000/api/notes/5 200
+   Note pinned
+4. Archiving Note...
+BROWSER: NoteCard action clicked 5
+REQ: PATCH http://127.0.0.1:3000/api/notes/5 200
+   Note archived
+5. Verifying Archive Page...
+REQ: GET http://127.0.0.1:3000/archive 200
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/assets/index-DdWBUAGt.js 304
+REQ: GET http://127.0.0.1:3000/api/notes?archived=true 200
+BROWSER: Fetched notes: [{"id":5,"user_id":1,"title":"Test Note 1765631856698","content":"","type":"note","color":"default","is_pinned":true,"is_archived":true,"is_trashed":false,"trashed_at":null,"reminder_at":null,"created_at":"2025-12-13T13:17:36.761Z","updated_at":"2025-12-13T13:17:36.986Z","labels":null,"items":[]}]
+   Found in archive
+6. Unarchiving Note...
+BROWSER: NoteCard action clicked 5
+REQ: PATCH http://127.0.0.1:3000/api/notes/5 200
+   Unarchived
+7. Verifying Dashboard...
+REQ: GET http://127.0.0.1:3000/ 200
+REQ: GET http://127.0.0.1:3000/assets/index-DdWBUAGt.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+BROWSER: Fetched notes: [{"id":5,"user_id":1,"title":"Test Note 1765631856698","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":false,"trashed_at":null,"reminder_at":null,"created_at":"2025-12-13T13:17:36.761Z","updated_at":"2025-12-13T13:17:37.136Z","labels":null,"items":[]}]
+   Back in dashboard
+8. Trashing Note...
+BROWSER: NoteCard action clicked 5
+REQ: POST http://127.0.0.1:3000/api/notes/5/trash 200
+   Note trashed
+9. Verifying Trash Page...
+REQ: GET http://127.0.0.1:3000/trash 200
+REQ: GET http://127.0.0.1:3000/assets/index-DdWBUAGt.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+BROWSER: Fetched notes: [{"id":5,"user_id":1,"title":"Test Note 1765631856698","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:17:37.278Z","reminder_at":null,"created_at":"2025-12-13T13:17:36.761Z","updated_at":"2025-12-13T13:17:37.278Z","labels":null,"items":[]},{"id":4,"user_id":1,"title":"Test Note 1765631751042","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:15:51.630Z","reminder_at":null,"created_at":"2025-12-13T13:15:51.113Z","updated_at":"2025-12-13T13:15:51.630Z","labels":null,"items":[]},{"id":3,"user_id":1,"title":"Test Note 1765631556009","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:12:36.584Z","reminder_at":null,"created_at":"2025-12-13T13:12:36.073Z","updated_at":"2025-12-13T13:12:36.584Z","labels":null,"items":[]},{"id":2,"user_id":1,"title":"Test Note 1765631451961","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:10:52.531Z","reminder_at":null,"created_at":"2025-12-13T13:10:52.010Z","updated_at":"2025-12-13T13:10:52.531Z","labels":null,"items":[]}]
+REQ: GET http://127.0.0.1:3000/api/notes?trashed=true 200
+    Found in Trash
+10. Restoring Note...
+BROWSER: NoteCard action clicked 5
+REQ: POST http://127.0.0.1:3000/api/notes/5/restore 200
+    Note restored
+11. Deleting Forever...
+REQ: GET http://127.0.0.1:3000/ 200
+REQ: GET http://127.0.0.1:3000/assets/index-DdWBUAGt.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+BROWSER: Fetched notes: [{"id":5,"user_id":1,"title":"Test Note 1765631856698","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":false,"trashed_at":null,"reminder_at":null,"created_at":"2025-12-13T13:17:36.761Z","updated_at":"2025-12-13T13:17:37.418Z","labels":null,"items":[]}]
+REQ: GET http://127.0.0.1:3000/api/notes? 200
+BROWSER: NoteCard action clicked 5
+REQ FAILED: http://127.0.0.1:3000/api/notes/5/trash net::ERR_ABORTED
+REQ: GET http://127.0.0.1:3000/trash 200
+REQ: GET http://127.0.0.1:3000/assets/index-DdWBUAGt.js 304
+REQ: GET http://127.0.0.1:3000/assets/index-DlwHOXfq.css 304
+BROWSER: Fetched notes: [{"id":5,"user_id":1,"title":"Test Note 1765631856698","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:17:37.549Z","reminder_at":null,"created_at":"2025-12-13T13:17:36.761Z","updated_at":"2025-12-13T13:17:37.549Z","labels":null,"items":[]},{"id":4,"user_id":1,"title":"Test Note 1765631751042","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:15:51.630Z","reminder_at":null,"created_at":"2025-12-13T13:15:51.113Z","updated_at":"2025-12-13T13:15:51.630Z","labels":null,"items":[]},{"id":3,"user_id":1,"title":"Test Note 1765631556009","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:12:36.584Z","reminder_at":null,"created_at":"2025-12-13T13:12:36.073Z","updated_at":"2025-12-13T13:12:36.584Z","labels":null,"items":[]},{"id":2,"user_id":1,"title":"Test Note 1765631451961","content":"","type":"note","color":"default","is_pinned":true,"is_archived":false,"is_trashed":true,"trashed_at":"2025-12-13T13:10:52.531Z","reminder_at":null,"created_at":"2025-12-13T13:10:52.010Z","updated_at":"2025-12-13T13:10:52.531Z","labels":null,"items":[]}]
+REQ: GET http://127.0.0.1:3000/api/notes?trashed=true 200
+BROWSER: NoteCard action clicked 5
+REQ FAILED: http://127.0.0.1:3000/api/notes/5 net::ERR_ABORTED
+SUCCESS: All checks passed

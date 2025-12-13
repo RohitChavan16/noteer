@@ -6,11 +6,15 @@ import NoteModal from './NoteModal';
 import { useNotesStore } from '../stores/notesStore';
 
 export default function NoteGrid({ notes, showRestore, showDelete }) {
-    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote } = useNotesStore();
+    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote } = useNotesStore();
     const [selectedNote, setSelectedNote] = useState(null);
 
-    const pinnedNotes = notes.filter((n) => n.is_pinned);
-    const otherNotes = notes.filter((n) => !n.is_pinned);
+    const isTrash = showDelete;
+    const isArchive = showRestore && !showDelete;
+
+    // In trash, we don't separate pinned notes
+    const pinnedNotes = isTrash ? [] : notes.filter((n) => n.is_pinned);
+    const otherNotes = isTrash ? notes : notes.filter((n) => !n.is_pinned);
 
     const handleNoteClick = (note) => {
         if (!showDelete) {
@@ -46,12 +50,12 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                         key={note.id}
                         note={note}
                         onClick={handleNoteClick}
-                        onPin={!showDelete ? pinNote : undefined}
-                        onArchive={!showDelete && !showRestore ? archiveNote : (showRestore ? unarchiveNote : undefined)}
-                        onTrash={!showDelete ? trashNote : undefined}
-                        onDelete={showDelete ? deleteNote : undefined}
-                        showRestore={showRestore}
-                        showDelete={showDelete}
+                        onPin={!isTrash ? pinNote : undefined}
+                        onArchive={!isTrash && !isArchive ? archiveNote : undefined}
+                        onUnarchive={isArchive ? unarchiveNote : undefined}
+                        onRestore={isTrash ? restoreNote : undefined}
+                        onTrash={!isTrash ? trashNote : undefined}
+                        onDelete={isTrash ? deleteNote : undefined}
                     />
                 ))}
             </Box>

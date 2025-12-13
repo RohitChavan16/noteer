@@ -84,6 +84,7 @@ volumes:
 | `PORT` | `3000` | Application port |
 | `ADMIN_EMAIL` | `admin@example.com` | Admin user email |
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
+| `REGISTRATION_ENABLED` | `true` | Allow new user registration |
 | `OIDC_ENABLED` | `false` | Enable OIDC authentication |
 | `OIDC_ISSUER_URL` | - | OIDC provider URL |
 | `OIDC_CLIENT_ID` | - | OIDC client ID |

@@ -23,9 +23,10 @@ export function errorHandler(err, req, res, next) {
     }
 
     // Default error
+    console.error('SERVER ERROR DETAIL:', err.message, err.stack);
     res.status(err.status || 500).json({
-        error: process.env.NODE_ENV === 'production'
-            ? 'Internal server error'
-            : err.message,
+        error: err.message,
+        stack: err.stack,
+        details: err
     });
 }

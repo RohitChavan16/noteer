@@ -1,6 +1,6 @@
 import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
-import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash } from '@tabler/icons-react';
+import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore } from '@tabler/icons-react';
 
 const NOTE_COLORS = {
     default: { light: undefined, dark: undefined },
@@ -34,11 +34,12 @@ const formatDate = (dateString) => {
     }
 };
 
-export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onDelete, showRestore, showDelete }) {
+export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
 
     const handleAction = (e, action) => {
+        console.log('NoteCard action clicked', note.id);
         e.stopPropagation();
         action();
     };
@@ -61,9 +62,6 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onD
                     '&:hover': {
                         transform: 'translateY(-2px)',
                         boxShadow: theme.shadows.md,
-                    },
-                    '&:hover .note-actions': {
-                        opacity: 1,
                     },
                     borderColor: note.is_pinned ? 'var(--mantine-color-blue-5)' : undefined,
                 },
@@ -128,66 +126,78 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onTrash, onD
                 </Group>
             )}
 
-            {/* Last modified date */}
-            {lastModified && (
-                <Text size="xs" c="dimmed" mt="sm">{lastModified}</Text>
-            )}
+            <Group mt="sm" justify="space-between" align="center">
+                <Group gap="xs" style={{ position: 'relative', zIndex: 2 }}>
+                    {onPin && (
+                        <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            onClick={(e) => handleAction(e, () => onPin(note.id, !note.is_pinned))}
+                            title={note.is_pinned ? 'Unpin' : 'Pin'}
+                        >
+                            {note.is_pinned ? <IconPinFilled size={16} /> : <IconPin size={16} />}
+                        </ActionIcon>
+                    )}
 
-            <Group gap="xs" mt="sm" className="note-actions" style={{ opacity: 0, transition: 'opacity 0.15s' }}>
-                {onPin && !showDelete && (
-                    <ActionIcon
-                        variant="subtle"
-                        size="sm"
-                        onClick={(e) => handleAction(e, () => onPin(note.id, !note.is_pinned))}
-                        title={note.is_pinned ? 'Unpin' : 'Pin'}
-                    >
-                        {note.is_pinned ? <IconPinFilled size={16} /> : <IconPin size={16} />}
-                    </ActionIcon>
-                )}
+                    {onArchive && (
+                        <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            onClick={(e) => handleAction(e, () => onArchive(note.id))}
+                            title="Archive"
+                        >
+                            <IconArchive size={16} />
+                        </ActionIcon>
+                    )}
 
-                {onArchive && !showDelete && !showRestore && (
-                    <ActionIcon
-                        variant="subtle"
-                        size="sm"
-                        onClick={(e) => handleAction(e, () => onArchive(note.id))}
-                        title="Archive"
-                    >
-                        <IconArchive size={16} />
-                    </ActionIcon>
-                )}
+                    {onUnarchive && (
+                        <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            onClick={(e) => handleAction(e, () => onUnarchive(note.id))}
+                            title="Unarchive"
+                        >
+                            <IconArchiveOff size={16} />
+                        </ActionIcon>
+                    )}
 
-                {showRestore && onArchive && (
-                    <ActionIcon
-                        variant="subtle"
-                        size="sm"
-                        onClick={(e) => handleAction(e, () => onArchive(note.id))}
-                        title="Unarchive"
-                    >
-                        <IconArchiveOff size={16} />
-                    </ActionIcon>
-                )}
+                    {onRestore && (
+                        <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            onClick={(e) => handleAction(e, () => onRestore(note.id))}
+                            title="Restore"
+                        >
+                            <IconRestore size={16} />
+                        </ActionIcon>
+                    )}
 
-                {onTrash && !showDelete && (
-                    <ActionIcon
-                        variant="subtle"
-                        size="sm"
-                        onClick={(e) => handleAction(e, () => onTrash(note.id))}
-                        title="Move to trash"
-                    >
-                        <IconTrash size={16} />
-                    </ActionIcon>
-                )}
+                    {onTrash && (
+                        <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            onClick={(e) => handleAction(e, () => onTrash(note.id))}
+                            title="Move to trash"
+                        >
+                            <IconTrash size={16} />
+                        </ActionIcon>
+                    )}
 
-                {showDelete && onDelete && (
-                    <ActionIcon
-                        variant="subtle"
-                        color="red"
-                        size="sm"
-                        onClick={(e) => handleAction(e, () => onDelete(note.id))}
-                        title="Delete forever"
-                    >
-                        <IconTrash size={16} />
-                    </ActionIcon>
+                    {onDelete && (
+                        <ActionIcon
+                            variant="subtle"
+                            color="red"
+                            size="sm"
+                            onClick={(e) => handleAction(e, () => onDelete(note.id))}
+                            title="Delete forever"
+                        >
+                            <IconTrash size={16} />
+                        </ActionIcon>
+                    )}
+                </Group>
+
+                {lastModified && (
+                    <Text size="xs" c="dimmed">{lastModified}</Text>
                 )}
             </Group>
         </Card>

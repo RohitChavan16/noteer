@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
 import { Modal, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Checkbox, Text, Box } from '@mantine/core';
-import { IconPalette, IconGripVertical, IconPlus, IconX } from '@tabler/icons-react';
+import { IconPalette, IconGripVertical, IconPlus, IconX, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash } from '@tabler/icons-react';
 
 const NOTE_COLORS = [
     { id: 'default', color: '#ffffff', darkColor: '#25262b' },
@@ -29,7 +29,7 @@ export default function NoteModal({ note, onClose }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
 
-    const { updateNote } = useNotesStore();
+    const { updateNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote } = useNotesStore();
     const [title, setTitle] = useState(note?.title || '');
     const [content, setContent] = useState(note?.content || '');
     const [items, setItems] = useState(note?.items || []);
@@ -162,7 +162,7 @@ export default function NoteModal({ note, onClose }) {
                     />
                 )}
 
-                <Group justify="space-between">
+                <Group justify="space-between" align="center">
                     <Group gap="xs">
                         <Popover opened={showColors} onChange={setShowColors} position="top-start">
                             <Popover.Target>
@@ -191,6 +191,72 @@ export default function NoteModal({ note, onClose }) {
                                 </Group>
                             </Popover.Dropdown>
                         </Popover>
+
+                        {!note.is_trashed && (
+                            <>
+                                <ActionIcon
+                                    variant="subtle"
+                                    onClick={async () => {
+                                        await updateNote(note.id, { is_pinned: !note.is_pinned });
+                                        // Don't close on pin
+                                        // Update local state if needed, but props should update if parent re-renders
+                                        // Actually better to just close or let store update propagate
+                                    }}
+                                    title={note.is_pinned ? "Unpin" : "Pin"}
+                                >
+                                    {note.is_pinned ? <IconPinFilled size={18} /> : <IconPin size={18} />}
+                                </ActionIcon>
+
+                                <ActionIcon
+                                    variant="subtle"
+                                    onClick={async () => {
+                                        await (note.is_archived ? unarchiveNote(note.id) : archiveNote(note.id));
+                                        onClose();
+                                    }}
+                                    title={note.is_archived ? "Unarchive" : "Archive"}
+                                >
+                                    {note.is_archived ? <IconArchiveOff size={18} /> : <IconArchive size={18} />}
+                                </ActionIcon>
+
+                                <ActionIcon
+                                    variant="subtle"
+                                    onClick={async () => {
+                                        await trashNote(note.id);
+                                        onClose();
+                                    }}
+                                    title="Trash"
+                                >
+                                    <IconTrash size={18} />
+                                </ActionIcon>
+                            </>
+                        )}
+
+                        {note.is_trashed && (
+                            <>
+                                <ActionIcon
+                                    variant="subtle"
+                                    onClick={async () => {
+                                        await restoreNote(note.id);
+                                        onClose();
+                                    }}
+                                    title="Restore"
+                                >
+                                    <IconArchiveOff size={18} />
+                                </ActionIcon>
+                                <ActionIcon
+                                    variant="subtle"
+                                    color="red"
+                                    onClick={async () => {
+                                        await deleteNote(note.id);
+                                        onClose();
+                                    }}
+                                    title="Delete forever"
+                                >
+                                    <IconTrash size={18} />
+                                </ActionIcon>
+                            </>
+                        )}
+
                     </Group>
 
                     {note.updated_at && (
