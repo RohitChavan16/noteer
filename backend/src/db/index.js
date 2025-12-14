@@ -32,13 +32,16 @@ export async function initializeDatabase() {
       id SERIAL PRIMARY KEY,
       email VARCHAR(255) UNIQUE NOT NULL,
       password_hash VARCHAR(255),
-      name VARCHAR(255),
+      given_name VARCHAR(255),
+      family_name VARCHAR(255),
       role VARCHAR(50) DEFAULT 'user',
       oidc_subject VARCHAR(255),
       oidc_issuer VARCHAR(255),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE INDEX IF NOT EXISTS idx_users_oidc_subject ON users(oidc_subject);
 
     CREATE TABLE IF NOT EXISTS notes (
       id SERIAL PRIMARY KEY,
@@ -93,16 +96,40 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_note_versions_note_id ON note_versions(note_id);
   `);
 
-  // Migration: Add type column if it doesn't exist (for existing databases)
+  // Migration: Split name into given_name and family_name
   await query(`
       DO $$
       BEGIN
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'name'
+        ) THEN
+            -- Add new columns if they don't exist
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'given_name') THEN
+                ALTER TABLE users ADD COLUMN given_name VARCHAR(255);
+            END IF;
+            
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'family_name') THEN
+                ALTER TABLE users ADD COLUMN family_name VARCHAR(255);
+            END IF;
+
+            -- Migrate data (simple split by first space)
+            UPDATE users 
+            SET 
+                given_name = split_part(name, ' ', 1),
+                family_name = NULLIF(substring(name from length(split_part(name, ' ', 1)) + 2), '')
+            WHERE name IS NOT NULL AND given_name IS NULL;
+
+            -- Drop old column
+            ALTER TABLE users DROP COLUMN name;
+        END IF;
+
+        -- Ensure type column exists (previous migration)
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns
           WHERE table_name = 'notes' AND column_name = 'type'
         ) THEN
           ALTER TABLE notes ADD COLUMN type VARCHAR(50) DEFAULT 'note';
-          -- Set type to 'checklist' for notes that have items
           UPDATE notes SET type = 'checklist'
           WHERE id IN (SELECT DISTINCT note_id FROM note_items);
         END IF;
@@ -117,8 +144,8 @@ export async function initializeDatabase() {
   if (existingAdmin.rows.length === 0) {
     const passwordHash = await bcrypt.hash(adminPassword, 12);
     await query(
-      'INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, $4)',
-      [adminEmail, passwordHash, 'Administrator', 'admin']
+      'INSERT INTO users (email, password_hash, given_name, family_name, role) VALUES ($1, $2, $3, $4, $5)',
+      [adminEmail, passwordHash, 'Administrator', '', 'admin']
     );
     console.log(`👤 Created admin user: ${adminEmail}`);
   }

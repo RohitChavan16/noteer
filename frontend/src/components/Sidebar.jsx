@@ -74,16 +74,16 @@ export default function Sidebar({ onClose }) {
 
             {/* User section */}
             <Box p="md" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
-                <Group justify="space-between">
-                    <Group gap="sm">
-                        <Avatar color="blue" radius="xl">
+                <Group justify="space-between" wrap="nowrap">
+                    <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                        <Avatar color="blue" radius="xl" flex={0}>
                             {user?.name?.[0] || user?.email?.[0] || 'U'}
                         </Avatar>
-                        <Box>
-                            <Text size="sm" fw={500} lineClamp={1}>
+                        <Box style={{ flex: 1, minWidth: 0 }}>
+                            <Text size="sm" fw={500} truncate="end">
                                 {user?.name || user?.email}
                             </Text>
-                            <Text size="xs" c="dimmed" tt="capitalize">
+                            <Text size="xs" c="dimmed" tt="capitalize" truncate="end">
                                 {user?.role}
                             </Text>
                         </Box>
@@ -93,6 +93,7 @@ export default function Sidebar({ onClose }) {
                         color="red"
                         onClick={handleLogout}
                         title="Logout"
+                        flex={0}
                     >
                         <IconLogout size={18} />
                     </ActionIcon>

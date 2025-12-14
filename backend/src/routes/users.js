@@ -13,9 +13,13 @@ router.use(authenticateToken);
 router.get('/', requireRole('admin'), async (req, res, next) => {
     try {
         const result = await query(
-            'SELECT id, email, name, role, oidc_subject, created_at FROM users ORDER BY created_at DESC'
+            'SELECT id, email, given_name, family_name, role, oidc_subject, created_at FROM users ORDER BY created_at DESC'
         );
-        res.json(result.rows);
+        const users = result.rows.map(u => ({
+            ...u,
+            name: `${u.given_name || ''} ${u.family_name || ''}`.trim() || u.email
+        }));
+        res.json(users);
     } catch (error) {
         next(error);
     }
@@ -32,7 +36,7 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
         }
 
         const result = await query(
-            'SELECT id, email, name, role, oidc_subject, oidc_issuer, created_at FROM users WHERE id = $1',
+            'SELECT id, email, given_name, family_name, role, oidc_subject, oidc_issuer, created_at FROM users WHERE id = $1',
             [id]
         );
 
@@ -43,6 +47,7 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
         const user = result.rows[0];
         res.json({
             ...user,
+            name: `${user.given_name || ''} ${user.family_name || ''}`.trim() || user.email,
             isOidc: !!user.oidc_subject,
         });
     } catch (error) {
@@ -53,7 +58,8 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
 // PATCH /api/users/:id - Update user (name, email, password)
 router.patch('/:id', [
     param('id').isInt(),
-    body('name').optional().trim().isLength({ max: 255 }),
+    body('given_name').optional().trim().isLength({ max: 255 }),
+    body('family_name').optional().trim().isLength({ max: 255 }),
     body('email').optional().isEmail().normalizeEmail(),
     body('password').optional().isLength({ min: 6 }),
     body('role').optional().isIn(['admin', 'user']),
@@ -65,7 +71,7 @@ router.patch('/:id', [
         }
 
         const { id } = req.params;
-        const { name, email, password, role } = req.body;
+        const { given_name, family_name, email, password, role } = req.body;
 
         // Users can only update themselves unless admin
         if (req.user.role !== 'admin' && req.user.id !== parseInt(id)) {
@@ -104,9 +110,13 @@ router.patch('/:id', [
         const params = [];
         let paramIndex = 1;
 
-        if (name !== undefined) {
-            updates.push(`name = $${paramIndex++}`);
-            params.push(name);
+        if (given_name !== undefined) {
+            updates.push(`given_name = $${paramIndex++}`);
+            params.push(given_name);
+        }
+        if (family_name !== undefined) {
+            updates.push(`family_name = $${paramIndex++}`);
+            params.push(family_name);
         }
         if (email && !isOidcUser) {
             updates.push(`email = $${paramIndex++}`);
@@ -130,13 +140,14 @@ router.patch('/:id', [
 
         const result = await query(
             `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} 
-       RETURNING id, email, name, role, oidc_subject, created_at`,
+       RETURNING id, email, given_name, family_name, role, oidc_subject, created_at`,
             params
         );
 
         const updatedUser = result.rows[0];
         res.json({
             ...updatedUser,
+            name: `${updatedUser.given_name || ''} ${updatedUser.family_name || ''}`.trim() || updatedUser.email,
             isOidc: !!updatedUser.oidc_subject,
         });
     } catch (error) {

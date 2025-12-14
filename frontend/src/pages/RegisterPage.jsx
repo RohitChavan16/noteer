@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { Center, Paper, TextInput, PasswordInput, Button, Title, Text, Anchor, Stack, Box, Alert } from '@mantine/core';
+import { Center, Paper, TextInput, PasswordInput, Button, Title, Text, Anchor, Stack, Box, Alert, Group } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 
 export default function RegisterPage() {
-    const [name, setName] = useState('');
+    const [givenName, setGivenName] = useState('');
+    const [familyName, setFamilyName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -20,7 +21,7 @@ export default function RegisterPage() {
             return;
         }
 
-        const success = await register(email, password, name);
+        const success = await register(email, password, givenName, familyName);
         if (success) {
             navigate('/');
         }
@@ -59,15 +60,23 @@ export default function RegisterPage() {
                                 </Alert>
                             )}
 
-                            <TextInput
-                                label="Name (optional)"
-                                type="text"
-                                placeholder="Your name"
-                                autoFocus
-                                maxLength={255}
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                            />
+                            <Group grow>
+                                <TextInput
+                                    label="First Name"
+                                    placeholder="John"
+                                    value={givenName}
+                                    onChange={(e) => setGivenName(e.target.value)}
+                                    autoFocus
+                                    maxLength={255}
+                                />
+                                <TextInput
+                                    label="Last Name"
+                                    placeholder="Doe"
+                                    value={familyName}
+                                    onChange={(e) => setFamilyName(e.target.value)}
+                                    maxLength={255}
+                                />
+                            </Group>
 
                             <TextInput
                                 label="Email"

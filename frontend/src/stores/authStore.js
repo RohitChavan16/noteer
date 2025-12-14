@@ -35,13 +35,13 @@ export const useAuthStore = create(
                 }
             },
 
-            register: async (email, password, name) => {
+            register: async (email, password, given_name, family_name) => {
                 set({ isLoading: true, error: null });
                 try {
                     const res = await fetch(`${API_URL}/auth/register`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ email, password, name }),
+                        body: JSON.stringify({ email, password, given_name, family_name }),
                     });
 
                     if (!res.ok) {
@@ -50,6 +50,25 @@ export const useAuthStore = create(
                     }
 
                     const { token, user } = await res.json();
+                    set({ token, user, isAuthenticated: true, isLoading: false });
+                    return true;
+                } catch (error) {
+                    set({ error: error.message, isLoading: false });
+                    return false;
+                }
+            },
+
+            loginWithToken: async (token) => {
+                set({ isLoading: true, error: null });
+                try {
+                    // Verifikace tokenu a ziskani dat uzivatele
+                    const res = await fetch(`${API_URL}/auth/me`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+
+                    if (!res.ok) throw new Error('Invalid token');
+
+                    const { user } = await res.json();
                     set({ token, user, isAuthenticated: true, isLoading: false });
                     return true;
                 } catch (error) {
@@ -86,7 +105,7 @@ export const useAuthStore = create(
                     }
 
                     set({
-                        user: { ...user, name: data.name, email: data.email },
+                        user: { ...user, ...data }, // Spread all data including new names
                         isLoading: false
                     });
                     return { success: true };

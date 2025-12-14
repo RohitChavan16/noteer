@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Center, Paper, TextInput, PasswordInput, Button, Title, Text, Anchor, Stack, Box, Alert } from '@mantine/core';
@@ -8,7 +8,16 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const { login, isLoading, error, clearError } = useAuthStore();
+    const [oidcEnabled, setOidcEnabled] = useState(false);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        // Check public config
+        fetch('/api/auth/config')
+            .then(res => res.json())
+            .then(data => setOidcEnabled(data.oidcEnabled))
+            .catch(() => { });
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -70,6 +79,18 @@ export default function LoginPage() {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                             />
+
+                            {oidcEnabled && (
+                                <Button
+                                    component="a"
+                                    href="/api/auth/oidc/login"
+                                    variant="outline"
+                                    fullWidth
+                                    mt="md"
+                                >
+                                    Login with SSO (OIDC)
+                                </Button>
+                            )}
 
                             <Button type="submit" loading={isLoading} fullWidth mt="sm">
                                 Sign in

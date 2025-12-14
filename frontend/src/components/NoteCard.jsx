@@ -3,19 +3,7 @@ import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu } from
 import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory } from '@tabler/icons-react';
 
-const NOTE_COLORS = {
-    default: { light: undefined, dark: undefined },
-    red: { light: 'red.1', dark: 'red.9' },
-    orange: { light: 'orange.1', dark: 'orange.9' },
-    yellow: { light: 'yellow.1', dark: 'yellow.9' },
-    green: { light: 'green.1', dark: 'green.9' },
-    teal: { light: 'teal.1', dark: 'teal.9' },
-    blue: { light: 'blue.1', dark: 'blue.9' },
-    purple: { light: 'grape.1', dark: 'grape.9' },
-    pink: { light: 'pink.1', dark: 'pink.9' },
-    brown: { light: 'orange.2', dark: 'orange.9' },
-    gray: { light: 'gray.2', dark: 'gray.8' },
-};
+import { getNoteColor, getNoteTextColor } from '../constants/noteColors';
 
 const formatDate = (dateString) => {
     if (!dateString) return null;
@@ -25,7 +13,7 @@ const formatDate = (dateString) => {
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     } else if (diffDays === 1) {
         return 'Yesterday';
     } else if (diffDays < 7) {
@@ -46,7 +34,8 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
         action();
     };
 
-    const bgColor = NOTE_COLORS[note.color]?.[isDark ? 'dark' : 'light'];
+    const bgColor = getNoteColor(note.color, isDark);
+    const textColor = getNoteTextColor(note.color, isDark);
     const lastModified = formatDate(note.updated_at || note.created_at);
 
     return (
@@ -58,8 +47,13 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             onClick={() => onClick?.(note)}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            style={{ cursor: 'pointer', breakInside: 'avoid', marginBottom: 16 }}
-            bg={bgColor}
+            style={{
+                cursor: 'pointer',
+                breakInside: 'avoid',
+                marginBottom: 16,
+                backgroundColor: bgColor,
+                color: textColor
+            }}
             className="note-card"
             styles={(theme) => ({
                 root: {
@@ -75,7 +69,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             {note.is_pinned && (
                 <ActionIcon
                     variant="transparent"
-                    color="blue"
+                    color={textColor === '#000000' ? 'dark' : 'blue'}
                     size="sm"
                     style={{ position: 'absolute', top: 8, right: 8 }}
                 >
@@ -84,13 +78,13 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             )}
 
             {note.title && (
-                <Text fw={600} size="md" mb="xs">
+                <Text fw={600} size="md" mb="xs" style={{ color: textColor }}>
                     {note.title}
                 </Text>
             )}
 
             {note.content && (
-                <Text size="sm" c="dimmed" lineClamp={6} style={{ whiteSpace: 'pre-wrap' }}>
+                <Text size="sm" lineClamp={6} style={{ whiteSpace: 'pre-wrap', color: textColor, opacity: 0.8 }}>
                     {note.content}
                 </Text>
             )}
@@ -104,7 +98,8 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                                     checked={item.is_checked}
                                     onChange={() => onItemToggle && onItemToggle(note.id, idx)}
                                     size="xs"
-                                    styles={{ input: { cursor: 'pointer' } }}
+                                    color={textColor === '#000000' ? 'dark' : 'blue'}
+                                    styles={{ input: { cursor: 'pointer', borderColor: textColor === '#000000' ? 'rgba(0,0,0,0.3)' : undefined } }}
                                 />
                             </Box>
                             <Text
@@ -114,6 +109,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                                     opacity: item.is_checked ? 0.6 : 1,
                                     flex: 1,
                                     wordBreak: 'break-word',
+                                    color: textColor
                                 }}
                             >
                                 {item.content}
@@ -141,6 +137,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size="sm"
                             onClick={(e) => handleAction(e, () => onPin(note.id, !note.is_pinned))}
                             title={note.is_pinned ? 'Unpin' : 'Pin'}
+                            style={{ color: textColor }}
                         >
                             {note.is_pinned ? <IconPinFilled size={16} /> : <IconPin size={16} />}
                         </ActionIcon>
@@ -152,6 +149,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size="sm"
                             onClick={(e) => handleAction(e, () => onArchive(note.id))}
                             title="Archive"
+                            style={{ color: textColor }}
                         >
                             <IconArchive size={16} />
                         </ActionIcon>
@@ -163,6 +161,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size="sm"
                             onClick={(e) => handleAction(e, () => onUnarchive(note.id))}
                             title="Unarchive"
+                            style={{ color: textColor }}
                         >
                             <IconArchiveOff size={16} />
                         </ActionIcon>
@@ -174,6 +173,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size="sm"
                             onClick={(e) => handleAction(e, () => onRestore(note.id))}
                             title="Restore"
+                            style={{ color: textColor }}
                         >
                             <IconRestore size={16} />
                         </ActionIcon>
@@ -185,6 +185,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size="sm"
                             onClick={(e) => handleAction(e, () => onTrash(note.id))}
                             title="Move to trash"
+                            style={{ color: textColor }}
                         >
                             <IconTrash size={16} />
                         </ActionIcon>
@@ -210,6 +211,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                                     size="sm"
                                     onClick={(e) => e.stopPropagation()}
                                     title="More options"
+                                    style={{ color: textColor }}
                                 >
                                     <IconDotsVertical size={16} />
                                 </ActionIcon>
@@ -228,7 +230,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                 </Group>
 
                 {lastModified && (
-                    <Text size="xs" c="dimmed">{lastModified}</Text>
+                    <Text size="xs" style={{ color: textColor, opacity: 0.7 }}>{lastModified}</Text>
                 )}
             </Group>
         </Card>

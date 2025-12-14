@@ -11,7 +11,8 @@ export default function SettingsPage() {
     const { user, updateProfile, isLoading } = useAuthStore();
     const { colorScheme, setColorScheme } = useMantineColorScheme();
 
-    const [name, setName] = useState(user?.name || '');
+    const [givenName, setGivenName] = useState(user?.given_name || '');
+    const [familyName, setFamilyName] = useState(user?.family_name || '');
     const [email, setEmail] = useState(user?.email || '');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,7 +30,8 @@ export default function SettingsPage() {
         }
 
         const updates = {};
-        if (name !== user?.name) updates.name = name;
+        if (givenName !== user?.given_name) updates.given_name = givenName;
+        if (familyName !== user?.family_name) updates.family_name = familyName;
         if (!isOidc && email !== user?.email) updates.email = email;
         if (!isOidc && newPassword) updates.password = newPassword;
 
@@ -87,13 +89,24 @@ export default function SettingsPage() {
 
                 <form onSubmit={handleSaveProfile}>
                     <Stack gap="sm">
-                        <TextInput
-                            label="Name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder="Your name"
-                            maxLength={255}
-                        />
+                        <Group grow>
+                            <TextInput
+                                label="First Name"
+                                value={givenName}
+                                onChange={(e) => setGivenName(e.target.value)}
+                                placeholder="John"
+                                maxLength={255}
+                                disabled={isOidc}
+                            />
+                            <TextInput
+                                label="Last Name"
+                                value={familyName}
+                                onChange={(e) => setFamilyName(e.target.value)}
+                                placeholder="Doe"
+                                maxLength={255}
+                                disabled={isOidc}
+                            />
+                        </Group>
 
                         <TextInput
                             label="Email"

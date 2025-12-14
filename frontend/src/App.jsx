@@ -1,5 +1,7 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuthStore } from './stores/authStore';
+import { Loader, Center } from '@mantine/core';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -19,6 +21,45 @@ function PublicRoute({ children }) {
 }
 
 export default function App() {
+    const { loginWithToken } = useAuthStore();
+    const navigate = useNavigate();
+
+    // Check for token synchronously during initialization to prevent
+    // ProtectedRoute from redirecting before we can verify
+    const [isVerifying, setIsVerifying] = useState(() => {
+        return !!new URLSearchParams(window.location.search).get('token');
+    });
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token');
+
+        fetch('/api/auth/debug?msg=' + encodeURIComponent('App mounted. Token found: ' + (token ? 'YES' : 'NO')));
+
+        if (token) {
+            // Verification already active via initial state
+            loginWithToken(token).then(success => {
+                fetch('/api/auth/debug?msg=' + encodeURIComponent('Login result: ' + success));
+                if (success) {
+                    // Remove token from URL without refresh
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                } else {
+                    // Token invalid/expired
+                    navigate('/login');
+                }
+                setIsVerifying(false);
+            });
+        }
+    }, [loginWithToken, navigate]);
+
+    if (isVerifying) {
+        return (
+            <Center mih="100vh">
+                <Loader size="xl" />
+            </Center>
+        );
+    }
+
     return (
         <Routes>
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />

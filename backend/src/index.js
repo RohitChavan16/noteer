@@ -7,6 +7,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import cookieParser from 'cookie-parser';
 
 import authRoutes from './routes/auth.js';
 import notesRoutes from './routes/notes.js';
@@ -63,6 +64,9 @@ process.env.JWT_SECRET = getOrGenerateJwtSecret();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy (required for correct protocol detection behind reverse proxies like Traefik/Nginx)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Let frontend handle CSP
@@ -72,6 +76,14 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use(cookieParser());
+
+// Debug logging middleware
+app.use((req, res, next) => {
+  console.log(`[Request] ${req.method} ${req.url}`);
+  console.log(`[Request] Auth Header: ${req.headers['authorization'] ? 'Present' : 'Missing'}`);
+  next();
+});
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

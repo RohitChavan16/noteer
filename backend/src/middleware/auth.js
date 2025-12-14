@@ -6,6 +6,7 @@ export function authenticateToken(req, res, next) {
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
+        console.log('[Auth] No token provided');
         return res.status(401).json({ error: 'Authentication required' });
     }
 
@@ -13,7 +14,10 @@ export function authenticateToken(req, res, next) {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
         next();
-    } catch (_error) {
+    } catch (error) {
+        console.error('[Auth] Token verification failed:', error.message);
+        console.log('[Auth] Token was:', token);
+        console.log('[Auth] Secret starts with:', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 4) + '...' : 'UNDEFINED');
         return res.status(403).json({ error: 'Invalid or expired token' });
     }
 }

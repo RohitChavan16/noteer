@@ -88,13 +88,24 @@ volumes:
 | `NOTE_VERSION_LIMIT` | `10` | Max stored versions per note (FIFO) |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
 | `OIDC_ENABLED` | `false` | Enable OIDC authentication |
-| `OIDC_ISSUER_URL` | - | OIDC provider URL |
+| `OIDC_ISSUER_URL` | - | OIDC provider URL (e.g. `https://auth.example.com`) |
 | `OIDC_CLIENT_ID` | - | OIDC client ID |
 | `OIDC_CLIENT_SECRET` | - | OIDC client secret |
-| `OIDC_REDIRECT_URI` | - | OIDC callback URL |
+| `APP_URL` | - | Public URL of the app (e.g., `https://notes.example.com`). Recommended for OIDC. |
 | `SSL_ENABLED` | `false` | Enable direct HTTPS |
 | `SSL_CERT_PATH` | - | Path to SSL certificate |
 | `SSL_KEY_PATH` | - | Path to SSL key |
+
+### OIDC Configuration
+
+If you enable OIDC (by setting `OIDC_ISSUER_URL`), you must register the **Callback URL** in your Identity Provider (Authentik, Keycloak, etc.).
+
+**Callback URL pattern:**
+`[YOUR_APP_URL]/api/auth/callback`
+
+Examples:
+- Local: `http://localhost:3000/api/auth/callback`
+- Production: `https://notes.example.com/api/auth/callback`
 
 ### Reverse Proxy (Recommended)
 
@@ -160,7 +171,6 @@ docker run -d \
 
 ### 📱 Mobile Apps (Planned)
 - [ ] 🤖 Android app (native)
-- [ ] 🍎 iOS app (native)
 - [ ] 📲 PWA support
 
 ### 🔧 Features (Planned)
@@ -170,7 +180,9 @@ docker run -d \
 - [ ] 🔍 Advanced search with filters
 - [ ] 📤 Export (Markdown, PDF)
 - [ ] 🔄 Offline sync
-- [ ] 🏷️ Nested labels
+- [ ] 🏷️ **Labels**: Create labels, assign multiple to notes, filter by label.
+
+- [ ] 🔽 **Sorting Notes**: By updated date (default) or alphabetical (A-Z/Z-A) based on title/content.
 
 ---
 
