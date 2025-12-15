@@ -44,7 +44,10 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             padding="md"
             radius="md"
             withBorder
-            onClick={() => onClick?.(note)}
+            onClick={() => {
+                console.log('NoteCard onClick fired for note:', note.id, note.title);
+                onClick?.(note);
+            }}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             style={{

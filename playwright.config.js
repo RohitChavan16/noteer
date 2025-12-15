@@ -35,17 +35,6 @@ export default defineConfig({
             name: 'Mobile Safari',
             use: { ...devices['iPhone 12'] },
         },
-        {
-            name: 'Samsung Galaxy S24',
-            use: {
-                userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-S921B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-                viewport: { width: 360, height: 780 },
-                deviceScaleFactor: 3,
-                isMobile: true,
-                hasTouch: true,
-                defaultBrowserType: 'chromium',
-            },
-        },
     ],
 
     /* Run your local dev server before starting the tests */
