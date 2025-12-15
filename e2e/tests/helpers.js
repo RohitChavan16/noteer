@@ -42,8 +42,13 @@ export async function logout(page, isMobile) {
     const logoutBtn = page.locator('[title="Logout"]');
     await expect(logoutBtn).toBeVisible({ timeout: 5000 });
     await logoutBtn.scrollIntoViewIfNeeded();
-    // Use force click to handle mobile viewport issues
-    await logoutBtn.click({ force: true });
+    // Use force click to handle mobile viewport issues, with fallback to dispatchEvent
+    try {
+        await logoutBtn.click({ force: true, timeout: 3000 });
+    } catch (error) {
+        console.log(`Click failed: ${error.message}. Retrying with dispatchEvent...`);
+        await logoutBtn.dispatchEvent('click');
+    }
     await expect(page.locator('text=Welcome back')).toBeVisible({ timeout: 5000 });
 }
 

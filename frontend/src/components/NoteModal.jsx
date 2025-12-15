@@ -67,7 +67,15 @@ export default function NoteModal({ note, onClose }) {
 
         if (hasChanges) {
             setIsSaving(true);
-            await updateNote(note.id, { title, content, color, items });
+            await updateNote(note.id, {
+                title,
+                content,
+                color,
+                items,
+                is_pinned: note.is_pinned,
+                is_archived: note.is_archived,
+                type: note.type
+            });
             setIsSaving(false);
         }
         onClose();

@@ -28,12 +28,10 @@ test.describe('Archive Checklist', () => {
         // 5. Edit checklist in archive
         const archivedCard = getNoteCard(page, checklistTitle);
         await expect(archivedCard).toBeVisible({ timeout: 10000 });
-
         await openNoteModal(page, archivedCard);
-
-        // Edit first item - Mantine modal selector
+        // Edit first item - find by value
         const modal = page.locator('.mantine-Modal-content');
-        const firstItemInput = modal.locator('input[type="text"]').first();
+        const firstItemInput = modal.locator('input').filter({ hasValue: 'Item 1' }).first();
         await firstItemInput.fill(editedItem);
         await closeNoteModal(page);
 
@@ -85,7 +83,7 @@ test.describe('Archive Checklist', () => {
         await expect(archivedCard).toBeVisible({ timeout: 10000 });
 
         await openNoteModal(page, archivedCard);
-        const firstItemInput = modal.locator('input[type="text"]').first();
+        const firstItemInput = modal.locator('input').filter({ hasValue: 'Task A' }).first();
         await firstItemInput.fill(editedItem);
         await closeNoteModal(page);
 
