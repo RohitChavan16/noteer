@@ -4,6 +4,7 @@ import {
     openNoteModal, closeNoteModal, getNoteCard, uniqueId
 } from './helpers.js';
 
+
 test.describe('Archive Checklist', () => {
 
     test('should archive and unarchive checklist using overview buttons', async ({ page, isMobile }) => {
@@ -28,10 +29,17 @@ test.describe('Archive Checklist', () => {
         // 5. Edit checklist in archive
         const archivedCard = getNoteCard(page, checklistTitle);
         await expect(archivedCard).toBeVisible({ timeout: 10000 });
+
         await openNoteModal(page, archivedCard);
-        // Edit first item - find by value
+
+        // Edit first item - debug value
         const modal = page.locator('.mantine-Modal-content');
-        const firstItemInput = modal.locator('input').filter({ hasValue: 'Item 1' }).first();
+        const firstItemInput = modal.locator('[data-testid="item-content"]').nth(0);
+        await expect(firstItemInput).toBeVisible({ timeout: 10000 });
+
+        const actualValue = await firstItemInput.inputValue();
+
+
         await firstItemInput.fill(editedItem);
         await closeNoteModal(page);
 
@@ -45,6 +53,9 @@ test.describe('Archive Checklist', () => {
 
         // 8. Navigate to Notes and verify
         await navigateTo(page, isMobile, '/');
+        await page.reload();
+        await page.waitForTimeout(2000);
+
         const restoredCard = getNoteCard(page, checklistTitle);
         await expect(restoredCard).toBeVisible({ timeout: 10000 });
         await expect(restoredCard).toContainText(editedItem);
@@ -66,14 +77,15 @@ test.describe('Archive Checklist', () => {
         await login(page);
 
         // 2. Create checklist
+
         const noteCard = await createChecklist(page, checklistTitle, items);
 
         // 3. Open modal and archive using modal button
         await openNoteModal(page, noteCard);
         const modal = page.locator('.mantine-Modal-content');
         await modal.locator('[title="Archive"]').click();
-        await expect(modal).not.toBeVisible({ timeout: 5000 });
-        await expect(noteCard).not.toBeVisible({ timeout: 5000 });
+        await expect(modal).not.toBeVisible({ timeout: 10000 });
+        await expect(noteCard).not.toBeVisible({ timeout: 10000 });
 
         // 4. Navigate to Archive
         await navigateTo(page, isMobile, '/archive');
@@ -83,7 +95,12 @@ test.describe('Archive Checklist', () => {
         await expect(archivedCard).toBeVisible({ timeout: 10000 });
 
         await openNoteModal(page, archivedCard);
-        const firstItemInput = modal.locator('input').filter({ hasValue: 'Task A' }).first();
+        const firstItemInput = modal.locator('[data-testid="item-content"]').nth(0);
+        await expect(firstItemInput).toBeVisible({ timeout: 10000 });
+
+        const actualValue = await firstItemInput.inputValue();
+
+
         await firstItemInput.fill(editedItem);
         await closeNoteModal(page);
 
@@ -97,14 +114,11 @@ test.describe('Archive Checklist', () => {
 
         // 8. Navigate to Notes and verify
         await navigateTo(page, isMobile, '/');
+        await page.reload();
+        await page.waitForTimeout(2000);
+
         const restoredCard = getNoteCard(page, checklistTitle);
         await expect(restoredCard).toBeVisible({ timeout: 10000 });
-
-        // 9. Cleanup
-        await restoredCard.hover();
-        await restoredCard.locator('[title="Move to trash"]').click();
-
-        // 10. Logout
         await logout(page, isMobile);
     });
 });

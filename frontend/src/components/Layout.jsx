@@ -34,7 +34,7 @@ export default function Layout() {
             </AppShell.Navbar>
 
             <AppShell.Main>
-                <Box maw={1400} mx="auto">
+                <Box maw={1800} mx="auto" px="md">
                     <Outlet />
                 </Box>
             </AppShell.Main>

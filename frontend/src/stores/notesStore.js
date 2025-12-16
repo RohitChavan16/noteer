@@ -6,12 +6,20 @@ const API_URL = '/api';
 // Helper to get authFetch from authStore
 const getAuthFetch = () => useAuthStore.getState().authFetch;
 
+// Detect touch device for default view mode (phones, tablets)
+const getDefaultViewMode = () => {
+    if (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
+        return 'list';
+    }
+    return 'grid';
+};
+
 export const useNotesStore = create((set, get) => ({
     notes: [],
     isLoading: false,
     error: null,
     searchQuery: '',
-    viewMode: 'grid', // 'grid' | 'list'
+    viewMode: getDefaultViewMode(), // 'grid' on desktop, 'list' on mobile
 
     setSearchQuery: (query) => set({ searchQuery: query }),
     setViewMode: (mode) => set({ viewMode: mode }),

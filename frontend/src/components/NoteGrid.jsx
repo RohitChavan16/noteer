@@ -38,9 +38,13 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         await updateNote(noteId, { items: updatedItems });
     };
 
-    const gridStyles = viewMode === 'list'
-        ? { maxWidth: 600 }
-        : { columnCount: 4, columnGap: 16 };
+    // Force list view on touch devices (phones and tablets)
+    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    const effectiveViewMode = isTouchDevice ? 'list' : viewMode;
+
+    const gridStyles = effectiveViewMode === 'list'
+        ? { maxWidth: 600, margin: '0 auto' }
+        : { columnCount: 5, columnGap: 16 };
 
     const renderNotes = (noteList, title) => (
         <>
@@ -105,6 +109,9 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
             />
 
             <style>{`
+                @media (max-width: 1200px) {
+                    .mantine-Box-root { column-count: 4 !important; }
+                }
                 @media (max-width: 992px) {
                     .mantine-Box-root { column-count: 3 !important; }
                 }

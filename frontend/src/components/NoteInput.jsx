@@ -1,12 +1,27 @@
 import { useState, useRef } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Checkbox, Text, Portal } from '@mantine/core';
-import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconGripVertical, IconX } from '@tabler/icons-react';
+import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text } from '@mantine/core';
+import { IconPlus, IconPalette, IconCheckbox, IconNotes } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
 
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+
+import SortableChecklistItem from './SortableChecklistItem';
 
 // Robust ID generator fallback
 const generateId = () => {
@@ -35,6 +50,23 @@ export default function NoteInput() {
     const backgroundColor = getNoteColor(color, isDark);
     const textColor = getNoteTextColor(color, isDark);
 
+    // Detect touch device for larger buttons
+    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    const iconSize = isTouchDevice ? 22 : 18;
+    const buttonSize = isTouchDevice ? "lg" : "sm";
+
+    // DnD Kit sensors - PointerSensor works for both mouse and touch
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8, // 8px movement before drag starts
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
     const handleSubmit = async () => {
         if (isSubmittingRef.current) return;
         isSubmittingRef.current = true;
@@ -52,9 +84,6 @@ export default function NoteInput() {
                     ? [...items, { content: newItem.trim(), is_checked: false, id: generateId() }]
                     : items;
 
-                // Clean up IDs before sending if backend doesn't expect them?
-                // Actually keeping them is fine for consistency, but backend might strip them or store them.
-                // Let's rely on backend storing whatever we send in JSONB.
                 if (!title.trim() && finalItems.length === 0) {
                     resetForm();
                     return;
@@ -118,94 +147,21 @@ export default function NoteInput() {
         setItems(items.map((item, i) => i === index ? { ...item, content } : item));
     };
 
-    const handleDragEnd = (result) => {
-        if (!result.destination) return;
+    const handleDragEnd = (event) => {
+        const { active, over } = event;
 
-        const newItems = Array.from(items);
-        const [reorderedItem] = newItems.splice(result.source.index, 1);
-        newItems.splice(result.destination.index, 0, reorderedItem);
-
-        setItems(newItems);
+        if (over && active.id !== over.id) {
+            setItems((currentItems) => {
+                const oldIndex = currentItems.findIndex((item) => item.id === active.id);
+                const newIndex = currentItems.findIndex((item) => item.id === over.id);
+                return arrayMove(currentItems, oldIndex, newIndex);
+            });
+        }
     };
 
     const handleColorSelect = (colorId) => {
         setColor(colorId);
         setShowColors(false);
-    };
-
-    const renderItem = (item, index, provided, snapshot) => {
-        // "Selected" state is active only when dragging BUT NOT when dropping (animating to home)
-        // This makes the item satisfy the user request to "unselect" immediately on release
-        const isLifted = snapshot.isDragging && !snapshot.isDropAnimating;
-
-        return (
-            <div
-                ref={provided.innerRef}
-                {...provided.draggableProps}
-                style={{
-                    ...provided.draggableProps.style,
-                    boxSizing: 'border-box',
-                    transition: snapshot.isDragging ? 'box-shadow 0.2s, background-color 0.2s' : 'none',
-
-                    backgroundColor: snapshot.isDragging ? backgroundColor : 'transparent',
-                    color: textColor,
-                    borderRadius: '4px',
-                    boxShadow: isLifted ? '0 8px 16px rgba(0,0,0,0.2)' : 'none',
-                    opacity: 1,
-                    zIndex: snapshot.isDragging ? 9999 : 'auto',
-                }}
-            >
-                <Group gap="xs" wrap="nowrap" mb={4} align="center">
-                    <div
-                        {...provided.dragHandleProps}
-                        style={{
-                            ...provided.dragHandleProps.style,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'grab',
-                            touchAction: 'none',
-                            height: '32px',
-                            width: '24px',
-                            marginLeft: '-4px',
-                            WebkitTapHighlightColor: 'transparent'
-                        }}
-                    >
-                        <IconGripVertical size={16} style={{ opacity: 0.4, color: textColor }} />
-                    </div>
-                    <Checkbox
-                        checked={item.is_checked}
-                        onChange={() => toggleItemCheck(index)}
-                        size="xs"
-                        color={textColor === '#000000' ? 'dark' : 'blue'}
-                        style={{ pointerEvents: snapshot.isDragging ? 'none' : 'auto' }}
-                    />
-                    <TextInput
-                        value={item.content}
-                        onChange={(e) => updateItemContent(index, e.target.value)}
-                        variant="unstyled"
-                        size="sm"
-                        maxLength={500}
-                        style={{ flex: 1, pointerEvents: snapshot.isDragging ? 'none' : 'auto' }}
-                        styles={{
-                            input: {
-                                textDecoration: item.is_checked ? 'line-through' : 'none',
-                                opacity: item.is_checked ? 0.6 : 1,
-                                color: textColor
-                            }
-                        }}
-                    />
-                    <ActionIcon
-                        variant="subtle"
-                        size="xs"
-                        onClick={() => removeItem(index)}
-                        style={{ color: textColor, pointerEvents: snapshot.isDragging ? 'none' : 'auto' }}
-                    >
-                        <IconX size={12} />
-                    </ActionIcon>
-                </Group>
-            </div>
-        );
     };
 
     if (!isExpanded) {
@@ -280,31 +236,29 @@ export default function NoteInput() {
                         />
                     ) : (
                         <Stack gap={4}>
-                            <DragDropContext onDragEnd={handleDragEnd}>
-                                <Droppable
-                                    droppableId="checklist-items"
-                                    renderClone={(provided, snapshot, rubric) => (
-                                        <Portal>
-                                            {renderItem(items[rubric.source.index], rubric.source.index, provided, snapshot)}
-                                        </Portal>
-                                    )}
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
+                            >
+                                <SortableContext
+                                    items={items.map(item => item.id)}
+                                    strategy={verticalListSortingStrategy}
                                 >
-                                    {(provided) => (
-                                        <div ref={provided.innerRef} {...provided.droppableProps}>
-                                            {items.map((item, index) => (
-                                                <Draggable
-                                                    key={item.id}
-                                                    draggableId={item.id}
-                                                    index={index}
-                                                >
-                                                    {(provided, snapshot) => renderItem(item, index, provided, snapshot)}
-                                                </Draggable>
-                                            ))}
-                                            {provided.placeholder}
-                                        </div>
-                                    )}
-                                </Droppable>
-                            </DragDropContext>
+                                    {items.map((item, index) => (
+                                        <SortableChecklistItem
+                                            key={item.id}
+                                            item={item}
+                                            index={index}
+                                            onToggle={toggleItemCheck}
+                                            onUpdate={updateItemContent}
+                                            onRemove={removeItem}
+                                            textColor={textColor}
+                                            backgroundColor={backgroundColor}
+                                        />
+                                    ))}
+                                </SortableContext>
+                            </DndContext>
 
                             <Group gap="xs" wrap="nowrap">
                                 <Box w={14} /> {/* Spacer for grip icon */}
@@ -336,11 +290,12 @@ export default function NoteInput() {
                                 <Popover.Target>
                                     <ActionIcon
                                         variant="subtle"
+                                        size={buttonSize}
                                         onClick={() => setShowColors(!showColors)}
                                         title="Background color"
                                         style={{ color: textColor }}
                                     >
-                                        <IconPalette size={18} />
+                                        <IconPalette size={iconSize} />
                                     </ActionIcon>
                                 </Popover.Target>
                                 <Popover.Dropdown>
@@ -365,25 +320,25 @@ export default function NoteInput() {
 
                             <ActionIcon
                                 variant={mode === 'note' ? 'filled' : 'subtle'}
-                                size="sm"
+                                size={buttonSize}
                                 onClick={() => setMode('note')}
                                 title="Note"
                                 style={mode !== 'note' ? { color: textColor } : {}}
                             >
-                                <IconNotes size={16} />
+                                <IconNotes size={isTouchDevice ? 20 : 16} />
                             </ActionIcon>
                             <ActionIcon
                                 variant={mode === 'checklist' ? 'filled' : 'subtle'}
-                                size="sm"
+                                size={buttonSize}
                                 onClick={() => setMode('checklist')}
                                 title="Checklist"
                                 style={mode !== 'checklist' ? { color: textColor } : {}}
                             >
-                                <IconCheckbox size={16} />
+                                <IconCheckbox size={isTouchDevice ? 20 : 16} />
                             </ActionIcon>
                         </Group>
 
-                        <Button variant="subtle" size="xs" onClick={handleSubmit} style={{ color: textColor }}>
+                        <Button variant="subtle" size={isTouchDevice ? "sm" : "xs"} onClick={handleSubmit} style={{ color: textColor }}>
                             Close
                         </Button>
                     </Group>

@@ -28,6 +28,9 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
     const isDark = colorScheme === 'dark';
     const [isHovered, setIsHovered] = useState(false);
 
+    // Detect touch device - show actions always on touch
+    const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
     const handleAction = (e, action) => {
         console.log('NoteCard action clicked', note.id);
         e.stopPropagation();
@@ -133,64 +136,64 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             )}
 
             <Group mt="sm" justify="space-between" align="center">
-                <Group gap="xs" style={{ opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
+                <Group gap="xs" style={{ opacity: (isHovered || isTouchDevice) ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
                     {onPin && (
                         <ActionIcon
                             variant="subtle"
-                            size="sm"
+                            size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onPin(note.id, !note.is_pinned))}
                             title={note.is_pinned ? 'Unpin' : 'Pin'}
                             style={{ color: textColor }}
                         >
-                            {note.is_pinned ? <IconPinFilled size={16} /> : <IconPin size={16} />}
+                            {note.is_pinned ? <IconPinFilled size={isTouchDevice ? 20 : 16} /> : <IconPin size={isTouchDevice ? 20 : 16} />}
                         </ActionIcon>
                     )}
 
                     {onArchive && (
                         <ActionIcon
                             variant="subtle"
-                            size="sm"
+                            size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onArchive(note.id))}
                             title="Archive"
                             style={{ color: textColor }}
                         >
-                            <IconArchive size={16} />
+                            <IconArchive size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
                     )}
 
                     {onUnarchive && (
                         <ActionIcon
                             variant="subtle"
-                            size="sm"
+                            size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onUnarchive(note.id))}
                             title="Unarchive"
                             style={{ color: textColor }}
                         >
-                            <IconArchiveOff size={16} />
+                            <IconArchiveOff size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
                     )}
 
                     {onRestore && (
                         <ActionIcon
                             variant="subtle"
-                            size="sm"
+                            size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onRestore(note.id))}
                             title="Restore"
                             style={{ color: textColor }}
                         >
-                            <IconRestore size={16} />
+                            <IconRestore size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
                     )}
 
                     {onTrash && (
                         <ActionIcon
                             variant="subtle"
-                            size="sm"
+                            size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onTrash(note.id))}
                             title="Move to trash"
                             style={{ color: textColor }}
                         >
-                            <IconTrash size={16} />
+                            <IconTrash size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
                     )}
 
@@ -198,11 +201,11 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         <ActionIcon
                             variant="subtle"
                             color="red"
-                            size="sm"
+                            size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onDelete(note.id))}
                             title="Delete forever"
                         >
-                            <IconTrash size={16} />
+                            <IconTrash size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
                     )}
 
@@ -211,12 +214,12 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             <Menu.Target>
                                 <ActionIcon
                                     variant="subtle"
-                                    size="sm"
+                                    size={isTouchDevice ? "lg" : "sm"}
                                     onClick={(e) => e.stopPropagation()}
                                     title="More options"
                                     style={{ color: textColor }}
                                 >
-                                    <IconDotsVertical size={16} />
+                                    <IconDotsVertical size={isTouchDevice ? 20 : 16} />
                                 </ActionIcon>
                             </Menu.Target>
 

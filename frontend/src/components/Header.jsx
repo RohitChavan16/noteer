@@ -55,15 +55,18 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
             </Group>
 
             <Group gap={4} wrap="nowrap">
-                <SegmentedControl
-                    value={viewMode}
-                    onChange={setViewMode}
-                    data={[
-                        { value: 'grid', label: <IconLayoutGrid size={16} /> },
-                        { value: 'list', label: <IconList size={16} /> },
-                    ]}
-                    size="xs"
-                />
+                {/* Hide toggle on touch devices - always use list view there */}
+                {(typeof window === 'undefined' || (!('ontouchstart' in window) && navigator.maxTouchPoints === 0)) && (
+                    <SegmentedControl
+                        value={viewMode}
+                        onChange={setViewMode}
+                        data={[
+                            { value: 'grid', label: <IconLayoutGrid size={16} /> },
+                            { value: 'list', label: <IconList size={16} /> },
+                        ]}
+                        size="xs"
+                    />
+                )}
                 <ActionIcon
                     variant="subtle"
                     size="md"
