@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Modal, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Box } from '@mantine/core';
-import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash } from '@tabler/icons-react';
+import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text } from '@mantine/core';
+import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
+import NoteRichTextEditor from './NoteRichTextEditor';
 
 import {
     DndContext,
@@ -45,6 +46,7 @@ export default function NoteModal({ note, onClose }) {
     const { updateNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote } = useNotesStore();
     const [title, setTitle] = useState(note?.title || '');
     const [content, setContent] = useState(note?.content || '');
+    const [showFormatting, setShowFormatting] = useState(false);
 
     // Ensure items have IDs for drag and drop
     const [items, setItems] = useState(() =>
@@ -52,27 +54,23 @@ export default function NoteModal({ note, onClose }) {
     );
 
     const [color, setColor] = useState(note?.color || 'default');
-    const [showColors, setShowColors] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [newItem, setNewItem] = useState('');
+    const [showColors, setShowColors] = useState(false);
 
     const isChecklist = note?.type === 'checklist' || (note?.items && note.items.length > 0);
 
-    const backgroundColor = getNoteColor(color, isDark);
+    const bgColor = getNoteColor(color, isDark);
     const textColor = getNoteTextColor(color, isDark);
 
-    // Detect touch device for larger buttons
+    // Detect touch device
     const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
     const iconSize = isTouchDevice ? 22 : 18;
-    const buttonSize = isTouchDevice ? "lg" : undefined;
+    const buttonSize = isTouchDevice ? "lg" : "md";
 
-    // DnD Kit sensors - PointerSensor works for both mouse and touch
+    // DnD Kit sensors
     const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8, // 8px movement before drag starts
-            },
-        }),
+        useSensor(PointerSensor),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
@@ -99,6 +97,10 @@ export default function NoteModal({ note, onClose }) {
             setIsSaving(false);
         }
         onClose();
+    };
+
+    const handleClose = () => {
+        handleSave();
     };
 
     const addItem = () => {
@@ -144,22 +146,32 @@ export default function NoteModal({ note, onClose }) {
     return (
         <Modal
             opened={!!note}
-            onClose={handleSave}
+            onClose={handleClose}
             size="lg"
             centered
-            withCloseButton={false}
+            radius="md"
+            padding="lg"
             styles={{
-                content: { backgroundColor: backgroundColor, color: textColor },
+                content: { backgroundColor: bgColor, color: textColor },
+                header: { backgroundColor: bgColor, color: textColor },
+                body: { backgroundColor: bgColor, color: textColor }
+            }}
+            withCloseButton={false}
+            overlayProps={{
+                backgroundOpacity: 0.55,
+                blur: 3,
             }}
         >
             <Stack gap="md">
                 <TextInput
                     placeholder="Title"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => setTitle(e.currentTarget.value)}
                     variant="unstyled"
                     maxLength={200}
-                    styles={{ input: { fontWeight: 600, fontSize: '1.25rem', color: textColor } }}
+                    size="lg"
+                    styles={{ input: { fontWeight: 700, fontSize: '1.5rem', color: textColor } }}
+                    data-autofocus={!note?.title}
                 />
 
                 {isChecklist ? (
@@ -178,25 +190,24 @@ export default function NoteModal({ note, onClose }) {
                                         key={item.id}
                                         item={item}
                                         index={index}
-                                        onToggle={toggleItemCheck}
-                                        onUpdate={updateItemContent}
-                                        onRemove={removeItem}
+                                        isDark={isDark}
                                         textColor={textColor}
-                                        backgroundColor={backgroundColor}
+                                        onToggle={() => toggleItemCheck(index)}
+                                        onRemove={() => removeItem(index)}
+                                        onUpdateContent={(content) => updateItemContent(index, content)}
+                                        onEnter={() => addItem()}
                                     />
                                 ))}
                             </SortableContext>
                         </DndContext>
 
-                        <Group gap="xs" wrap="nowrap">
-                            <Box w={14} />
-                            <IconPlus size={14} style={{ opacity: 0.4, color: textColor }} />
+                        <Group align="center" mt="xs">
+                            <IconPlus size={16} style={{ color: textColor, opacity: 0.6 }} />
                             <TextInput
                                 placeholder="List item"
                                 value={newItem}
-                                onChange={(e) => setNewItem(e.target.value)}
+                                onChange={(e) => setNewItem(e.currentTarget.value)}
                                 onKeyDown={handleItemKeyDown}
-                                onBlur={addItem}
                                 variant="unstyled"
                                 size="sm"
                                 maxLength={500}
@@ -206,242 +217,137 @@ export default function NoteModal({ note, onClose }) {
                         </Group>
                     </Stack>
                 ) : (
-                    <Textarea
-                        placeholder="Take a note..."
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        variant="unstyled"
-                        minRows={6}
-                        autosize
-                        styles={{ input: { color: textColor } }}
+                    <NoteRichTextEditor
+                        content={content}
+                        onChange={setContent}
+                        showToolbar={showFormatting}
+                        isDark={isDark}
                     />
                 )}
 
-                {/* Mobile layout: stacked rows. Desktop: single row */}
-                {isTouchDevice ? (
-                    <Stack gap="sm" align="stretch">
-                        <Group gap="xs" justify="center">
-                            <Popover opened={showColors} onChange={setShowColors} position="top-start">
-                                <Popover.Target>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        size={buttonSize}
-                                        onClick={() => setShowColors(!showColors)}
-                                        title="Background color"
-                                        style={{ color: textColor }}
-                                    >
-                                        <IconPalette size={iconSize} />
-                                    </ActionIcon>
-                                </Popover.Target>
-                                <Popover.Dropdown>
-                                    <Group gap="xs">
-                                        {NOTE_COLORS.map((c) => (
-                                            <ColorSwatch
-                                                key={c.id}
-                                                color={isDark ? c.dark : c.light}
-                                                onClick={() => { setColor(c.id); setShowColors(false); }}
-                                                style={{
-                                                    cursor: 'pointer',
-                                                    border: color === c.id ? '2px solid var(--mantine-color-blue-5)' : `1px solid ${isDark ? 'var(--mantine-color-dark-4)' : 'var(--mantine-color-gray-5)'}`
-                                                }}
-                                                size={24}
-                                            />
-                                        ))}
-                                    </Group>
-                                </Popover.Dropdown>
-                            </Popover>
+                <Group justify="space-between" align="center">
+                    <Group gap="xs">
+                        <Popover opened={showColors} onChange={setShowColors} position="top-start" shadow="md" width={200}>
+                            <Popover.Target>
+                                <ActionIcon
+                                    variant="subtle"
+                                    size={buttonSize}
+                                    onClick={() => setShowColors(!showColors)}
+                                    title="Background color"
+                                    style={{ color: textColor }}
+                                >
+                                    <IconPalette size={iconSize} />
+                                </ActionIcon>
+                            </Popover.Target>
+                            <Popover.Dropdown>
+                                <Group gap="xs" wrap="wrap">
+                                    {Object.entries(NOTE_COLORS).map(([name, c]) => (
+                                        <ColorSwatch
+                                            key={name}
+                                            color={isDark ? c.dark : c.light}
+                                            onClick={() => { setColor(name); setShowColors(false); }}
+                                            style={{
+                                                cursor: 'pointer',
+                                                border: color === name ? `2px solid ${isDark ? '#fff' : '#000'}` : '1px solid rgba(0,0,0,0.1)'
+                                            }}
+                                            size={24}
+                                        />
+                                    ))}
+                                </Group>
+                            </Popover.Dropdown>
+                        </Popover>
 
-                            {!note.is_trashed && (
-                                <>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        size={buttonSize}
-                                        onClick={async () => {
-                                            await updateNote(note.id, { is_pinned: !note.is_pinned });
-                                        }}
-                                        title={note.is_pinned ? "Unpin" : "Pin"}
-                                        style={{ color: textColor }}
-                                    >
-                                        {note.is_pinned ? <IconPinFilled size={iconSize} /> : <IconPin size={iconSize} />}
-                                    </ActionIcon>
-
-                                    <ActionIcon
-                                        variant="subtle"
-                                        size={buttonSize}
-                                        onClick={async () => {
-                                            await (note.is_archived ? unarchiveNote(note.id) : archiveNote(note.id));
-                                            onClose();
-                                        }}
-                                        title={note.is_archived ? "Unarchive" : "Archive"}
-                                        style={{ color: textColor }}
-                                    >
-                                        {note.is_archived ? <IconArchiveOff size={iconSize} /> : <IconArchive size={iconSize} />}
-                                    </ActionIcon>
-
-                                    <ActionIcon
-                                        variant="subtle"
-                                        size={buttonSize}
-                                        onClick={async () => {
-                                            await trashNote(note.id);
-                                            onClose();
-                                        }}
-                                        title="Trash"
-                                        style={{ color: textColor }}
-                                    >
-                                        <IconTrash size={iconSize} />
-                                    </ActionIcon>
-                                </>
-                            )}
-
-                            {note.is_trashed && (
-                                <>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        size={buttonSize}
-                                        onClick={async () => {
-                                            await restoreNote(note.id);
-                                            onClose();
-                                        }}
-                                        title="Restore"
-                                        style={{ color: textColor }}
-                                    >
-                                        <IconArchiveOff size={iconSize} />
-                                    </ActionIcon>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        color="red"
-                                        size={buttonSize}
-                                        onClick={async () => {
-                                            await deleteNote(note.id);
-                                            onClose();
-                                        }}
-                                        title="Delete forever"
-                                    >
-                                        <IconTrash size={iconSize} />
-                                    </ActionIcon>
-                                </>
-                            )}
-                        </Group>
-
-                        {note.updated_at && (
-                            <Text size="xs" c="dimmed" ta="center">
-                                Edited {formatDate(note.updated_at)}
-                            </Text>
+                        {!isChecklist && (
+                            <ActionIcon
+                                variant={showFormatting ? "filled" : "subtle"}
+                                title="Formatting options"
+                                style={{ color: showFormatting && isDark ? '#fff' : textColor }}
+                                onClick={() => setShowFormatting(!showFormatting)}
+                                size={buttonSize}
+                            >
+                                <IconTypography size={iconSize} />
+                            </ActionIcon>
                         )}
 
-                        <Button variant="subtle" onClick={handleSave} loading={isSaving} fullWidth>
-                            Close
-                        </Button>
-                    </Stack>
-                ) : (
-                    <Group justify="space-between" align="center">
-                        <Group gap="xs">
-                            <Popover opened={showColors} onChange={setShowColors} position="top-start">
-                                <Popover.Target>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        onClick={() => setShowColors(!showColors)}
-                                        title="Background color"
-                                        style={{ color: textColor }}
-                                    >
-                                        <IconPalette size={18} />
-                                    </ActionIcon>
-                                </Popover.Target>
-                                <Popover.Dropdown>
-                                    <Group gap="xs">
-                                        {NOTE_COLORS.map((c) => (
-                                            <ColorSwatch
-                                                key={c.id}
-                                                color={isDark ? c.dark : c.light}
-                                                onClick={() => { setColor(c.id); setShowColors(false); }}
-                                                style={{
-                                                    cursor: 'pointer',
-                                                    border: color === c.id ? '2px solid var(--mantine-color-blue-5)' : `1px solid ${isDark ? 'var(--mantine-color-dark-4)' : 'var(--mantine-color-gray-5)'}`
-                                                }}
-                                                size={24}
-                                            />
-                                        ))}
-                                    </Group>
-                                </Popover.Dropdown>
-                            </Popover>
+                        {!note.is_trashed && (
+                            <>
+                                <ActionIcon
+                                    variant="subtle"
+                                    size={buttonSize}
+                                    onClick={() => updateNote(note.id, { is_pinned: !note.is_pinned })}
+                                    title={note.is_pinned ? "Unpin" : "Pin"}
+                                    style={{ color: textColor }}
+                                >
+                                    {note.is_pinned ? <IconPinFilled size={iconSize} /> : <IconPin size={iconSize} />}
+                                </ActionIcon>
 
-                            {!note.is_trashed && (
-                                <>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        onClick={async () => {
-                                            await updateNote(note.id, { is_pinned: !note.is_pinned });
-                                        }}
-                                        title={note.is_pinned ? "Unpin" : "Pin"}
-                                        style={{ color: textColor }}
-                                    >
-                                        {note.is_pinned ? <IconPinFilled size={18} /> : <IconPin size={18} />}
-                                    </ActionIcon>
+                                <ActionIcon
+                                    variant="subtle"
+                                    size={buttonSize}
+                                    onClick={() => {
+                                        note.is_archived ? unarchiveNote(note.id) : archiveNote(note.id);
+                                        onClose();
+                                    }}
+                                    title={note.is_archived ? "Unarchive" : "Archive"}
+                                    style={{ color: textColor }}
+                                >
+                                    {note.is_archived ? <IconArchiveOff size={iconSize} /> : <IconArchive size={iconSize} />}
+                                </ActionIcon>
 
-                                    <ActionIcon
-                                        variant="subtle"
-                                        onClick={async () => {
-                                            await (note.is_archived ? unarchiveNote(note.id) : archiveNote(note.id));
-                                            onClose();
-                                        }}
-                                        title={note.is_archived ? "Unarchive" : "Archive"}
-                                        style={{ color: textColor }}
-                                    >
-                                        {note.is_archived ? <IconArchiveOff size={18} /> : <IconArchive size={18} />}
-                                    </ActionIcon>
-
-                                    <ActionIcon
-                                        variant="subtle"
-                                        onClick={async () => {
-                                            await trashNote(note.id);
-                                            onClose();
-                                        }}
-                                        title="Trash"
-                                        style={{ color: textColor }}
-                                    >
-                                        <IconTrash size={18} />
-                                    </ActionIcon>
-                                </>
-                            )}
-
-                            {note.is_trashed && (
-                                <>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        onClick={async () => {
-                                            await restoreNote(note.id);
-                                            onClose();
-                                        }}
-                                        title="Restore"
-                                        style={{ color: textColor }}
-                                    >
-                                        <IconArchiveOff size={18} />
-                                    </ActionIcon>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        color="red"
-                                        onClick={async () => {
-                                            await deleteNote(note.id);
-                                            onClose();
-                                        }}
-                                        title="Delete forever"
-                                    >
-                                        <IconTrash size={18} />
-                                    </ActionIcon>
-                                </>
-                            )}
-                        </Group>
-
-                        {note.updated_at && (
-                            <Text size="xs" c="dimmed" ta="center">
-                                Edited {formatDate(note.updated_at)}
-                            </Text>
+                                <ActionIcon
+                                    variant="subtle"
+                                    size={buttonSize}
+                                    onClick={() => {
+                                        trashNote(note.id);
+                                        onClose();
+                                    }}
+                                    title="Trash"
+                                    style={{ color: textColor }}
+                                >
+                                    <IconTrash size={iconSize} />
+                                </ActionIcon>
+                            </>
                         )}
 
-                        <Button variant="subtle" onClick={handleSave} loading={isSaving}>
-                            Close
-                        </Button>
+                        {note.is_trashed && (
+                            <>
+                                <ActionIcon
+                                    variant="subtle"
+                                    size={buttonSize}
+                                    onClick={() => {
+                                        restoreNote(note.id);
+                                        onClose();
+                                    }}
+                                    title="Restore"
+                                    style={{ color: textColor }}
+                                >
+                                    <IconRestore size={iconSize} />
+                                </ActionIcon>
+                                <ActionIcon
+                                    variant="subtle"
+                                    color="red"
+                                    size={buttonSize}
+                                    onClick={() => {
+                                        deleteNote(note.id);
+                                        onClose();
+                                    }}
+                                    title="Delete forever"
+                                >
+                                    <IconTrash size={iconSize} />
+                                </ActionIcon>
+                            </>
+                        )}
                     </Group>
+
+                    <Button variant="subtle" onClick={handleSave} loading={isSaving} style={{ color: textColor }}>
+                        Close
+                    </Button>
+                </Group>
+
+                {note.updated_at && (
+                    <Text size="xs" ta="center" style={{ color: textColor, opacity: 0.6 }}>
+                        Edited {formatDate(note.updated_at)}
+                    </Text>
                 )}
             </Stack>
         </Modal>

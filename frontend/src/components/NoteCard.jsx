@@ -90,8 +90,8 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             )}
 
             {note.content && (
-                <Text size="sm" lineClamp={6} style={{ whiteSpace: 'pre-wrap', color: textColor, opacity: 0.8 }}>
-                    {note.content}
+                <Text size="sm" lineClamp={6} component="div" style={{ color: textColor, opacity: 0.8 }} className="note-content">
+                    <div dangerouslySetInnerHTML={{ __html: note.content }} />
                 </Text>
             )}
 

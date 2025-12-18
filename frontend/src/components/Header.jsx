@@ -3,6 +3,7 @@ import { useMantineColorScheme } from '@mantine/core';
 import { Group, TextInput, ActionIcon, Burger, SegmentedControl } from '@mantine/core';
 import { useNotesStore } from '../stores/notesStore';
 import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList } from '@tabler/icons-react';
+import { SyncStatus } from './SyncStatus';
 
 export default function Header({ onMenuToggle, isMenuOpen }) {
     const { colorScheme, setColorScheme } = useMantineColorScheme();
@@ -75,6 +76,7 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                 >
                     {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
                 </ActionIcon>
+                <SyncStatus />
             </Group>
         </Group>
     );

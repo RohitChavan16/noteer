@@ -65,10 +65,6 @@ export const NOTE_COLORS = [
     },
     {
         id: 'brown',
-        light: '#f4fce3', // lime.1 (brown is tricky in mantine, substituting closest earth tone if specific note needed, or keeping orange.2)
-        // Let's stick to the previous 'brown' which was likely orange-based.
-        // Old brown: light '#ffd8a8' (orange.2), dark '#5c3a1d'
-        // Let's use a distinct milky coffee color
         light: '#f0e6cc',
         dark: '#e3d5b8',
         lightLabel: '#000000',

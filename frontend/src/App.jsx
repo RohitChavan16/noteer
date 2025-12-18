@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from './stores/authStore';
+import { useNotesStore } from './stores/notesStore';
 import { Loader, Center } from '@mantine/core';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -29,6 +30,19 @@ export default function App() {
     const [isVerifying, setIsVerifying] = useState(() => {
         return !!new URLSearchParams(window.location.search).get('token');
     });
+
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (useNotesStore.getState().pendingChanges) {
+                e.preventDefault();
+                e.returnValue = ''; // Required for Chrome
+                return '';
+            }
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, []);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);

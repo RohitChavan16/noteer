@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import _ from 'lodash';
 import { useAuthStore } from './authStore';
 
 const API_URL = '/api';
@@ -14,168 +15,221 @@ const getDefaultViewMode = () => {
     return 'grid';
 };
 
-export const useNotesStore = create((set, get) => ({
-    notes: [],
-    isLoading: false,
-    error: null,
-    searchQuery: '',
-    viewMode: getDefaultViewMode(), // 'grid' on desktop, 'list' on mobile
+export const useNotesStore = create((set, get) => {
+    // Keep track of debounced save functions per note ID
+    const saveHandlers = new Map();
 
-    setSearchQuery: (query) => set({ searchQuery: query }),
-    setViewMode: (mode) => set({ viewMode: mode }),
+    return {
+        notes: [],
+        isLoading: false,
+        error: null,
+        searchQuery: '',
+        viewMode: getDefaultViewMode(),
 
-    fetchNotes: async (options = {}) => {
-        set({ isLoading: true, error: null });
-        try {
-            const params = new URLSearchParams();
-            if (options.archived) params.append('archived', 'true');
-            if (options.trashed) params.append('trashed', 'true');
-            if (options.label) params.append('label', options.label);
-            if (options.search) params.append('search', options.search);
+        // Sync state
+        isSyncing: false,
+        pendingChanges: false,
+        lastSyncedAt: null,
 
-            const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes?${params}`);
+        setSearchQuery: (query) => set({ searchQuery: query }),
+        setViewMode: (mode) => set({ viewMode: mode }),
 
-            if (!res.ok) throw new Error('Failed to fetch notes');
+        fetchNotes: async (options = {}) => {
+            set({ isLoading: true, error: null });
+            try {
+                const params = new URLSearchParams();
+                if (options.archived) params.append('archived', 'true');
+                if (options.trashed) params.append('trashed', 'true');
+                if (options.label) params.append('label', options.label);
+                if (options.search) params.append('search', options.search);
 
-            const notes = await res.json();
-            set({ notes, isLoading: false });
-        } catch (error) {
-            set({ error: error.message, isLoading: false });
-        }
-    },
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes?${params}`);
 
-    createNote: async (noteData) => {
-        try {
-            const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(noteData),
-            });
+                if (!res.ok) throw new Error('Failed to fetch notes');
 
-            if (!res.ok) throw new Error('Failed to create note');
+                const notes = await res.json();
+                set({ notes, isLoading: false });
+            } catch (error) {
+                set({ error: error.message, isLoading: false });
+            }
+        },
 
-            const note = await res.json();
-            set((state) => ({ notes: [note, ...state.notes] }));
-            return note;
-        } catch (error) {
-            set({ error: error.message });
-            return null;
-        }
-    },
+        createNote: async (noteData) => {
+            try {
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(noteData),
+                });
 
-    updateNote: async (id, noteData) => {
-        try {
-            const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(noteData),
-            });
+                if (!res.ok) throw new Error('Failed to create note');
 
-            if (!res.ok) throw new Error('Failed to update note');
+                const note = await res.json();
+                set((state) => ({ notes: [note, ...state.notes] }));
+                return note;
+            } catch (error) {
+                set({ error: error.message });
+                return null;
+            }
+        },
 
-            const updatedNote = await res.json();
+        // Optimistic update with debounced backend sync
+        updateNote: async (id, noteData) => {
+            // 1. Optimistic update
             set((state) => ({
-                notes: state.notes.map((n) => (n.id === id ? { ...n, ...updatedNote } : n)),
+                notes: state.notes.map((n) => (n.id === id ? { ...n, ...noteData } : n)),
+                pendingChanges: true
             }));
-            return updatedNote;
-        } catch (error) {
-            set({ error: error.message });
-            return null;
-        }
-    },
 
-    trashNote: async (id) => {
-        try {
+            // 2. define save function
+            const saveToBackend = async (dataToSave) => {
+                set({ isSyncing: true });
+                try {
+                    const authFetch = getAuthFetch();
+                    const res = await authFetch(`${API_URL}/notes/${id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(dataToSave),
+                    });
+
+                    if (!res.ok) throw new Error('Failed to update note');
+
+                    const updatedNote = await res.json();
+
+                    // Update state with confirmed data from backend (e.g. updated_at)
+                    set((state) => ({
+                        notes: state.notes.map((n) => (n.id === id ? { ...n, ...updatedNote } : n)),
+                        isSyncing: false,
+                        pendingChanges: false,
+                        lastSyncedAt: new Date()
+                    }));
+                } catch (error) {
+                    console.error('Sync failed:', error);
+                    set({ error: error.message, isSyncing: false });
+                }
+            };
+
+            // 3. Get or create debounced handler
+            if (!saveHandlers.has(id)) {
+                // Debounce for 2 seconds (as per user request: "not immediately")
+                saveHandlers.set(id, _.debounce(saveToBackend, 2000));
+            }
+
+            // 4. Trigger debounced save
+            const handler = saveHandlers.get(id);
+            handler(noteData);
+
+            return true; // Return immediately for optimistic UI
+        },
+
+        // Immediate save (e.g. for creating copies or critical updates)
+        forceSyncNote: async (id, noteData) => {
+            // Cancel any pending debounced save for this note
+            if (saveHandlers.has(id)) {
+                saveHandlers.get(id).cancel();
+            }
+
+            set({ isSyncing: true });
+            try {
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(noteData),
+                });
+
+                if (!res.ok) throw new Error('Failed to update note');
+                const updatedNote = await res.json();
+
+                set((state) => ({
+                    notes: state.notes.map((n) => (n.id === id ? { ...n, ...updatedNote } : n)),
+                    isSyncing: false,
+                    pendingChanges: false,
+                    lastSyncedAt: new Date()
+                }));
+                return updatedNote;
+            } catch (error) {
+                set({ error: error.message, isSyncing: false });
+                return null;
+            }
+        },
+
+        trashNote: async (id) => {
+            try {
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes/${id}/trash`, { method: 'POST' });
+                if (!res.ok) throw new Error('Failed to trash note');
+                set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
+                return true;
+            } catch (error) {
+                set({ error: error.message });
+                return false;
+            }
+        },
+
+        restoreNote: async (id) => {
+            try {
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes/${id}/restore`, { method: 'POST' });
+                if (!res.ok) throw new Error('Failed to restore note');
+                set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
+                return true;
+            } catch (error) {
+                set({ error: error.message });
+                return false;
+            }
+        },
+
+        deleteNote: async (id) => {
+            try {
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Failed to delete note');
+                set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
+                return true;
+            } catch (error) {
+                set({ error: error.message });
+                return false;
+            }
+        },
+
+        pinNote: async (id, isPinned) => {
+            return get().forceSyncNote(id, { is_pinned: isPinned });
+        },
+
+        archiveNote: async (id) => {
+            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })); // Optimistic remove
+            const result = await get().forceSyncNote(id, { is_archived: true });
+            return result;
+        },
+
+        unarchiveNote: async (id) => {
+            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })); // Optimistic remove
+            const result = await get().forceSyncNote(id, { is_archived: false });
+            return result;
+        },
+
+        getNoteVersions: async (id) => {
+            try {
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes/${id}/versions`);
+                if (!res.ok) throw new Error('Failed to fetch versions');
+                return await res.json();
+            } catch (error) {
+                console.error(error);
+                return [];
+            }
+        },
+
+        restoreNoteVersion: async (id, versionId) => {
             const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes/${id}/trash`, {
-                method: 'POST',
+            const res = await authFetch(`${API_URL}/notes/${id}/versions/${versionId}/restore`, {
+                method: 'POST'
             });
-
-            if (!res.ok) throw new Error('Failed to trash note');
-
-            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-            return true;
-        } catch (error) {
-            set({ error: error.message });
-            return false;
-        }
-    },
-
-    restoreNote: async (id) => {
-        try {
-            const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes/${id}/restore`, {
-                method: 'POST',
-            });
-
-            if (!res.ok) throw new Error('Failed to restore note');
-
-            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-            return true;
-        } catch (error) {
-            set({ error: error.message });
-            return false;
-        }
-    },
-
-    deleteNote: async (id) => {
-        try {
-            const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes/${id}`, {
-                method: 'DELETE',
-            });
-
-            if (!res.ok) throw new Error('Failed to delete note');
-
-            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-            return true;
-        } catch (error) {
-            set({ error: error.message });
-            return false;
-        }
-    },
-
-    pinNote: async (id, isPinned) => {
-        return get().updateNote(id, { is_pinned: isPinned });
-    },
-
-    archiveNote: async (id) => {
-        const result = await get().updateNote(id, { is_archived: true });
-        if (result) {
-            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-        }
-        return result;
-    },
-
-    unarchiveNote: async (id) => {
-        const result = await get().updateNote(id, { is_archived: false });
-        if (result) {
-            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-        }
-        return result;
-    },
-
-    getNoteVersions: async (id) => {
-        try {
-            const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes/${id}/versions`);
-            if (!res.ok) throw new Error('Failed to fetch versions');
+            if (!res.ok) throw new Error('Failed to restore version');
             return await res.json();
-        } catch (error) {
-            console.error(error);
-            return [];
-        }
-    },
-
-    restoreNoteVersion: async (id, versionId) => {
-        const authFetch = getAuthFetch();
-        const res = await authFetch(`${API_URL}/notes/${id}/versions/${versionId}/restore`, {
-            method: 'POST'
-        });
-        if (!res.ok) throw new Error('Failed to restore version');
-        return await res.json();
-    },
-}));
+        },
+    };
+});
