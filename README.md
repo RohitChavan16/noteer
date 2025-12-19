@@ -22,10 +22,8 @@
 - 📌 **Pin & Archive** - Pin important notes, archive completed ones
 - 🕒 **Version History** - Store file versions and restore/rollback to previous states
 - 🎨 **Color Coding** - 11 beautiful colors to categorize your notes
-- 🌓 **Dark & Light Mode** - Easy on the eyes, day or night (dark mode default)
 - 🔒 **Secure Authentication** - Local login or OIDC (Authentik, Authelia, PocketID, etc.)
-- 👥 **Multi-user** - Admin and user roles with full access control
-- 🐳 **Single Container** - Everything runs in one Docker container
+- 👥 **Multi-user & Admin Panel** - User management with admin/user roles
 - 📱 **Responsive Design** - Works beautifully on desktop and mobile
 - 🔐 **SSL/TLS Ready** - Use with reverse proxy or direct HTTPS
 
@@ -167,12 +165,6 @@ docker run -d \
 
 ## 🗺️ Roadmap
 
-### 🛡️ Admin Panel (Coming Soon)
-- [ ] 👥 User management (create, delete, password reset)
-- [ ] ⬆️ Promote/demote users to admin role
-- [ ] 💾 Disk space limits per user
-- [ ] 🔒 Admin privacy: cannot view user notes
-
 ### 📱 Mobile Apps (Planned)
 - [ ] 🤖 Android app (native)
 - [ ] 📲 PWA support
@@ -184,9 +176,7 @@ docker run -d \
 - [ ] 🔍 Advanced search with filters
 - [ ] 📤 Export (Markdown, PDF)
 - [ ] 🔄 Offline sync
-- [ ] 🏷️ **Labels**: Create labels, assign multiple to notes, filter by label.
-
-- [ ] 🔽 **Sorting Notes**: By updated date (default) or alphabetical (A-Z/Z-A) based on title/content.
+- [ ] 🔽 Sorting notes (alphabetical, by date)
 
 ---
 
