@@ -39,7 +39,8 @@
 docker run -d \
   --name noteer \
   -p 3000:3000 \
-  -v noteer-data:/var/lib/postgresql/data \
+  -v noteer-db:/var/lib/postgresql/data \
+  -v noteer-data:/var/lib/noteer \
   -e ADMIN_EMAIL=admin@example.com \
   -e ADMIN_PASSWORD=your-secure-password \
   ghcr.io/bigtcze/noteer:latest
@@ -60,7 +61,8 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - noteer-data:/var/lib/postgresql/data
+      - noteer-db:/var/lib/postgresql/data
+      - noteer-data:/var/lib/noteer
     environment:
       - ADMIN_EMAIL=admin@example.com
       - ADMIN_PASSWORD=your-secure-password
@@ -71,6 +73,7 @@ services:
       # - OIDC_CLIENT_SECRET=your-client-secret
 
 volumes:
+  noteer-db:
   noteer-data:
 ```
 
@@ -150,7 +153,8 @@ Mount your certificates and enable SSL:
 docker run -d \
   --name noteer \
   -p 443:3000 \
-  -v noteer-data:/var/lib/postgresql/data \
+  -v noteer-db:/var/lib/postgresql/data \
+  -v noteer-data:/var/lib/noteer \
   -v /path/to/cert.pem:/certs/cert.pem:ro \
   -v /path/to/key.pem:/certs/key.pem:ro \
   -e SSL_ENABLED=true \

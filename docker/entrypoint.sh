@@ -6,6 +6,10 @@ mkdir -p /var/log/supervisor
 chown -R root:root /var/log/supervisor
 chmod 755 /var/log/supervisor
 
+# Create Noteer data directory for JWT secret and uploads
+mkdir -p /var/lib/noteer
+chmod 755 /var/lib/noteer
+
 # Initialize PostgreSQL if not already done
 if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
     echo "📦 Initializing PostgreSQL database..."
