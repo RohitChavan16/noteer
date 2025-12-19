@@ -10,6 +10,7 @@ import NotesPage from './pages/NotesPage';
 import ArchivePage from './pages/ArchivePage';
 import TrashPage from './pages/TrashPage';
 import SettingsPage from './pages/SettingsPage';
+import AdminPage from './pages/AdminPage';
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated } = useAuthStore();
@@ -84,6 +85,7 @@ export default function App() {
                 <Route path="archive" element={<ArchivePage />} />
                 <Route path="trash" element={<TrashPage />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="admin" element={<AdminPage />} />
                 <Route path="label/:label" element={<NotesPage />} />
             </Route>
         </Routes>

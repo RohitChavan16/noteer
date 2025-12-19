@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.js';
 import notesRoutes from './routes/notes.js';
 import usersRoutes from './routes/users.js';
+import labelsRoutes from './routes/labels.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initializeDatabase } from './db/index.js';
 
@@ -94,6 +95,7 @@ if (process.env.NODE_ENV === 'production') {
 app.use('/api/auth', authRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/labels', labelsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

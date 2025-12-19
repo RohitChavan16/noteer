@@ -74,6 +74,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                         onDelete={isTrash ? deleteNote : undefined}
                         onItemToggle={!isTrash ? handleItemToggle : undefined}
                         onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
+                        onLabelsChange={!isTrash ? (noteId, labels) => updateNote(noteId, { labels }) : undefined}
                     />
                 ))}
             </Box>

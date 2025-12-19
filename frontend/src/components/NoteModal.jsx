@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text } from '@mantine/core';
+import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge } from '@mantine/core';
 import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import NoteRichTextEditor from './NoteRichTextEditor';
+import LabelPicker from './LabelPicker';
 
 import {
     DndContext,
@@ -57,6 +58,7 @@ export default function NoteModal({ note, onClose }) {
     const [isSaving, setIsSaving] = useState(false);
     const [newItem, setNewItem] = useState('');
     const [showColors, setShowColors] = useState(false);
+    const [labels, setLabels] = useState(note?.labels || []);
 
     const isChecklist = note?.type === 'checklist' || (note?.items && note.items.length > 0);
 
@@ -65,8 +67,8 @@ export default function NoteModal({ note, onClose }) {
 
     // Detect touch device
     const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    const iconSize = isTouchDevice ? 22 : 18;
-    const buttonSize = isTouchDevice ? "lg" : "md";
+    const iconSize = isTouchDevice ? 26 : 22;
+    const buttonSize = isTouchDevice ? "xl" : "lg";
 
     // DnD Kit sensors
     const sensors = useSensors(
@@ -82,7 +84,8 @@ export default function NoteModal({ note, onClose }) {
         const hasChanges = title !== (note?.title || '') ||
             content !== (note?.content || '') ||
             color !== (note?.color || 'default') ||
-            JSON.stringify(items) !== JSON.stringify(note?.items || []);
+            JSON.stringify(items) !== JSON.stringify(note?.items || []) ||
+            JSON.stringify(labels.sort()) !== JSON.stringify((note?.labels || []).sort());
 
         if (hasChanges) {
             setIsSaving(true);
@@ -91,6 +94,7 @@ export default function NoteModal({ note, onClose }) {
                 content,
                 color,
                 items,
+                labels,
                 // Don't convert status fields back to stale props
                 type: note.type
             });
@@ -225,6 +229,17 @@ export default function NoteModal({ note, onClose }) {
                     />
                 )}
 
+                {/* Labels badges */}
+                {labels.length > 0 && (
+                    <Group gap="xs" mt="xs">
+                        {labels.map((label, idx) => (
+                            <Badge key={idx} size="md" variant="light" tt="none">
+                                {label}
+                            </Badge>
+                        ))}
+                    </Group>
+                )}
+
                 <Group justify="space-between" align="center">
                     <Group gap="xs">
                         <Popover opened={showColors} onChange={setShowColors} position="top-start" shadow="md" width={200}>
@@ -268,6 +283,12 @@ export default function NoteModal({ note, onClose }) {
                                 <IconTypography size={iconSize} />
                             </ActionIcon>
                         )}
+
+                        <LabelPicker
+                            selectedLabels={labels}
+                            onChange={setLabels}
+                            triggerStyle={{ color: textColor }}
+                        />
 
                         {!note.is_trashed && (
                             <>
@@ -338,17 +359,21 @@ export default function NoteModal({ note, onClose }) {
                             </>
                         )}
                     </Group>
+                </Group>
 
-                    <Button variant="subtle" onClick={handleSave} loading={isSaving} style={{ color: textColor }}>
+                {/* Date and Close on same row */}
+                <Group justify="space-between" align="center">
+                    {note.updated_at ? (
+                        <Text size="xs" style={{ color: textColor, opacity: 0.6 }}>
+                            Edited {formatDate(note.updated_at)}
+                        </Text>
+                    ) : (
+                        <div />
+                    )}
+                    <Button variant="subtle" size="compact-sm" onClick={handleSave} loading={isSaving} style={{ color: textColor }}>
                         Close
                     </Button>
                 </Group>
-
-                {note.updated_at && (
-                    <Text size="xs" ta="center" style={{ color: textColor, opacity: 0.6 }}>
-                        Edited {formatDate(note.updated_at)}
-                    </Text>
-                )}
             </Stack>
         </Modal>
     );

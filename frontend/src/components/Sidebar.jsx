@@ -1,11 +1,20 @@
+import { useState, useEffect } from 'react';
 import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { Stack, NavLink, Avatar, Group, Text, ActionIcon, Divider, Box, Title } from '@mantine/core';
-import { IconNote, IconArchive, IconTrash, IconSettings, IconLogout } from '@tabler/icons-react';
+import { useLabelsStore } from '../stores/labelsStore';
+import { Stack, NavLink, Avatar, Group, Text, ActionIcon, Divider, Box, Title, Button, ScrollArea } from '@mantine/core';
+import { IconNote, IconArchive, IconTrash, IconSettings, IconLogout, IconShieldCog, IconTag, IconPencil } from '@tabler/icons-react';
+import EditLabelsModal from './EditLabelsModal';
 
 export default function Sidebar({ onClose }) {
     const { user, logout } = useAuthStore();
+    const { labels, fetchLabels } = useLabelsStore();
     const navigate = useNavigate();
+    const [editLabelsOpen, setEditLabelsOpen] = useState(false);
+
+    useEffect(() => {
+        fetchLabels();
+    }, [fetchLabels]);
 
     const handleLogout = () => {
         logout();
@@ -24,7 +33,7 @@ export default function Sidebar({ onClose }) {
 
     return (
         <Stack h="100%" justify="space-between" p={0}>
-            <Box>
+            <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 {/* Logo */}
                 <Group p="md" pb="xs">
                     <Box
@@ -69,7 +78,69 @@ export default function Sidebar({ onClose }) {
                         onClick={handleLinkClick}
                         variant="filled"
                     />
+
+                    {user?.role === 'admin' && (
+                        <NavLink
+                            component={RouterNavLink}
+                            to="/admin"
+                            label="Admin Panel"
+                            leftSection={<IconShieldCog size={20} stroke={1.5} />}
+                            onClick={handleLinkClick}
+                            variant="filled"
+                        />
+                    )}
                 </Stack>
+
+                {/* Labels Section */}
+                {labels.length > 0 && (
+                    <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                        <Divider my="sm" mx="xs" />
+                        <Box px="xs" mb="xs">
+                            <Group justify="space-between" mb={4}>
+                                <Text size="xs" fw={600} c="dimmed" tt="uppercase">Labels</Text>
+                                <ActionIcon
+                                    variant="subtle"
+                                    size="sm"
+                                    onClick={() => setEditLabelsOpen(true)}
+                                    title="Edit labels"
+                                >
+                                    <IconPencil size={16} />
+                                </ActionIcon>
+                            </Group>
+                        </Box>
+                        <ScrollArea style={{ flex: 1 }} px="xs" scrollbarSize={8}>
+                            <Stack gap={4}>
+                                {labels.map((label) => (
+                                    <NavLink
+                                        key={label.id}
+                                        component={RouterNavLink}
+                                        to={`/label/${encodeURIComponent(label.name)}`}
+                                        label={label.name}
+                                        leftSection={<IconTag size={16} stroke={1.5} />}
+                                        onClick={handleLinkClick}
+                                        variant="filled"
+                                        py={6}
+                                    />
+                                ))}
+                            </Stack>
+                        </ScrollArea>
+                    </Box>
+                )}
+
+                {/* Edit Labels Button - always visible if no labels */}
+                {labels.length === 0 && (
+                    <>
+                        <Divider my="sm" mx="xs" />
+                        <Stack gap={4} px="xs">
+                            <NavLink
+                                label="Create labels"
+                                leftSection={<IconTag size={20} stroke={1.5} />}
+                                onClick={() => setEditLabelsOpen(true)}
+                                variant="filled"
+                            />
+                        </Stack>
+                    </>
+                )}
             </Box>
 
             {/* User section */}
@@ -99,6 +170,12 @@ export default function Sidebar({ onClose }) {
                     </ActionIcon>
                 </Group>
             </Box>
+
+            {/* Edit Labels Modal */}
+            <EditLabelsModal
+                opened={editLabelsOpen}
+                onClose={() => setEditLabelsOpen(false)}
+            />
         </Stack>
     );
 }

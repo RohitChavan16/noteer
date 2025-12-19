@@ -4,6 +4,7 @@ import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory } from '@tabler/icons-react';
 
 import { getNoteColor, getNoteTextColor } from '../constants/noteColors';
+import LabelPicker from './LabelPicker';
 
 const formatDate = (dateString) => {
     if (!dateString) return null;
@@ -23,7 +24,7 @@ const formatDate = (dateString) => {
     }
 };
 
-export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory }) {
+export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
     const [isHovered, setIsHovered] = useState(false);
@@ -128,7 +129,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             {note.labels && note.labels.length > 0 && (
                 <Group gap="xs" mt="sm">
                     {note.labels.map((label, idx) => (
-                        <Badge key={idx} size="sm" variant="light">
+                        <Badge key={idx} size="md" variant="light" tt="none">
                             {label}
                         </Badge>
                     ))}
@@ -207,6 +208,14 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         >
                             <IconTrash size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
+                    )}
+
+                    {onLabelsChange && (
+                        <LabelPicker
+                            selectedLabels={note.labels || []}
+                            onChange={(labels) => onLabelsChange(note.id, labels)}
+                            triggerStyle={{ color: textColor }}
+                        />
                     )}
 
                     {onVersionHistory && (

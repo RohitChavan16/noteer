@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text } from '@mantine/core';
-import { IconPlus, IconPalette, IconCheckbox, IconNotes } from '@tabler/icons-react';
+import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge } from '@mantine/core';
+import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconTag } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
+import LabelPicker from './LabelPicker';
 
 import {
     DndContext,
@@ -31,7 +32,7 @@ const generateId = () => {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
 };
 
-export default function NoteInput() {
+export default function NoteInput({ currentLabel }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
 
@@ -43,9 +44,16 @@ export default function NoteInput() {
     const [newItem, setNewItem] = useState('');
     const [color, setColor] = useState('default');
     const [showColors, setShowColors] = useState(false);
+    const [labels, setLabels] = useState(currentLabel ? [currentLabel] : []);
+    const [labelsModalOpen, setLabelsModalOpen] = useState(false);
     const { createNote } = useNotesStore();
     const formRef = useRef(null);
     const isSubmittingRef = useRef(false);
+
+    // Update labels when currentLabel changes (e.g., navigating to different label filter)
+    useEffect(() => {
+        setLabels(currentLabel ? [currentLabel] : []);
+    }, [currentLabel]);
 
     const backgroundColor = getNoteColor(color, isDark);
     const textColor = getNoteTextColor(color, isDark);
@@ -77,7 +85,7 @@ export default function NoteInput() {
                     resetForm();
                     return;
                 }
-                await createNote({ title, content, color });
+                await createNote({ title, content, color, labels });
             } else {
                 // Include newItem if user was typing when they clicked away
                 const finalItems = newItem.trim()
@@ -88,7 +96,7 @@ export default function NoteInput() {
                     resetForm();
                     return;
                 }
-                await createNote({ title, items: finalItems, color, type: 'checklist' });
+                await createNote({ title, items: finalItems, color, type: 'checklist', labels });
             }
             resetForm();
         } finally {
@@ -106,16 +114,17 @@ export default function NoteInput() {
         setIsExpanded(false);
         setShowColors(false);
         setMode('note');
+        setLabels(currentLabel ? [currentLabel] : []);
     };
 
     const handleBlur = (e) => {
-        // Don't blur-save if popover is open or click was inside the form
-        if (showColors) return;
+        // Don't blur-save if popover or modal is open, or click was inside the form
+        if (showColors || labelsModalOpen) return;
         if (formRef.current && formRef.current.contains(e.relatedTarget)) return;
 
         // Small delay to allow for popover interactions
         setTimeout(() => {
-            if (!showColors && !isSubmittingRef.current) {
+            if (!showColors && !labelsModalOpen && !isSubmittingRef.current) {
                 handleSubmit();
             }
         }, 100);
@@ -278,6 +287,17 @@ export default function NoteInput() {
                         </Stack>
                     )}
 
+                    {/* Labels badges */}
+                    {labels.length > 0 && (
+                        <Group gap="xs" mt="xs">
+                            {labels.map((label, idx) => (
+                                <Badge key={idx} size="sm" variant="light" tt="none">
+                                    {label}
+                                </Badge>
+                            ))}
+                        </Group>
+                    )}
+
                     <Group justify="space-between" mt="xs">
                         <Group gap="xs">
                             <Popover
@@ -336,6 +356,12 @@ export default function NoteInput() {
                             >
                                 <IconCheckbox size={isTouchDevice ? 20 : 16} />
                             </ActionIcon>
+                            <LabelPicker
+                                selectedLabels={labels}
+                                onChange={setLabels}
+                                triggerStyle={{ color: textColor }}
+                                onOpenChange={setLabelsModalOpen}
+                            />
                         </Group>
 
                         <Button variant="subtle" size={isTouchDevice ? "sm" : "xs"} onClick={handleSubmit} style={{ color: textColor }}>
