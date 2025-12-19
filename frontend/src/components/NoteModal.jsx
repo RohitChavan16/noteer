@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge } from '@mantine/core';
-import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore } from '@tabler/icons-react';
+import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu } from '@mantine/core';
+import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import NoteRichTextEditor from './NoteRichTextEditor';
@@ -315,18 +315,32 @@ export default function NoteModal({ note, onClose }) {
                                     {note.is_archived ? <IconArchiveOff size={iconSize} /> : <IconArchive size={iconSize} />}
                                 </ActionIcon>
 
-                                <ActionIcon
-                                    variant="subtle"
-                                    size={buttonSize}
-                                    onClick={() => {
-                                        trashNote(note.id);
-                                        onClose();
-                                    }}
-                                    title="Trash"
-                                    style={{ color: textColor }}
-                                >
-                                    <IconTrash size={iconSize} />
-                                </ActionIcon>
+                                {/* 3-dot menu for less common actions */}
+                                <Menu shadow="md" width={200} position="top-end">
+                                    <Menu.Target>
+                                        <ActionIcon
+                                            variant="subtle"
+                                            size={buttonSize}
+                                            title="More options"
+                                            style={{ color: textColor }}
+                                        >
+                                            <IconDotsVertical size={iconSize} />
+                                        </ActionIcon>
+                                    </Menu.Target>
+
+                                    <Menu.Dropdown>
+                                        <Menu.Item
+                                            color="red"
+                                            leftSection={<IconTrash size={14} />}
+                                            onClick={() => {
+                                                trashNote(note.id);
+                                                onClose();
+                                            }}
+                                        >
+                                            Move to trash
+                                        </Menu.Item>
+                                    </Menu.Dropdown>
+                                </Menu>
                             </>
                         )}
 

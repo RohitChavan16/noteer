@@ -186,18 +186,15 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         </ActionIcon>
                     )}
 
-                    {onTrash && (
-                        <ActionIcon
-                            variant="subtle"
-                            size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onTrash(note.id))}
-                            title="Move to trash"
-                            style={{ color: textColor }}
-                        >
-                            <IconTrash size={isTouchDevice ? 20 : 16} />
-                        </ActionIcon>
+                    {onLabelsChange && (
+                        <LabelPicker
+                            selectedLabels={note.labels || []}
+                            onChange={(labels) => onLabelsChange(note.id, labels)}
+                            triggerStyle={{ color: textColor }}
+                        />
                     )}
 
+                    {/* Permanent delete - only in trash view */}
                     {onDelete && (
                         <ActionIcon
                             variant="subtle"
@@ -210,15 +207,8 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         </ActionIcon>
                     )}
 
-                    {onLabelsChange && (
-                        <LabelPicker
-                            selectedLabels={note.labels || []}
-                            onChange={(labels) => onLabelsChange(note.id, labels)}
-                            triggerStyle={{ color: textColor }}
-                        />
-                    )}
-
-                    {onVersionHistory && (
+                    {/* 3-dot menu for less common actions */}
+                    {(onVersionHistory || onTrash) && (
                         <Menu shadow="md" width={200} position="bottom-end">
                             <Menu.Target>
                                 <ActionIcon
@@ -233,12 +223,26 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             </Menu.Target>
 
                             <Menu.Dropdown>
-                                <Menu.Item
-                                    leftSection={<IconHistory size={14} />}
-                                    onClick={(e) => handleAction(e, () => onVersionHistory(note.id))}
-                                >
-                                    Version history
-                                </Menu.Item>
+                                {onVersionHistory && (
+                                    <Menu.Item
+                                        leftSection={<IconHistory size={14} />}
+                                        onClick={(e) => handleAction(e, () => onVersionHistory(note.id))}
+                                    >
+                                        Version history
+                                    </Menu.Item>
+                                )}
+                                {onTrash && (
+                                    <>
+                                        <Menu.Divider />
+                                        <Menu.Item
+                                            color="red"
+                                            leftSection={<IconTrash size={14} />}
+                                            onClick={(e) => handleAction(e, () => onTrash(note.id))}
+                                        >
+                                            Move to trash
+                                        </Menu.Item>
+                                    </>
+                                )}
                             </Menu.Dropdown>
                         </Menu>
                     )}
