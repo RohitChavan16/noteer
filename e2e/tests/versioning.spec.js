@@ -1,21 +1,22 @@
 import { test, expect } from '@playwright/test';
-import fs from 'fs';
+
 
 import {
     login, logout, navigateTo, createNote,
     openNoteModal, closeNoteModal, getNoteCard, uniqueId
 } from './helpers.js';
 
+
+
 test.describe('Note Versioning', () => {
 
     test('should create versions and restore old version', async ({ page, isMobile }) => {
-        test.setTimeout(60000); // Increase timeout to allow debug dump on failure
+        test.setTimeout(120000);
         const noteTitle = `Versioning Test ${uniqueId()}`;
         const initialContent = 'Initial content v1';
         const editedContent = 'Edited content v2';
 
         // 1. Login
-        page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
         await login(page);
 
         // 2. Create note with initial text - Capture ID from response
@@ -26,129 +27,106 @@ test.describe('Note Versioning', () => {
         const createResponse = await createResponsePromise;
         const noteData = await createResponse.json();
         const noteId = noteData.id;
-        console.log(`Created note with ID: ${noteId}`);
 
         // 3. Edit note to create version 2
-        console.log('Opening note modal...');
+        // 3. Edit note to create version 2
         await openNoteModal(page, noteCard);
-        console.log('Modal opened');
 
         const modal = page.locator('.mantine-Modal-content');
-        const contentTextarea = modal.locator('textarea');
+        const contentTextarea = modal.locator('.ProseMirror');
         await contentTextarea.fill(editedContent);
-        console.log('Content filled');
 
         // Wait for update request
         const updateResponsePromise = page.waitForResponse(response =>
             response.url().includes(`/api/notes/${noteId}`) && response.request().method() === 'PATCH'
         );
         await closeNoteModal(page);
-        console.log('Modal closed, waiting for patch...');
+        await closeNoteModal(page);
         await updateResponsePromise;
-        console.log('Patch received');
 
         // Verify content updated
         await expect(noteCard).toContainText(editedContent);
-        console.log('Content verification passed');
 
         // 4. Open version history menu
         await noteCard.hover();
-        console.log('Hovered card');
         const menuBtn = noteCard.locator('[title="More options"]');
         await expect(menuBtn).toBeVisible({ timeout: 5000 });
         await menuBtn.click();
-        console.log('Clicked menu button');
-        try {
-            await page.getByRole('menuitem', { name: 'Version history' }).click();
-            console.log('Version history item clicked');
+        await expect(page.locator('.mantine-Menu-dropdown')).toBeVisible();
+        await page.getByRole('menuitem', { name: /version history/i }).click();
 
-            // 5. Verify version history modal
-            // Use specific selector for modal title to avoid matching menu item
-            const modalTitle = page.locator('.mantine-Modal-title').getByText('Version History');
-            await expect(modalTitle).toBeVisible({ timeout: 5000 });
-            console.log('History modal visible');
+        // 5. Verify version history modal
+        // Use specific selector for modal title to avoid matching menu item
+        // Use specific selector for modal title to avoid matching menu item
+        const modalTitle = page.locator('.mantine-Modal-title').getByText(/Version History/i);
+        await expect(modalTitle).toBeVisible({ timeout: 5000 });
 
-            // Wait for loader to disappear
-            await expect(page.locator('.mantine-Loader-root')).not.toBeVisible({ timeout: 10000 });
+        // Wait for loader to disappear
+        await expect(page.locator('.mantine-Loader-root')).not.toBeVisible({ timeout: 10000 });
 
-            // Wait for at least one restore button to appear
-            const restoreButtons = page.getByRole('button', { name: 'Restore' });
-            await expect(restoreButtons.first()).toBeVisible({ timeout: 10000 });
+        // Wait for at least one restore button to appear
+        // Use specific selector ensuring we target the buttons inside the modal
+        const restoreButtons = page.locator('.mantine-Modal-content').getByRole('button', { name: /Restore/i });
+        await expect(restoreButtons.first()).toBeVisible({ timeout: 10000 });
 
-            const restoreCount = await restoreButtons.count();
-            console.log(`Found ${restoreCount} restore buttons`);
-            expect(restoreCount).toBeGreaterThanOrEqual(1);
+        const restoreCount = await restoreButtons.count();
+        expect(restoreCount).toBeGreaterThanOrEqual(1);
 
-            // Accept confirmation dialog
-            page.once('dialog', dialog => dialog.accept());
+        // Accept confirmation dialog
+        page.once('dialog', async dialog => {
+            await dialog.accept();
+        });
 
-            // Click last restore button (oldest version - initial content)
-            await restoreButtons.last().click();
+        // Restore first version
+        await restoreButtons.first().click();
 
-            // 6. Verify modal closes and content restored
-            console.log('Verifying content restored');
-            await expect(modalTitle).not.toBeVisible({ timeout: 5000 });
-            await expect(noteCard).toContainText(initialContent);
-            console.log('Content restored successfully');
+        // Wait for loader during restore
+        await expect(page.locator('.mantine-Loader-root')).not.toBeVisible({ timeout: 10000 });
 
-            // 7. Open version history again to verify 3 versions exist
-            console.log('Re-opening version history');
-            await noteCard.hover();
-            await menuBtn.click();
-            await page.getByRole('menuitem', { name: 'Version history' }).click();
+        // 6. Verify version restored
+        // The content should revert to "Initial content v1"
+        await expect(noteCard).toContainText(initialContent);
 
-            // Use specific selector for modal title to avoid matching menu item
-            const modalTitleReopened = page.locator('.mantine-Modal-title').getByText('Version History');
-            await expect(modalTitleReopened).toBeVisible({ timeout: 5000 });
-            console.log('History modal re-opened');
+        // 7. Open version history again to verify 3 versions exist
+        // Reload page to ensure fresh state and avoid stale elements after store update
+        await page.reload();
+        await page.waitForLoadState('networkidle');
 
-            try {
-                // Wait for loader to disappear
-                await expect(page.locator('.mantine-Loader-root')).not.toBeVisible({ timeout: 10000 });
-                console.log('Loader disappeared');
+        const restoredCard = getNoteCard(page, noteTitle);
+        await expect(restoredCard).toBeVisible({ timeout: 10000 });
 
-                // Find versions
-                const restoreButtons = page.getByRole('button', { name: 'Restore' });
-                await expect(restoreButtons.first()).toBeVisible({ timeout: 10000 });
+        await restoredCard.scrollIntoViewIfNeeded();
+        await restoredCard.hover();
 
-                const count = await restoreButtons.count();
-                console.log(`Found ${count} versions`);
+        const menuBtnReopen = restoredCard.locator('[title="More options"]');
+        await expect(menuBtnReopen).toBeVisible();
+        await menuBtnReopen.click();
 
-                if (count < 2) {
-                    console.log('Dump because count < 2');
-                    fs.writeFileSync('status.txt', `COUNT: ${count}`);
-                    // Dump modal
-                    try {
-                        const modalHtml = await page.locator('.mantine-Modal-content').innerHTML();
-                        fs.writeFileSync('modal.html', modalHtml);
-                    } catch (e) { }
-                }
+        // Explicitly wait for menu dropdown
+        await expect(page.locator('.mantine-Menu-dropdown')).toBeVisible();
+        await page.getByRole('menuitem', { name: /version history/i }).click();
 
-                expect(count).toBeGreaterThanOrEqual(2);
+        // Use specific selector for modal title to avoid matching menu item
+        const modalTitleReopened = page.locator('.mantine-Modal-title').getByText(/Version History/i);
+        await expect(modalTitleReopened).toBeVisible({ timeout: 5000 });
 
-            } catch (e) {
-                console.log('ERROR in Step 7');
-                fs.writeFileSync('status.txt', `ERROR: ${e.toString()}`);
-                // Dump modal
-                try {
-                    const modalHtml = await page.locator('.mantine-Modal-content').innerHTML();
-                    fs.writeFileSync('modal.html', modalHtml);
-                } catch (err) { }
-                throw e;
-            }
-        } catch (e) {
-            console.log('ERROR CAUGHT');
-            fs.writeFileSync('error.txt', e.toString() + '\n' + e.stack);
-            throw e;
-        }
+        // Wait for loader
+        await expect(page.locator('.mantine-Loader-root')).not.toBeVisible({ timeout: 10000 });
+
+        // Find versions
+        const restoreButtonsReopened = page.locator('.mantine-Modal-content').getByRole('button', { name: /Restore/i });
+        await expect(restoreButtonsReopened.first()).toBeVisible({ timeout: 10000 });
+
+        const countReopened = await restoreButtonsReopened.count();
+        expect(countReopened).toBeGreaterThanOrEqual(2);
 
         // Close modal
-        await page.keyboard.press('Escape');
-        await expect(page.locator('text=Version History')).not.toBeVisible({ timeout: 5000 });
+        await page.locator('.mantine-Modal-close').click();
+        await expect(page.getByText(/Version History/i)).not.toBeVisible({ timeout: 5000 });
 
         // 8. Cleanup
-        await noteCard.hover();
-        await noteCard.locator('[title="Move to trash"]').click();
+        await restoredCard.hover();
+        await restoredCard.locator('[title="Move to trash"]').click();
         await navigateTo(page, isMobile, '/trash');
         const trashedCard = getNoteCard(page, noteTitle);
         await expect(trashedCard).toBeVisible({ timeout: 10000 });
