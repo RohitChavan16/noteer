@@ -41,6 +41,11 @@ router.get('/', async (req, res, next) => {
                            FROM note_items ni
                            WHERE ni.note_id = n.id
                        ), '[]'::json) as items,
+                       COALESCE((
+                           SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name, 'mime_type', img.mime_type, 'size', img.size, 'created_at', img.created_at))
+                           FROM note_images img
+                           WHERE img.note_id = n.id
+                       ), '[]'::json) as images,
                        (SELECT COUNT(*) > 0 FROM note_shares ns WHERE ns.note_id = n.id) as is_shared,
                        (SELECT json_agg(json_build_object(
                            'id', u.id, 'email', u.email, 'given_name', u.given_name, 
@@ -62,6 +67,11 @@ router.get('/', async (req, res, next) => {
                            FROM note_items ni
                            WHERE ni.note_id = n.id
                        ), '[]'::json) as items,
+                       COALESCE((
+                           SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name, 'mime_type', img.mime_type, 'size', img.size, 'created_at', img.created_at))
+                           FROM note_images img
+                           WHERE img.note_id = n.id
+                       ), '[]'::json) as images,
                        FALSE as is_shared,
                        NULL::json as collaborators,
                        json_build_object(
@@ -146,7 +156,12 @@ router.get('/sync', async (req, res, next) => {
                        SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
                        FROM note_items ni
                        WHERE ni.note_id = n.id
-                   ), '[]'::json) as items
+                   ), '[]'::json) as items,
+                   COALESCE((
+                       SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name))
+                       FROM note_images img
+                       WHERE img.note_id = n.id
+                   ), '[]'::json) as images
             FROM notes n
             LEFT JOIN note_labels nl ON n.id = nl.note_id
             LEFT JOIN labels l ON nl.label_id = l.id
@@ -335,7 +350,13 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
             [id]
         );
 
-        res.json({ ...result.rows[0], items: items.rows });
+        // Get images
+        const images = await query(
+            'SELECT * FROM note_images WHERE note_id = $1 ORDER BY created_at',
+            [id]
+        );
+
+        res.json({ ...result.rows[0], items: items.rows, images: images.rows });
     } catch (error) {
         next(error);
     }
@@ -349,7 +370,7 @@ router.post('/', validateNote, async (req, res, next) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { title, content, type, color, is_pinned, reminder_at, items, labels } = req.body;
+        const { title, content, type, color, is_pinned, reminder_at, items, labels, images } = req.body;
         const userId = req.user.id;
 
         const result = await query(
@@ -392,9 +413,20 @@ router.post('/', validateNote, async (req, res, next) => {
             }
         }
 
-        // Attach items and labels to response
+        // Add images
+        if (images && Array.isArray(images)) {
+            for (const img of images) {
+                await query(
+                    'INSERT INTO note_images (note_id, user_id, url, original_name, mime_type, size) VALUES ($1, $2, $3, $4, $5, $6)',
+                    [note.id, userId, img.url, img.original_name, img.mime_type, img.size]
+                );
+            }
+        }
+
+        // Attach items, labels, and images to response
         note.items = items || [];
         note.labels = labels || [];
+        note.images = images || [];
 
         res.status(201).json(note);
     } catch (error) {
@@ -412,7 +444,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         const { id } = req.params;
         const userId = req.user.id;
-        const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels } = req.body;
+        const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels, images } = req.body;
 
         // Check if user owns the note or has shared access
         const noteCheck = await query(
@@ -551,9 +583,22 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
             }
         }
 
+        // Update images if provided
+        if (images && Array.isArray(images)) {
+            // Delete existing images for this note
+            await query('DELETE FROM note_images WHERE note_id = $1', [id]);
+            for (const img of images) {
+                await query(
+                    'INSERT INTO note_images (note_id, user_id, url, original_name, mime_type, size) VALUES ($1, $2, $3, $4, $5, $6)',
+                    [id, userId, img.url, img.original_name, img.mime_type, img.size]
+                );
+            }
+        }
+
         const responseNote = { ...result.rows[0] };
         if (items) responseNote.items = items;
         if (labels) responseNote.labels = labels;
+        if (images) responseNote.images = images;
 
         res.json(responseNote);
     } catch (error) {

@@ -13,6 +13,7 @@ import authRoutes from './routes/auth.js';
 import notesRoutes from './routes/notes.js';
 import usersRoutes from './routes/users.js';
 import labelsRoutes from './routes/labels.js';
+import uploadRoutes from './routes/upload.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initializeDatabase } from './db/index.js';
 
@@ -86,6 +87,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve uploads
+app.use('/uploads', express.static(join(__dirname, '../uploads')));
+
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(join(__dirname, '../../frontend/dist')));
@@ -96,6 +100,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/labels', labelsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

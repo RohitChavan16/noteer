@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip } from '@mantine/core';
+import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid, AspectRatio, Image, Overlay, Center } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory, IconUsers, IconShare } from '@tabler/icons-react';
 
@@ -89,6 +89,27 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                 >
                     <IconPinFilled size={16} />
                 </ActionIcon>
+            )}
+
+            {note.images && note.images.length > 0 && (
+                <SimpleGrid cols={3} spacing={4} mb="xs">
+                    {note.images.slice(0, 3).map((img, index) => (
+                        <AspectRatio key={index} ratio={1} style={{ position: 'relative' }}>
+                            <Image
+                                src={img.url}
+                                radius="sm"
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                            {index === 2 && note.images.length > 3 && (
+                                <Overlay color="#000" opacity={0.6} zIndex={1} radius="sm">
+                                    <Center h="100%">
+                                        <Text c="white" fw={700} size="lg">+{note.images.length - 3}</Text>
+                                    </Center>
+                                </Overlay>
+                            )}
+                        </AspectRatio>
+                    ))}
+                </SimpleGrid>
             )}
 
             {note.title && (

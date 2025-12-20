@@ -171,8 +171,6 @@ docker run -d \
 
 ### 🔧 Features (Planned)
 - [ ] 🔔 Reminders & notifications
-- [ ] 🖼️ Image attachments
-- [ ] 🤝 Note sharing & collaboration
 - [ ] 🔍 Advanced search with filters
 - [ ] 📤 Export (Markdown, PDF)
 - [ ] 🔄 Offline sync

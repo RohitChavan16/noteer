@@ -266,6 +266,27 @@ export const useNotesStore = create((set, get) => {
             return await res.json();
         },
 
+        uploadImage: async (file) => {
+            try {
+                const formData = new FormData();
+                formData.append('images', file);
+
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/upload`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!res.ok) throw new Error('Failed to upload image');
+                const uploadedFiles = await res.json();
+                return uploadedFiles[0];
+            } catch (error) {
+                console.error(error);
+                set({ error: error.message });
+                return null;
+            }
+        },
+
         flushPendingUpdates: async () => {
             const promises = [];
             for (const handler of saveHandlers.values()) {

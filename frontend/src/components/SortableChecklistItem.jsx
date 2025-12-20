@@ -67,14 +67,14 @@ export default function SortableChecklistItem({
                 </button>
                 <Checkbox
                     checked={item.is_checked}
-                    onChange={() => onToggle(index)}
+                    onChange={() => onToggle(item.id)}
                     size="xs"
                     color={textColor === '#000000' ? 'dark' : 'blue'}
                     style={{ pointerEvents: isDragging ? 'none' : 'auto' }}
                 />
                 <TextInput
                     value={item.content}
-                    onChange={(e) => onUpdate(index, e.target.value)}
+                    onChange={(e) => onUpdate(item.id, e.target.value)}
                     variant="unstyled"
                     size="sm"
                     maxLength={500}
@@ -91,7 +91,7 @@ export default function SortableChecklistItem({
                 <ActionIcon
                     variant="subtle"
                     size="xs"
-                    onClick={() => onRemove(index)}
+                    onClick={() => onRemove(item.id)}
                     style={{ color: textColor, pointerEvents: isDragging ? 'none' : 'auto' }}
                 >
                     <IconX size={12} />

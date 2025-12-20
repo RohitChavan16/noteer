@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge } from '@mantine/core';
-import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconTag } from '@tabler/icons-react';
+import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone';
+import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge, SimpleGrid, Image, LoadingOverlay, Overlay, AspectRatio } from '@mantine/core';
+import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconTag, IconPhoto, IconTrash, IconX, IconUpload } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
+import { notifications } from '@mantine/notifications';
 import LabelPicker from './LabelPicker';
 
 import {
@@ -46,9 +48,12 @@ export default function NoteInput({ currentLabel }) {
     const [showColors, setShowColors] = useState(false);
     const [labels, setLabels] = useState(currentLabel ? [currentLabel] : []);
     const [labelsModalOpen, setLabelsModalOpen] = useState(false);
-    const { createNote } = useNotesStore();
+    const [images, setImages] = useState([]);
+    const [isUploading, setIsUploading] = useState(false);
+    const { createNote, uploadImage } = useNotesStore();
     const formRef = useRef(null);
     const isSubmittingRef = useRef(false);
+    const openRef = useRef(null);
 
     // Update labels when currentLabel changes (e.g., navigating to different label filter)
     useEffect(() => {
@@ -81,22 +86,22 @@ export default function NoteInput({ currentLabel }) {
 
         try {
             if (mode === 'note') {
-                if (!title.trim() && !content.trim()) {
+                if (!title.trim() && !content.trim() && images.length === 0) {
                     resetForm();
                     return;
                 }
-                await createNote({ title, content, color, labels });
+                await createNote({ title, content, color, labels, images });
             } else {
                 // Include newItem if user was typing when they clicked away
                 const finalItems = newItem.trim()
                     ? [...items, { content: newItem.trim(), is_checked: false, id: generateId() }]
                     : items;
 
-                if (!title.trim() && finalItems.length === 0) {
+                if (!title.trim() && finalItems.length === 0 && images.length === 0) {
                     resetForm();
                     return;
                 }
-                await createNote({ title, items: finalItems, color, type: 'checklist', labels });
+                await createNote({ title, items: finalItems, color, type: 'checklist', labels, images });
             }
             resetForm();
         } finally {
@@ -115,6 +120,7 @@ export default function NoteInput({ currentLabel }) {
         setShowColors(false);
         setMode('note');
         setLabels(currentLabel ? [currentLabel] : []);
+        setImages([]);
     };
 
     const handleBlur = (e) => {
@@ -173,6 +179,34 @@ export default function NoteInput({ currentLabel }) {
         setShowColors(false);
     };
 
+    const handleDrop = async (files) => {
+        setIsUploading(true);
+        try {
+            for (const file of files) {
+                const uploaded = await uploadImage(file);
+                if (uploaded) {
+                    setImages(prev => [...prev, uploaded]);
+                }
+            }
+        } catch (error) {
+            console.error(error);
+            // Error handling usually done in store
+        } finally {
+            setIsUploading(false);
+            // Ensure expanded if dropped on collapsed (though logic for collapsed drop is tricky without wrapper, this covers expanded)
+        }
+    };
+
+    const removeImage = (index) => {
+        setImages(images.filter((_, i) => i !== index));
+    };
+
+    const handlePhotoClick = (e) => {
+        e.stopPropagation();
+        setIsExpanded(true);
+        setTimeout(() => openRef.current?.(), 0);
+    };
+
     if (!isExpanded) {
         return (
             <Center mb="xl">
@@ -191,7 +225,9 @@ export default function NoteInput({ currentLabel }) {
                             <ActionIcon variant="subtle" c="dimmed" size="sm" onClick={(e) => { e.stopPropagation(); setMode('checklist'); setIsExpanded(true); }}>
                                 <IconCheckbox size={18} />
                             </ActionIcon>
-                            <IconPlus size={18} color="var(--mantine-color-dimmed)" />
+                            <ActionIcon variant="subtle" c="dimmed" size="sm" onClick={handlePhotoClick}>
+                                <IconPhoto size={18} />
+                            </ActionIcon>
                         </Group>
                     </Group>
                 </Paper>
@@ -216,159 +252,205 @@ export default function NoteInput({ currentLabel }) {
                     color: textColor
                 }}
             >
-                <Stack gap="xs">
-                    <TextInput
-                        placeholder="Title"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        variant="unstyled"
-                        autoFocus
-                        maxLength={200}
-                        styles={{
-                            input: {
-                                fontWeight: 600,
-                                fontSize: '1rem',
-                                color: textColor
-                            }
-                        }}
-                    />
+                <Dropzone
+                    openRef={openRef}
+                    onDrop={handleDrop}
+                    accept={IMAGE_MIME_TYPE}
+                    activateOnClick={false}
+                    radius="md"
+                    styles={{ root: { border: 'none', backgroundColor: 'transparent', padding: 0, overflow: 'hidden' } }}
+                >
+                    <Box style={{ position: 'relative' }}>
+                        <LoadingOverlay visible={isUploading} overlayProps={{ radius: "sm", blur: 1 }} />
+                        <Dropzone.Accept>
+                            <Overlay color={isDark ? "var(--mantine-color-dark-6)" : "var(--mantine-color-gray-0)"} opacity={0.9} zIndex={10}>
+                                <Center h="100%">
+                                    <Stack align="center" gap="xs">
+                                        <IconUpload size={40} />
+                                        <Text size="lg" fw={500}>Drop images here</Text>
+                                    </Stack>
+                                </Center>
+                            </Overlay>
+                        </Dropzone.Accept>
 
-                    {mode === 'note' ? (
-                        <Textarea
-                            placeholder="Take a note..."
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            variant="unstyled"
-                            minRows={3}
-                            autosize
-                            styles={{ input: { color: textColor } }}
-                        />
-                    ) : (
-                        <Stack gap={4}>
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={closestCenter}
-                                onDragEnd={handleDragEnd}
-                            >
-                                <SortableContext
-                                    items={items.map(item => item.id)}
-                                    strategy={verticalListSortingStrategy}
-                                >
-                                    {items.map((item, index) => (
-                                        <SortableChecklistItem
-                                            key={item.id}
-                                            item={item}
-                                            index={index}
-                                            onToggle={toggleItemCheck}
-                                            onUpdate={updateItemContent}
-                                            onRemove={removeItem}
-                                            textColor={textColor}
-                                            backgroundColor={backgroundColor}
-                                        />
+                        <Stack gap="xs">
+                            {images.length > 0 && (
+                                <SimpleGrid cols={3} spacing="xs">
+                                    {images.map((img, index) => (
+                                        <Box key={index} style={{ position: 'relative', aspectRatio: '1' }}>
+                                            <Image
+                                                src={img.url}
+                                                radius="sm"
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                            <ActionIcon
+                                                variant="filled"
+                                                color="rgba(0,0,0,0.6)"
+                                                size="sm"
+                                                style={{ position: 'absolute', bottom: 4, right: 4 }}
+                                                onClick={(e) => { e.stopPropagation(); removeImage(index); }}
+                                            >
+                                                <IconTrash size={14} color="white" />
+                                            </ActionIcon>
+                                        </Box>
                                     ))}
-                                </SortableContext>
-                            </DndContext>
+                                </SimpleGrid>
+                            )}
 
-                            <Group gap="xs" wrap="nowrap">
-                                <Box w={14} /> {/* Spacer for grip icon */}
-                                <IconPlus size={14} style={{ opacity: 0.4, color: textColor }} />
-                                <TextInput
-                                    placeholder="List item"
-                                    value={newItem}
-                                    onChange={(e) => setNewItem(e.target.value)}
-                                    onKeyDown={handleItemKeyDown}
+                            <TextInput
+                                placeholder="Title"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                variant="unstyled"
+                                autoFocus
+                                maxLength={200}
+                                styles={{
+                                    input: {
+                                        fontWeight: 600,
+                                        fontSize: '1rem',
+                                        color: textColor
+                                    }
+                                }}
+                            />
+
+                            {mode === 'note' ? (
+                                <Textarea
+                                    placeholder="Take a note..."
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
                                     variant="unstyled"
-                                    size="sm"
-                                    maxLength={500}
-                                    style={{ flex: 1 }}
+                                    minRows={3}
+                                    autosize
                                     styles={{ input: { color: textColor } }}
                                 />
+                            ) : (
+                                <Stack gap={4}>
+                                    <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={closestCenter}
+                                        onDragEnd={handleDragEnd}
+                                    >
+                                        <SortableContext
+                                            items={items.map(item => item.id)}
+                                            strategy={verticalListSortingStrategy}
+                                        >
+                                            {items.map((item, index) => (
+                                                <SortableChecklistItem
+                                                    key={item.id}
+                                                    item={item}
+                                                    index={index}
+                                                    onToggle={toggleItemCheck}
+                                                    onUpdate={updateItemContent}
+                                                    onRemove={removeItem}
+                                                    textColor={textColor}
+                                                    backgroundColor={backgroundColor}
+                                                />
+                                            ))}
+                                        </SortableContext>
+                                    </DndContext>
+
+                                    <Group gap="xs" wrap="nowrap">
+                                        <Box w={14} /> {/* Spacer for grip icon */}
+                                        <IconPlus size={14} style={{ opacity: 0.4, color: textColor }} />
+                                        <TextInput
+                                            placeholder="List item"
+                                            value={newItem}
+                                            onChange={(e) => setNewItem(e.target.value)}
+                                            onKeyDown={handleItemKeyDown}
+                                            variant="unstyled"
+                                            size="sm"
+                                            maxLength={500}
+                                            style={{ flex: 1 }}
+                                            styles={{ input: { color: textColor } }}
+                                        />
+                                    </Group>
+                                </Stack>
+                            )}
+
+                            {/* Labels badges */}
+                            {labels.length > 0 && (
+                                <Group gap="xs" mt="xs">
+                                    {labels.map((label, idx) => (
+                                        <Badge key={idx} size="sm" variant="light" tt="none">
+                                            {label}
+                                        </Badge>
+                                    ))}
+                                </Group>
+                            )}
+
+                            <Group justify="space-between" mt="xs">
+                                <Group gap="xs">
+                                    <Popover
+                                        opened={showColors}
+                                        onChange={setShowColors}
+                                        position="top-start"
+                                        trapFocus
+                                        withinPortal={false}
+                                    >
+                                        <Popover.Target>
+                                            <ActionIcon
+                                                variant="subtle"
+                                                size={buttonSize}
+                                                onClick={() => setShowColors(!showColors)}
+                                                title="Background color"
+                                                style={{ color: textColor }}
+                                            >
+                                                <IconPalette size={iconSize} />
+                                            </ActionIcon>
+                                        </Popover.Target>
+                                        <Popover.Dropdown>
+                                            <Group gap="xs">
+                                                {NOTE_COLORS.map((c) => (
+                                                    <ColorSwatch
+                                                        key={c.id}
+                                                        color={isDark ? c.dark : c.light}
+                                                        onClick={() => handleColorSelect(c.id)}
+                                                        style={{
+                                                            cursor: 'pointer',
+                                                            border: color === c.id
+                                                                ? '2px solid var(--mantine-color-blue-5)'
+                                                                : `1px solid ${isDark ? 'var(--mantine-color-dark-4)' : 'var(--mantine-color-gray-5)'}`
+                                                        }}
+                                                        size={24}
+                                                    />
+                                                ))}
+                                            </Group>
+                                        </Popover.Dropdown>
+                                    </Popover>
+
+                                    <ActionIcon
+                                        variant={mode === 'note' ? 'filled' : 'subtle'}
+                                        size={buttonSize}
+                                        onClick={() => setMode('note')}
+                                        title="Note"
+                                        style={mode !== 'note' ? { color: textColor } : {}}
+                                    >
+                                        <IconNotes size={isTouchDevice ? 20 : 16} />
+                                    </ActionIcon>
+                                    <ActionIcon
+                                        variant={mode === 'checklist' ? 'filled' : 'subtle'}
+                                        size={buttonSize}
+                                        onClick={() => setMode('checklist')}
+                                        title="Checklist"
+                                        style={mode !== 'checklist' ? { color: textColor } : {}}
+                                    >
+                                        <IconCheckbox size={isTouchDevice ? 20 : 16} />
+                                    </ActionIcon>
+                                    <LabelPicker
+                                        selectedLabels={labels}
+                                        onChange={setLabels}
+                                        triggerStyle={{ color: textColor }}
+                                        onOpenChange={setLabelsModalOpen}
+                                    />
+                                </Group>
+
+                                <Button variant="subtle" size={isTouchDevice ? "sm" : "xs"} onClick={handleSubmit} style={{ color: textColor }}>
+                                    Close
+                                </Button>
                             </Group>
                         </Stack>
-                    )}
-
-                    {/* Labels badges */}
-                    {labels.length > 0 && (
-                        <Group gap="xs" mt="xs">
-                            {labels.map((label, idx) => (
-                                <Badge key={idx} size="sm" variant="light" tt="none">
-                                    {label}
-                                </Badge>
-                            ))}
-                        </Group>
-                    )}
-
-                    <Group justify="space-between" mt="xs">
-                        <Group gap="xs">
-                            <Popover
-                                opened={showColors}
-                                onChange={setShowColors}
-                                position="top-start"
-                                trapFocus
-                                withinPortal={false}
-                            >
-                                <Popover.Target>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        size={buttonSize}
-                                        onClick={() => setShowColors(!showColors)}
-                                        title="Background color"
-                                        style={{ color: textColor }}
-                                    >
-                                        <IconPalette size={iconSize} />
-                                    </ActionIcon>
-                                </Popover.Target>
-                                <Popover.Dropdown>
-                                    <Group gap="xs">
-                                        {NOTE_COLORS.map((c) => (
-                                            <ColorSwatch
-                                                key={c.id}
-                                                color={isDark ? c.dark : c.light}
-                                                onClick={() => handleColorSelect(c.id)}
-                                                style={{
-                                                    cursor: 'pointer',
-                                                    border: color === c.id
-                                                        ? '2px solid var(--mantine-color-blue-5)'
-                                                        : `1px solid ${isDark ? 'var(--mantine-color-dark-4)' : 'var(--mantine-color-gray-5)'}`
-                                                }}
-                                                size={24}
-                                            />
-                                        ))}
-                                    </Group>
-                                </Popover.Dropdown>
-                            </Popover>
-
-                            <ActionIcon
-                                variant={mode === 'note' ? 'filled' : 'subtle'}
-                                size={buttonSize}
-                                onClick={() => setMode('note')}
-                                title="Note"
-                                style={mode !== 'note' ? { color: textColor } : {}}
-                            >
-                                <IconNotes size={isTouchDevice ? 20 : 16} />
-                            </ActionIcon>
-                            <ActionIcon
-                                variant={mode === 'checklist' ? 'filled' : 'subtle'}
-                                size={buttonSize}
-                                onClick={() => setMode('checklist')}
-                                title="Checklist"
-                                style={mode !== 'checklist' ? { color: textColor } : {}}
-                            >
-                                <IconCheckbox size={isTouchDevice ? 20 : 16} />
-                            </ActionIcon>
-                            <LabelPicker
-                                selectedLabels={labels}
-                                onChange={setLabels}
-                                triggerStyle={{ color: textColor }}
-                                onOpenChange={setLabelsModalOpen}
-                            />
-                        </Group>
-
-                        <Button variant="subtle" size={isTouchDevice ? "sm" : "xs"} onClick={handleSubmit} style={{ color: textColor }}>
-                            Close
-                        </Button>
-                    </Group>
-                </Stack>
+                    </Box>
+                </Dropzone>
             </Paper>
         </Center>
     );

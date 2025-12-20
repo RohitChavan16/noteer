@@ -19,6 +19,7 @@
     "express-validator": "^7.2.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "openid-client": "^6.1.3",
     "pg": "^8.13.1"
   },

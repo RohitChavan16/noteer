@@ -117,6 +117,19 @@ export async function initializeDatabase() {
       UNIQUE(user_id, note_id, label_id)
     );
     CREATE INDEX IF NOT EXISTS idx_user_note_labels_user_note ON user_note_labels(user_id, note_id);
+
+    CREATE TABLE IF NOT EXISTS note_images (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      note_id INTEGER REFERENCES notes(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      url TEXT NOT NULL,
+      original_name TEXT,
+      mime_type TEXT,
+      size BIGINT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_note_images_note_id ON note_images(note_id);
+    CREATE INDEX IF NOT EXISTS idx_note_images_user_id ON note_images(user_id);
   `);
 
   // Migration: Split name into given_name and family_name
