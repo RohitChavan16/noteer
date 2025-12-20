@@ -1,10 +1,17 @@
 import { useState } from 'react';
-import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu } from '@mantine/core';
+import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
-import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory } from '@tabler/icons-react';
+import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory, IconUsers, IconShare } from '@tabler/icons-react';
 
 import { getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import LabelPicker from './LabelPicker';
+
+// Get initials from name parts
+function getInitials(givenName, familyName) {
+    const first = givenName?.charAt(0)?.toUpperCase() || '';
+    const last = familyName?.charAt(0)?.toUpperCase() || '';
+    return first + last || '?';
+}
 
 const formatDate = (dateString) => {
     if (!dateString) return null;
@@ -24,7 +31,7 @@ const formatDate = (dateString) => {
     }
 };
 
-export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange }) {
+export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
     const [isHovered, setIsHovered] = useState(false);
@@ -137,8 +144,9 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             )}
 
             <Group mt="sm" justify="space-between" align="center">
+                {/* Left side: Action buttons */}
                 <Group gap="xs" style={{ opacity: (isHovered || isTouchDevice) ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
-                    {onPin && (
+                    {onPin && note.is_owner !== false && (
                         <ActionIcon
                             variant="subtle"
                             size={isTouchDevice ? "lg" : "sm"}
@@ -171,6 +179,19 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             style={{ color: textColor }}
                         >
                             <IconArchiveOff size={isTouchDevice ? 20 : 16} />
+                        </ActionIcon>
+                    )}
+
+                    {/* Share button for owner */}
+                    {onShare && note.is_owner !== false && !note.is_trashed && (
+                        <ActionIcon
+                            variant="subtle"
+                            size={isTouchDevice ? "lg" : "sm"}
+                            onClick={(e) => handleAction(e, () => onShare(note))}
+                            title="Share"
+                            style={{ color: textColor }}
+                        >
+                            <IconShare size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
                     )}
 
@@ -207,8 +228,8 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         </ActionIcon>
                     )}
 
-                    {/* 3-dot menu for less common actions */}
-                    {(onVersionHistory || onTrash) && (
+                    {/* 3-dot menu - only for owner (version history + trash) */}
+                    {note.is_owner !== false && (onVersionHistory || onTrash) && (
                         <Menu shadow="md" width={200} position="bottom-end">
                             <Menu.Target>
                                 <ActionIcon
@@ -248,9 +269,27 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                     )}
                 </Group>
 
-                {lastModified && (
-                    <Text size="xs" style={{ color: textColor, opacity: 0.7 }}>{lastModified}</Text>
-                )}
+                {/* Right side: Share indicator + last modified */}
+                <Group gap="xs" align="center">
+                    {/* Show owner avatar for shared notes (not owned by current user) */}
+                    {note.owner && (
+                        <Tooltip label={`Shared by ${note.owner.given_name || note.owner.email}`}>
+                            <Avatar src={note.owner.avatar_url} size="sm" radius="xl">
+                                {getInitials(note.owner.given_name, note.owner.family_name)}
+                            </Avatar>
+                        </Tooltip>
+                    )}
+
+                    {/* Shared with others indicator for owner */}
+                    {note.is_shared && note.is_owner && (
+                        <Tooltip label="Shared with others">
+                            <IconUsers size={14} style={{ color: textColor, opacity: 0.7 }} />
+                        </Tooltip>
+                    )}
+                    {lastModified && (
+                        <Text size="xs" style={{ color: textColor, opacity: 0.7 }}>{lastModified}</Text>
+                    )}
+                </Group>
             </Group>
         </Card>
     );

@@ -8,18 +8,22 @@ import { IconTag, IconPlus, IconX } from '@tabler/icons-react';
 
 export default function EditLabelsModal({ opened, onClose }) {
     const { labels, createLabel, deleteLabel, fetchLabels, isLoading } = useLabelsStore();
-    const { fetchNotes } = useNotesStore();
+    const { fetchNotes, flushPendingUpdates } = useNotesStore();
     const [newLabelName, setNewLabelName] = useState('');
     const [error, setError] = useState('');
 
     // Refetch labels when modal opens (to get updated note counts)
     useEffect(() => {
         if (opened) {
-            fetchLabels();
+            const syncAndFetch = async () => {
+                if (flushPendingUpdates) await flushPendingUpdates();
+                fetchLabels();
+            };
+            syncAndFetch();
             setError('');
             setNewLabelName('');
         }
-    }, [opened, fetchLabels]);
+    }, [opened, fetchLabels, flushPendingUpdates]);
 
     const handleCreate = async () => {
         if (!newLabelName.trim()) return;

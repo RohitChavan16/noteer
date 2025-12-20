@@ -13,8 +13,39 @@ router.use(authenticateToken);
 router.get('/', requireRole('admin'), async (req, res, next) => {
     try {
         const result = await query(
-            'SELECT id, email, given_name, family_name, role, oidc_subject, created_at FROM users ORDER BY created_at DESC'
+            'SELECT id, email, given_name, family_name, role, oidc_subject, avatar_url, created_at FROM users ORDER BY created_at DESC'
         );
+        const users = result.rows.map(u => ({
+            ...u,
+            name: `${u.given_name || ''} ${u.family_name || ''}`.trim() || u.email
+        }));
+        res.json(users);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/users/search - Search users by email or name (for sharing)
+router.get('/search', async (req, res, next) => {
+    try {
+        const { q } = req.query;
+        const currentUserId = req.user.id;
+
+        if (!q || q.length < 2) {
+            return res.json([]);
+        }
+
+        const searchTerm = `%${q}%`;
+        const result = await query(
+            `SELECT id, email, given_name, family_name, avatar_url 
+             FROM users 
+             WHERE id != $1 
+               AND (email ILIKE $2 OR given_name ILIKE $2 OR family_name ILIKE $2)
+             ORDER BY email ASC
+             LIMIT 10`,
+            [currentUserId, searchTerm]
+        );
+
         const users = result.rows.map(u => ({
             ...u,
             name: `${u.given_name || ''} ${u.family_name || ''}`.trim() || u.email
@@ -36,7 +67,7 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
         }
 
         const result = await query(
-            'SELECT id, email, given_name, family_name, role, oidc_subject, oidc_issuer, created_at FROM users WHERE id = $1',
+            'SELECT id, email, given_name, family_name, role, oidc_subject, oidc_issuer, avatar_url, created_at FROM users WHERE id = $1',
             [id]
         );
 
@@ -140,7 +171,7 @@ router.patch('/:id', [
 
         const result = await query(
             `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} 
-       RETURNING id, email, given_name, family_name, role, oidc_subject, created_at`,
+       RETURNING id, email, given_name, family_name, role, oidc_subject, avatar_url, created_at`,
             params
         );
 

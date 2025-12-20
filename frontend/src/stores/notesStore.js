@@ -31,11 +31,41 @@ export const useNotesStore = create((set, get) => {
         pendingChanges: false,
         lastSyncedAt: null,
 
+        // Polling state
+        lastFetchOptions: null,
+        pollingInterval: null,
+
         setSearchQuery: (query) => set({ searchQuery: query }),
         setViewMode: (mode) => set({ viewMode: mode }),
 
-        fetchNotes: async (options = {}) => {
-            set({ isLoading: true, error: null });
+        startPolling: () => {
+            if (get().pollingInterval) return;
+            const interval = setInterval(() => {
+                const { fetchNotes, lastFetchOptions, pendingChanges, isSyncing } = get();
+                // Do not poll if changes are pending
+                if (pendingChanges || isSyncing) return;
+                // Only poll if we have options (meaning a page has loaded)
+                if (lastFetchOptions) {
+                    fetchNotes(lastFetchOptions, true);
+                }
+            }, 5000); // Poll every 5 seconds
+            set({ pollingInterval: interval });
+        },
+
+        stopPolling: () => {
+            const { pollingInterval } = get();
+            if (pollingInterval) clearInterval(pollingInterval);
+            set({ pollingInterval: null });
+        },
+
+        fetchNotes: async (options = {}, silent = false) => {
+            // Save options for polling
+            set({ lastFetchOptions: options });
+
+            if (!silent) {
+                set({ isLoading: true, error: null });
+            }
+
             try {
                 const params = new URLSearchParams();
                 if (options.archived) params.append('archived', 'true');
@@ -51,7 +81,11 @@ export const useNotesStore = create((set, get) => {
                 const notes = await res.json();
                 set({ notes, isLoading: false });
             } catch (error) {
-                set({ error: error.message, isLoading: false });
+                if (!silent) {
+                    set({ error: error.message, isLoading: false });
+                } else {
+                    console.error('Polling failed:', error);
+                }
             }
         },
 
@@ -230,6 +264,19 @@ export const useNotesStore = create((set, get) => {
             });
             if (!res.ok) throw new Error('Failed to restore version');
             return await res.json();
+        },
+
+        flushPendingUpdates: async () => {
+            const promises = [];
+            for (const handler of saveHandlers.values()) {
+                const result = handler.flush();
+                if (result instanceof Promise) {
+                    promises.push(result);
+                }
+            }
+            if (promises.length > 0) {
+                await Promise.all(promises);
+            }
         },
     };
 });

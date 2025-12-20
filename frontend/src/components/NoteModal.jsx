@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useNotesStore } from '../stores/notesStore';
+import { useAuthStore } from '../stores/authStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu } from '@mantine/core';
-import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical } from '@tabler/icons-react';
+import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip } from '@mantine/core';
+import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical, IconShare, IconUserMinus, IconUsers } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import NoteRichTextEditor from './NoteRichTextEditor';
 import LabelPicker from './LabelPicker';
+import ShareModal from './ShareModal';
 
 import {
     DndContext,
@@ -40,6 +42,13 @@ const formatDate = (dateString) => {
         ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 };
 
+// Get initials from name parts
+function getInitials(givenName, familyName) {
+    const first = givenName?.charAt(0)?.toUpperCase() || '';
+    const last = familyName?.charAt(0)?.toUpperCase() || '';
+    return first + last || '?';
+}
+
 export default function NoteModal({ note, onClose }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
@@ -59,6 +68,12 @@ export default function NoteModal({ note, onClose }) {
     const [newItem, setNewItem] = useState('');
     const [showColors, setShowColors] = useState(false);
     const [labels, setLabels] = useState(note?.labels || []);
+    const [shareModalOpen, setShareModalOpen] = useState(false);
+    const [isShared, setIsShared] = useState(note?.is_shared || false);
+    const { authFetch, user } = useAuthStore();
+
+    // Check if current user is the owner
+    const isOwner = note?.is_owner !== false; // Default to true if not set (owned notes)
 
     const isChecklist = note?.type === 'checklist' || (note?.items && note.items.length > 0);
 
@@ -290,7 +305,20 @@ export default function NoteModal({ note, onClose }) {
                             triggerStyle={{ color: textColor }}
                         />
 
-                        {!note.is_trashed && (
+                        {/* Share button - only for owner */}
+                        {isOwner && !note.is_trashed && (
+                            <ActionIcon
+                                variant="subtle"
+                                size={buttonSize}
+                                onClick={() => setShareModalOpen(true)}
+                                title="Share"
+                                style={{ color: textColor }}
+                            >
+                                <IconShare size={iconSize} />
+                            </ActionIcon>
+                        )}
+
+                        {!note.is_trashed && isOwner && (
                             <>
                                 <ActionIcon
                                     variant="subtle"
@@ -315,7 +343,7 @@ export default function NoteModal({ note, onClose }) {
                                     {note.is_archived ? <IconArchiveOff size={iconSize} /> : <IconArchive size={iconSize} />}
                                 </ActionIcon>
 
-                                {/* 3-dot menu for less common actions */}
+                                {/* 3-dot menu for less common actions - only for owner */}
                                 <Menu shadow="md" width={200} position="top-end">
                                     <Menu.Target>
                                         <ActionIcon
@@ -342,6 +370,47 @@ export default function NoteModal({ note, onClose }) {
                                     </Menu.Dropdown>
                                 </Menu>
                             </>
+                        )}
+
+                        {/* Archive for shared notes (recipients) */}
+                        {!note.is_trashed && !isOwner && (
+                            <ActionIcon
+                                variant="subtle"
+                                size={buttonSize}
+                                onClick={() => {
+                                    note.is_archived ? unarchiveNote(note.id) : archiveNote(note.id);
+                                    onClose();
+                                }}
+                                title={note.is_archived ? "Unarchive" : "Archive"}
+                                style={{ color: textColor }}
+                            >
+                                {note.is_archived ? <IconArchiveOff size={iconSize} /> : <IconArchive size={iconSize} />}
+                            </ActionIcon>
+                        )}
+
+                        {/* For shared notes (not owner): Remove from my notes */}
+                        {!isOwner && !note.is_trashed && (
+                            <ActionIcon
+                                variant="subtle"
+                                color="red"
+                                size={buttonSize}
+                                onClick={async () => {
+                                    // Unshare self
+                                    try {
+                                        await authFetch(`/api/notes/${note.id}/share/${user.id}`, {
+                                            method: 'DELETE'
+                                        });
+                                    } catch (e) {
+                                        console.error('Failed to unshare:', e);
+                                    }
+                                    onClose();
+                                    // Refresh notes
+                                    useNotesStore.getState().fetchNotes();
+                                }}
+                                title="Remove from my notes"
+                            >
+                                <IconUserMinus size={iconSize} />
+                            </ActionIcon>
                         )}
 
                         {note.is_trashed && (
@@ -375,20 +444,44 @@ export default function NoteModal({ note, onClose }) {
                     </Group>
                 </Group>
 
-                {/* Date and Close on same row */}
+                {/* Date + Collaborators row */}
                 <Group justify="space-between" align="center">
-                    {note.updated_at ? (
-                        <Text size="xs" style={{ color: textColor, opacity: 0.6 }}>
-                            Edited {formatDate(note.updated_at)}
-                        </Text>
-                    ) : (
-                        <div />
-                    )}
+                    <Group gap="xs" align="center">
+                        {note.updated_at && (
+                            <Text size="xs" style={{ color: textColor, opacity: 0.6 }}>
+                                Edited {formatDate(note.updated_at)}
+                            </Text>
+                        )}
+
+                        {/* Show owner avatar for shared notes */}
+                        {note.owner && (
+                            <Tooltip label={`Owned by ${note.owner.given_name || note.owner.email}`}>
+                                <Avatar src={note.owner.avatar_url} size="sm" radius="xl">
+                                    {getInitials(note.owner.given_name, note.owner.family_name)}
+                                </Avatar>
+                            </Tooltip>
+                        )}
+
+                        {/* Shared with others indicator for owner */}
+                        {isShared && isOwner && (
+                            <Tooltip label="Shared with others">
+                                <IconUsers size={14} style={{ color: textColor, opacity: 0.7 }} />
+                            </Tooltip>
+                        )}
+                    </Group>
                     <Button variant="subtle" size="compact-sm" onClick={handleSave} loading={isSaving} style={{ color: textColor }}>
                         Close
                     </Button>
                 </Group>
             </Stack>
+
+            {/* Share Modal */}
+            <ShareModal
+                opened={shareModalOpen}
+                onClose={() => setShareModalOpen(false)}
+                note={note}
+                onShareChange={(collabCount) => setIsShared(collabCount > 0)}
+            />
         </Modal>
     );
 }

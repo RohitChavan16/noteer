@@ -1,11 +1,18 @@
 import { Outlet } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppShell, Box } from '@mantine/core';
 import Header from './Header';
 import Sidebar from './Sidebar';
+import { useNotesStore } from '../stores/notesStore';
 
 export default function Layout() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const { startPolling, stopPolling } = useNotesStore();
+
+    useEffect(() => {
+        startPolling();
+        return () => stopPolling();
+    }, [startPolling, stopPolling]);
 
     const handleMenuToggle = () => {
         setIsMenuOpen(!isMenuOpen);

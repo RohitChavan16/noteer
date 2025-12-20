@@ -94,6 +94,29 @@ export async function initializeDatabase() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_note_versions_note_id ON note_versions(note_id);
+
+    CREATE TABLE IF NOT EXISTS note_shares (
+      id SERIAL PRIMARY KEY,
+      note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+      owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      shared_with_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      is_archived BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(note_id, shared_with_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_note_shares_note_id ON note_shares(note_id);
+    CREATE INDEX IF NOT EXISTS idx_note_shares_shared_with ON note_shares(shared_with_id);
+
+    -- Per-user note labels: allows each user to have their own labels on any note they can access
+    CREATE TABLE IF NOT EXISTS user_note_labels (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+      label_id INTEGER NOT NULL REFERENCES labels(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, note_id, label_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_note_labels_user_note ON user_note_labels(user_id, note_id);
   `);
 
   // Migration: Split name into given_name and family_name
@@ -132,6 +155,14 @@ export async function initializeDatabase() {
           ALTER TABLE notes ADD COLUMN type VARCHAR(50) DEFAULT 'note';
           UPDATE notes SET type = 'checklist'
           WHERE id IN (SELECT DISTINCT note_id FROM note_items);
+        END IF;
+
+        -- Add avatar_url column for OIDC profile pictures
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'users' AND column_name = 'avatar_url'
+        ) THEN
+          ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500);
         END IF;
       END $$;
     `);

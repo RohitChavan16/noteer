@@ -4,12 +4,14 @@ import { IconNote } from '@tabler/icons-react';
 import NoteCard from './NoteCard';
 import NoteModal from './NoteModal';
 import VersionHistoryModal from './VersionHistoryModal';
+import ShareModal from './ShareModal';
 import { useNotesStore } from '../stores/notesStore';
 
 export default function NoteGrid({ notes, showRestore, showDelete }) {
-    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote } = useNotesStore();
+    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote, fetchNotes } = useNotesStore();
     const [selectedNote, setSelectedNote] = useState(null);
     const [versionHistoryNoteId, setVersionHistoryNoteId] = useState(null);
+    const [shareNoteId, setShareNoteId] = useState(null);
 
     const isTrash = showDelete;
     const isArchive = showRestore && !showDelete;
@@ -17,6 +19,9 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
     // In trash, we don't separate pinned notes
     const pinnedNotes = isTrash ? [] : notes.filter((n) => n.is_pinned);
     const otherNotes = isTrash ? notes : notes.filter((n) => !n.is_pinned);
+
+    // Find shareNote from current notes array by ID
+    const shareNote = shareNoteId ? notes.find(n => n.id === shareNoteId) : null;
 
     const handleNoteClick = (note) => {
         if (!showDelete) {
@@ -38,13 +43,17 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         await updateNote(noteId, { items: updatedItems });
     };
 
+    const handleShare = (note) => {
+        setShareNoteId(note.id);
+    };
+
     // Force list view on touch devices (phones and tablets)
     const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
     const effectiveViewMode = isTouchDevice ? 'list' : viewMode;
 
     const gridStyles = effectiveViewMode === 'list'
         ? { maxWidth: 600, margin: '0 auto' }
-        : { columnCount: 5, columnGap: 16 };
+        : { columnCount: 4, columnGap: 16 };
 
     const renderNotes = (noteList, title) => (
         <>
@@ -53,14 +62,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                     {title}
                 </Text>
             )}
-            <Box
-                style={{
-                    ...gridStyles,
-                    '@media (max-width: 992px)': { columnCount: 3 },
-                    '@media (max-width: 768px)': { columnCount: 2 },
-                    '@media (max-width: 576px)': { columnCount: 1 },
-                }}
-            >
+            <Box style={gridStyles}>
                 {noteList.map((note) => (
                     <NoteCard
                         key={note.id}
@@ -75,6 +77,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                         onItemToggle={!isTrash ? handleItemToggle : undefined}
                         onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
                         onLabelsChange={!isTrash ? (noteId, labels) => updateNote(noteId, { labels }) : undefined}
+                        onShare={!isTrash ? handleShare : undefined}
                     />
                 ))}
             </Box>
@@ -92,6 +95,9 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         );
     }
 
+    // Ensure we pass the latest version of the note to the modal
+    const activeNote = selectedNote ? (notes.find(n => n.id === selectedNote.id) || selectedNote) : null;
+
     return (
         <>
             <Box w="100%">
@@ -99,8 +105,8 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                 {renderNotes(otherNotes, pinnedNotes.length > 0 && !showDelete ? 'Others' : null)}
             </Box>
 
-            {selectedNote && (
-                <NoteModal note={selectedNote} onClose={handleModalClose} />
+            {activeNote && (
+                <NoteModal note={activeNote} onClose={handleModalClose} />
             )}
 
             <VersionHistoryModal
@@ -109,17 +115,24 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                 noteId={versionHistoryNoteId}
             />
 
+            <ShareModal
+                opened={!!shareNote}
+                onClose={() => {
+                    setShareNoteId(null);
+                    // Refresh notes when share modal closes to reflect changes
+                    fetchNotes();
+                }}
+                note={shareNote}
+            />
+
             <style>{`
-                @media (max-width: 1200px) {
-                    .mantine-Box-root { column-count: 4 !important; }
-                }
-                @media (max-width: 992px) {
+                @media (max-width: 1400px) {
                     .mantine-Box-root { column-count: 3 !important; }
                 }
-                @media (max-width: 768px) {
+                @media (max-width: 1000px) {
                     .mantine-Box-root { column-count: 2 !important; }
                 }
-                @media (max-width: 576px) {
+                @media (max-width: 600px) {
                     .mantine-Box-root { column-count: 1 !important; }
                 }
             `}</style>

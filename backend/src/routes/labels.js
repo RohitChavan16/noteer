@@ -13,11 +13,17 @@ router.get('/', async (req, res, next) => {
     try {
         const userId = req.user.id;
         const result = await query(
-            `SELECT l.id, l.name, l.created_at, COUNT(nl.note_id) as note_count
+            `SELECT l.id, l.name, l.created_at,
+             (
+                SELECT COUNT(DISTINCT note_id)
+                FROM (
+                    SELECT note_id FROM note_labels WHERE label_id = l.id
+                    UNION
+                    SELECT note_id FROM user_note_labels WHERE label_id = l.id
+                ) all_links
+             ) :: integer as note_count
              FROM labels l
-             LEFT JOIN note_labels nl ON l.id = nl.label_id
              WHERE l.user_id = $1
-             GROUP BY l.id, l.name, l.created_at
              ORDER BY l.name ASC`,
             [userId]
         );

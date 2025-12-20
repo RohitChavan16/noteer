@@ -24,7 +24,8 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
             setSearch('');
             setNewLabelName('');
         }
-    }, [opened, fetchLabels, selectedLabels]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [opened, fetchLabels]);
 
     const handleToggleLabel = (labelName) => {
         if (localLabels.includes(labelName)) {

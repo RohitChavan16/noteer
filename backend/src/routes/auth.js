@@ -129,6 +129,7 @@ router.get('/callback', async (req, res, next) => {
         let given_name = claims.given_name;
         let family_name = claims.family_name;
         let name = claims.name;
+        let picture = claims.picture;
 
         if (!email || (!given_name && !name)) {
             console.log('[OIDC] Fetching full UserInfo...');
@@ -141,6 +142,7 @@ router.get('/callback', async (req, res, next) => {
             given_name = given_name || userInfo.given_name;
             family_name = family_name || userInfo.family_name;
             name = name || userInfo.name || userInfo.preferred_username;
+            picture = picture || userInfo.picture;
         }
 
         // Fallbacks for names
@@ -167,17 +169,18 @@ router.get('/callback', async (req, res, next) => {
 
         if (user) {
             // User exists and is already linked. Sync details.
-            // We update email and names to match the identity provider
-            if (user.email !== email || user.given_name !== given_name || user.family_name !== family_name) {
-                console.log(`[OIDC] Syncing user ${user.id}: Email/Name changed in provider`);
+            // We update email, names, and avatar to match the identity provider
+            if (user.email !== email || user.given_name !== given_name || user.family_name !== family_name || user.avatar_url !== picture) {
+                console.log(`[OIDC] Syncing user ${user.id}: Profile changed in provider`);
                 await query(
-                    'UPDATE users SET email = $1, given_name = $2, family_name = $3 WHERE id = $4',
-                    [email, given_name, family_name, user.id]
+                    'UPDATE users SET email = $1, given_name = $2, family_name = $3, avatar_url = $4 WHERE id = $5',
+                    [email, given_name, family_name, picture || null, user.id]
                 );
                 // Refresh local user object
                 user.email = email;
                 user.given_name = given_name;
                 user.family_name = family_name;
+                user.avatar_url = picture;
             }
         } else {
             // 2. If not found by subject, try to find by email (First time link)
@@ -190,15 +193,15 @@ router.get('/callback', async (req, res, next) => {
                 // Also update names if they are currently default/empty, or just always sync them?
                 // Strategy: For good UX, we sync names from OIDC on link
                 await query(
-                    'UPDATE users SET oidc_subject = $1, oidc_issuer = $2, given_name = COALESCE($3, given_name), family_name = COALESCE($4, family_name) WHERE id = $5',
-                    [sub, process.env.OIDC_ISSUER_URL, given_name, family_name, user.id]
+                    'UPDATE users SET oidc_subject = $1, oidc_issuer = $2, given_name = COALESCE($3, given_name), family_name = COALESCE($4, family_name), avatar_url = COALESCE($5, avatar_url) WHERE id = $6',
+                    [sub, process.env.OIDC_ISSUER_URL, given_name, family_name, picture || null, user.id]
                 );
             } else {
                 // 3. Create new user
                 console.log(`[OIDC] Creating new user ${email}`);
                 const insertResult = await query(
-                    'INSERT INTO users (email, given_name, family_name, role, oidc_subject, oidc_issuer) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-                    [email, given_name, family_name || '', 'user', sub, process.env.OIDC_ISSUER_URL]
+                    'INSERT INTO users (email, given_name, family_name, role, oidc_subject, oidc_issuer, avatar_url) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+                    [email, given_name, family_name || '', 'user', sub, process.env.OIDC_ISSUER_URL, picture || null]
                 );
                 user = insertResult.rows[0];
             }
@@ -354,14 +357,28 @@ router.post('/register', validateRegister, async (req, res, next) => {
 });
 
 // GET /api/auth/me
-router.get('/me', authenticateToken, async (req, res) => {
-    // req.user has decoded JWT token data
-    const user = {
-        ...req.user,
-        // Ensure name is available if frontend needs it
-        name: `${req.user.given_name || ''} ${req.user.family_name || ''}`.trim() || req.user.email
-    };
-    res.json({ user });
+router.get('/me', authenticateToken, async (req, res, next) => {
+    try {
+        // Fetch full user data from database to get avatar_url
+        const result = await query(
+            'SELECT id, email, given_name, family_name, role, avatar_url FROM users WHERE id = $1',
+            [req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const dbUser = result.rows[0];
+        const user = {
+            ...dbUser,
+            isOidc: !!req.user.isOidc,
+            name: `${dbUser.given_name || ''} ${dbUser.family_name || ''}`.trim() || dbUser.email
+        };
+        res.json({ user });
+    } catch (error) {
+        next(error);
+    }
 });
 
 // POST /api/auth/logout (client-side token removal, but we can blacklist if needed)

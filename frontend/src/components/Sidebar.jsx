@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { useNotesStore } from '../stores/notesStore';
 import { useLabelsStore } from '../stores/labelsStore';
 import { Stack, NavLink, Avatar, Group, Text, ActionIcon, Divider, Box, Title, Button, ScrollArea } from '@mantine/core';
 import { IconNote, IconArchive, IconTrash, IconSettings, IconLogout, IconShieldCog, IconTag, IconPencil } from '@tabler/icons-react';
@@ -8,6 +9,7 @@ import EditLabelsModal from './EditLabelsModal';
 
 export default function Sidebar({ onClose }) {
     const { user, logout } = useAuthStore();
+    const { pendingChanges } = useNotesStore();
     const { labels, fetchLabels } = useLabelsStore();
     const navigate = useNavigate();
     const [editLabelsOpen, setEditLabelsOpen] = useState(false);
@@ -17,6 +19,10 @@ export default function Sidebar({ onClose }) {
     }, [fetchLabels]);
 
     const handleLogout = () => {
+        if (pendingChanges) {
+            const confirmed = window.confirm('You have unsaved changes. Are you sure you want to logout?');
+            if (!confirmed) return;
+        }
         logout();
         navigate('/login');
     };
@@ -147,7 +153,7 @@ export default function Sidebar({ onClose }) {
             <Box p="md" style={{ borderTop: '1px solid var(--mantine-color-default-border)' }}>
                 <Group justify="space-between" wrap="nowrap">
                     <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                        <Avatar color="blue" radius="xl" flex={0}>
+                        <Avatar src={user?.avatar_url} color="blue" radius="xl" flex={0}>
                             {user?.name?.[0] || user?.email?.[0] || 'U'}
                         </Avatar>
                         <Box style={{ flex: 1, minWidth: 0 }}>

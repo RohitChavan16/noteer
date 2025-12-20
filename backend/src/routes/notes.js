@@ -18,54 +18,95 @@ const validateNote = [
     body('reminder_at').optional().isISO8601(),
 ];
 
-// GET /api/notes - List notes
+// GET /api/notes - List notes (owned + shared with me)
 router.get('/', async (req, res, next) => {
     try {
         const { archived, trashed, label, search } = req.query;
         const userId = req.user.id;
 
+        // Build query for owned notes
         let sql = `
-            SELECT n.*, 
-                   array_agg(DISTINCT l.name) FILTER (WHERE l.name IS NOT NULL) as labels,
-                   COALESCE((
-                       SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
-                       FROM note_items ni
-                       WHERE ni.note_id = n.id
-                   ), '[]'::json) as items
-            FROM notes n
-            LEFT JOIN note_labels nl ON n.id = nl.note_id
-            LEFT JOIN labels l ON nl.label_id = l.id
-            WHERE n.user_id = $1
+            WITH note_data AS (
+                -- Owned notes
+                SELECT n.*, 
+                       TRUE as is_owner,
+                       FALSE as share_is_archived,
+                       COALESCE(
+                           -- First try user_note_labels, fallback to note_labels for backward compat
+                           (SELECT array_agg(DISTINCT l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $1 AND l.name IS NOT NULL),
+                           (SELECT array_agg(DISTINCT l.name) FROM note_labels nl JOIN labels l ON nl.label_id = l.id AND l.user_id = $1 WHERE nl.note_id = n.id AND l.name IS NOT NULL)
+                       ) as labels,
+                       COALESCE((
+                           SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
+                           FROM note_items ni
+                           WHERE ni.note_id = n.id
+                       ), '[]'::json) as items,
+                       (SELECT COUNT(*) > 0 FROM note_shares ns WHERE ns.note_id = n.id) as is_shared,
+                       (SELECT json_agg(json_build_object(
+                           'id', u.id, 'email', u.email, 'given_name', u.given_name, 
+                           'family_name', u.family_name, 'avatar_url', u.avatar_url
+                       )) FROM note_shares ns JOIN users u ON ns.shared_with_id = u.id WHERE ns.note_id = n.id) as collaborators,
+                       NULL::json as owner
+                FROM notes n
+                WHERE n.user_id = $1
+
+                UNION ALL
+
+                -- Shared with me notes
+                SELECT n.*, 
+                       FALSE as is_owner,
+                       ns.is_archived as share_is_archived,
+                       (SELECT array_agg(DISTINCT l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $1 AND l.name IS NOT NULL) as labels,
+                       COALESCE((
+                           SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
+                           FROM note_items ni
+                           WHERE ni.note_id = n.id
+                       ), '[]'::json) as items,
+                       FALSE as is_shared,
+                       NULL::json as collaborators,
+                       json_build_object(
+                           'id', owner_user.id, 'email', owner_user.email, 
+                           'given_name', owner_user.given_name, 'family_name', owner_user.family_name,
+                           'avatar_url', owner_user.avatar_url
+                       ) as owner
+                FROM notes n
+                JOIN note_shares ns ON ns.note_id = n.id AND ns.shared_with_id = $1
+                JOIN users owner_user ON n.user_id = owner_user.id
+                WHERE n.is_trashed = false
+            )
+            SELECT * FROM note_data nd
+            WHERE 1=1
         `;
 
         const params = [userId];
         let paramIndex = 2;
 
         if (archived === 'true') {
-            sql += ` AND n.is_archived = true AND n.is_trashed = false`;
+            // For archived view: show owned archived OR shared with archived state
+            sql += ` AND ((nd.is_owner = true AND nd.is_archived = true AND nd.is_trashed = false) 
+                     OR (nd.is_owner = false AND nd.share_is_archived = true))`;
         } else if (trashed === 'true') {
-            sql += ` AND n.is_trashed = true`;
+            // Only owned notes can be in trash
+            sql += ` AND nd.is_owner = true AND nd.is_trashed = true`;
         } else {
-            sql += ` AND n.is_archived = false AND n.is_trashed = false`;
+            // Active notes: not archived (per ownership), not trashed
+            sql += ` AND ((nd.is_owner = true AND nd.is_archived = false AND nd.is_trashed = false)
+                     OR (nd.is_owner = false AND nd.share_is_archived = false))`;
         }
 
         if (search) {
-            sql += ` AND (n.title ILIKE $${paramIndex} OR n.content ILIKE $${paramIndex})`;
+            sql += ` AND (nd.title ILIKE $${paramIndex} OR nd.content ILIKE $${paramIndex})`;
             params.push(`%${search}%`);
             paramIndex++;
         }
 
         if (label) {
-            sql += ` AND EXISTS (
-                SELECT 1 FROM note_labels nl2 
-                JOIN labels l2 ON nl2.label_id = l2.id 
-                WHERE nl2.note_id = n.id AND l2.name = $${paramIndex}
-            )`;
+            sql += ` AND $${paramIndex} = ANY(nd.labels)`;
             params.push(label);
             paramIndex++;
         }
 
-        sql += ` GROUP BY n.id ORDER BY n.is_pinned DESC, n.updated_at DESC`;
+        sql += ` ORDER BY nd.is_pinned DESC, nd.updated_at DESC`;
 
         const result = await query(sql, params);
         res.json(result.rows);
@@ -330,7 +371,7 @@ router.post('/', validateNote, async (req, res, next) => {
             }
         }
 
-        // Add labels
+        // Add labels (per-user labels)
         if (labels && Array.isArray(labels)) {
             for (const labelName of labels) {
                 // Get or create label
@@ -345,8 +386,8 @@ router.post('/', validateNote, async (req, res, next) => {
                     );
                 }
                 await query(
-                    'INSERT INTO note_labels (note_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-                    [note.id, labelResult.rows[0].id]
+                    'INSERT INTO user_note_labels (user_id, note_id, label_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+                    [userId, note.id, labelResult.rows[0].id]
                 );
             }
         }
@@ -373,7 +414,42 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         const userId = req.user.id;
         const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels } = req.body;
 
-        // Build dynamic update
+        // Check if user owns the note or has shared access
+        const noteCheck = await query(
+            `SELECT n.id, n.user_id, n.is_trashed,
+                    CASE WHEN n.user_id = $2 THEN true ELSE false END as is_owner,
+                    ns.id as share_id
+             FROM notes n
+             LEFT JOIN note_shares ns ON ns.note_id = n.id AND ns.shared_with_id = $2
+             WHERE n.id = $1 AND (n.user_id = $2 OR ns.id IS NOT NULL)`,
+            [id, userId]
+        );
+
+        if (noteCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        const noteInfo = noteCheck.rows[0];
+        const isOwner = noteInfo.is_owner;
+
+        if (noteInfo.is_trashed) {
+            return res.status(403).json({ error: 'Cannot update note in trash. Restore it first.' });
+        }
+
+        // Handle is_archived separately for shared users
+        if (is_archived !== undefined && !isOwner) {
+            // Update the share's is_archived state instead of the note
+            await query(
+                'UPDATE note_shares SET is_archived = $1 WHERE note_id = $2 AND shared_with_id = $3',
+                [is_archived, id, userId]
+            );
+            // If only archiving, return early with success
+            if (Object.keys(req.body).length === 1) {
+                return res.json({ success: true, is_archived });
+            }
+        }
+
+        // Build dynamic update for note fields
         const updates = [];
         const params = [];
         let paramIndex = 1;
@@ -382,27 +458,18 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         if (content !== undefined) { updates.push(`content = $${paramIndex++}`); params.push(content); }
         if (type !== undefined) { updates.push(`type = $${paramIndex++}`); params.push(type); }
         if (color !== undefined) { updates.push(`color = $${paramIndex++}`); params.push(color); }
-        if (is_pinned !== undefined) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
-        if (is_archived !== undefined) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
+        if (is_pinned !== undefined && isOwner) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
+        if (is_archived !== undefined && isOwner) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
         if (reminder_at !== undefined) { updates.push(`reminder_at = $${paramIndex++}`); params.push(reminder_at); }
+
+        // If no note updates needed (was just archive for shared user), skip
+        if (updates.length === 0 && !items && !labels) {
+            return res.json({ success: true });
+        }
 
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
-        params.push(id, userId);
-
-        // First check if note exists and is not trashed
-        const existingNote = await query(
-            'SELECT id, is_trashed FROM notes WHERE id = $1 AND user_id = $2',
-            [id, userId]
-        );
-
-        if (existingNote.rows.length === 0) {
-            return res.status(404).json({ error: 'Note not found' });
-        }
-
-        if (existingNote.rows[0].is_trashed) {
-            return res.status(403).json({ error: 'Cannot update note in trash. Restore it first.' });
-        }
+        params.push(id);
 
         // --- VERSIONING START ---
         // Save current state as a version before updating
@@ -442,7 +509,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         const result = await query(
             `UPDATE notes SET ${updates.join(', ')} 
-       WHERE id = $${paramIndex++} AND user_id = $${paramIndex}
+       WHERE id = $${paramIndex}
        RETURNING *`,
             params
         );
@@ -462,9 +529,10 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
             }
         }
 
-        // Update labels if provided
+        // Update labels if provided (per-user labels)
         if (labels && Array.isArray(labels)) {
-            await query('DELETE FROM note_labels WHERE note_id = $1', [id]);
+            // Delete existing user_note_labels for this user and note
+            await query('DELETE FROM user_note_labels WHERE user_id = $1 AND note_id = $2', [userId, id]);
             for (const labelName of labels) {
                 let labelResult = await query(
                     'SELECT id FROM labels WHERE user_id = $1 AND name = $2',
@@ -477,8 +545,8 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
                     );
                 }
                 await query(
-                    'INSERT INTO note_labels (note_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-                    [id, labelResult.rows[0].id]
+                    'INSERT INTO user_note_labels (user_id, note_id, label_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+                    [userId, id, labelResult.rows[0].id]
                 );
             }
         }
@@ -668,6 +736,145 @@ router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('ver
 
 
         res.json({ message: 'Restored successfully' });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// ============================================================================
+// NOTE SHARING API
+// ============================================================================
+
+// POST /api/notes/:id/share - Share note with a user
+router.post('/:id/share', [param('id').isInt(), body('user_id').isInt()], async (req, res, next) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const { id } = req.params;
+        const { user_id: targetUserId } = req.body;
+        const userId = req.user.id;
+
+        // Verify ownership
+        const noteCheck = await query('SELECT user_id FROM notes WHERE id = $1', [id]);
+        if (noteCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+        if (noteCheck.rows[0].user_id !== userId) {
+            return res.status(403).json({ error: 'Only the owner can share this note' });
+        }
+
+        // Cannot share with yourself
+        if (targetUserId === userId) {
+            return res.status(400).json({ error: 'Cannot share note with yourself' });
+        }
+
+        // Check target user exists
+        const targetUser = await query(
+            'SELECT id, email, given_name, family_name, avatar_url FROM users WHERE id = $1',
+            [targetUserId]
+        );
+        if (targetUser.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Create share (ignore if already exists)
+        await query(
+            `INSERT INTO note_shares (note_id, owner_id, shared_with_id) 
+             VALUES ($1, $2, $3) 
+             ON CONFLICT (note_id, shared_with_id) DO NOTHING`,
+            [id, userId, targetUserId]
+        );
+
+        // Update note's updated_at for sync
+        await query('UPDATE notes SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+
+        res.status(201).json({
+            success: true,
+            user: {
+                ...targetUser.rows[0],
+                name: `${targetUser.rows[0].given_name || ''} ${targetUser.rows[0].family_name || ''}`.trim() || targetUser.rows[0].email
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// DELETE /api/notes/:id/share/:userId - Unshare note from a user (owner action)
+// Also used by shared user to remove note from their list
+router.delete('/:id/share/:userId', [param('id').isInt(), param('userId').isInt()], async (req, res, next) => {
+    try {
+        const { id, userId: targetUserId } = req.params;
+        const currentUserId = req.user.id;
+
+        // Check note exists
+        const noteCheck = await query('SELECT user_id FROM notes WHERE id = $1', [id]);
+        if (noteCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        const isOwner = noteCheck.rows[0].user_id === currentUserId;
+        const targetId = parseInt(targetUserId);
+
+        // If owner - can unshare anyone
+        // If not owner - can only remove self
+        if (!isOwner && targetId !== currentUserId) {
+            return res.status(403).json({ error: 'You can only remove yourself from shared notes' });
+        }
+
+        const result = await query(
+            'DELETE FROM note_shares WHERE note_id = $1 AND shared_with_id = $2 RETURNING id',
+            [id, targetId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Share not found' });
+        }
+
+        // Update note's updated_at for sync
+        await query('UPDATE notes SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+
+        res.status(204).send();
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /api/notes/:id/shares - List users note is shared with
+router.get('/:id/shares', param('id').isInt(), async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        // Verify ownership or shared access
+        const noteCheck = await query(
+            `SELECT n.user_id FROM notes n 
+             LEFT JOIN note_shares ns ON ns.note_id = n.id AND ns.shared_with_id = $2
+             WHERE n.id = $1 AND (n.user_id = $2 OR ns.id IS NOT NULL)`,
+            [id, userId]
+        );
+        if (noteCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        const result = await query(
+            `SELECT u.id, u.email, u.given_name, u.family_name, u.avatar_url, ns.is_archived, ns.created_at as shared_at
+             FROM note_shares ns
+             JOIN users u ON ns.shared_with_id = u.id
+             WHERE ns.note_id = $1
+             ORDER BY ns.created_at`,
+            [id]
+        );
+
+        const users = result.rows.map(u => ({
+            ...u,
+            name: `${u.given_name || ''} ${u.family_name || ''}`.trim() || u.email
+        }));
+
+        res.json(users);
     } catch (error) {
         next(error);
     }
