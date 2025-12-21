@@ -97,7 +97,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         {note.images.slice(0, 2).map((img, index) => (
                             <Box key={index} style={{ position: 'relative', height: note.type === 'picture' ? 160 : 120, overflow: 'hidden' }}>
                                 <Image
-                                    src={img.thumb_small || img.url}
+                                    src={img.thumb_medium || img.thumb_small || img.url}
                                     style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
                                 />
                             </Box>
