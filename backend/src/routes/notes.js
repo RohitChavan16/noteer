@@ -11,7 +11,8 @@ router.use(authenticateToken);
 // Validation
 const validateNote = [
     body('title').optional().trim().isLength({ max: 500 }),
-    body('content').optional().trim(),
+    body('content').optional().trim().isLength({ max: 60000 }).withMessage('Note content too long (max 60000 chars)'),
+    body('items').optional().isArray({ max: 200 }).withMessage('Too many checklist items (max 200)'),
     body('type').optional().isIn(['note', 'checklist', 'picture']),
     body('color').optional().isIn(['default', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'gray']),
     body('is_pinned').optional().isBoolean(),

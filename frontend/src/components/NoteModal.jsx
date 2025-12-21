@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useMantineColorScheme } from '@mantine/core';
 import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone';
 import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, Image, LoadingOverlay, Overlay, AspectRatio, Center } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical, IconShare, IconUserMinus, IconUsers, IconChevronDown, IconChevronRight, IconPhoto, IconUpload, IconX } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
@@ -120,6 +121,16 @@ export default function NoteModal({ note, onClose }) {
     const handleSave = async () => {
         if (isSaving) return;
 
+        // Validation
+        if (!isChecklist && content.length > 60000) {
+            notifications.show({ title: 'Limit reached', message: 'Note content is too long (max 60000 characters).', color: 'red' });
+            return;
+        }
+        if (isChecklist && items.length > 200) {
+            notifications.show({ title: 'Limit reached', message: 'Maximum 200 checklist items.', color: 'red' });
+            return;
+        }
+
         const hasChanges = title !== (note?.title || '') ||
             content !== (note?.content || '') ||
             color !== (note?.color || 'default') ||
@@ -150,6 +161,10 @@ export default function NoteModal({ note, onClose }) {
 
     const addItem = () => {
         if (newItem.trim()) {
+            if (items.length >= 200) {
+                notifications.show({ title: 'Limit reached', message: 'Maximum 200 checklist items.', color: 'red' });
+                return;
+            }
             const itemToAdd = { content: newItem.trim(), is_checked: false, id: generateId() };
             setItems(currentItems => {
                 const firstCheckedIndex = currentItems.findIndex(i => i.is_checked);

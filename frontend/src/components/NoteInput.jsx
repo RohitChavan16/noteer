@@ -95,6 +95,10 @@ export default function NoteInput({ currentLabel }) {
                 }
                 await createNote({ title: '', content: '', color, type: 'picture', labels, images });
             } else if (mode === 'note') {
+                if (content.length > 60000) {
+                    notifications.show({ title: 'Limit reached', message: 'Note content is too long (max 60000 characters).', color: 'red' });
+                    return;
+                }
                 if (!title.trim() && !content.trim() && images.length === 0) {
                     resetForm();
                     return;
@@ -105,6 +109,11 @@ export default function NoteInput({ currentLabel }) {
                 const finalItems = newItem.trim()
                     ? [...items, { content: newItem.trim(), is_checked: false, id: generateId() }]
                     : items;
+
+                if (finalItems.length > 200) {
+                    notifications.show({ title: 'Limit reached', message: 'Maximum 200 checklist items.', color: 'red' });
+                    return;
+                }
 
                 if (!title.trim() && finalItems.length === 0 && images.length === 0) {
                     resetForm();
@@ -148,6 +157,10 @@ export default function NoteInput({ currentLabel }) {
 
     const addItem = () => {
         if (newItem.trim()) {
+            if (items.length >= 200) {
+                notifications.show({ title: 'Limit reached', message: 'Maximum 200 checklist items.', color: 'red' });
+                return;
+            }
             setItems([...items, { content: newItem.trim(), is_checked: false, id: generateId() }]);
             setNewItem('');
         }
