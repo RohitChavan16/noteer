@@ -87,8 +87,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve uploads
-app.use('/uploads', express.static(join(__dirname, '../uploads')));
+// Serve uploads from persistent storage
+const UPLOADS_PATH = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
+app.use('/uploads', express.static(UPLOADS_PATH));
 
 // Serve static frontend in production
 if (process.env.NODE_ENV === 'production') {

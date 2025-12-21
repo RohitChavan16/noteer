@@ -5,7 +5,7 @@ import {
 } from '@mantine/core';
 import { IconTag, IconPlus, IconX } from '@tabler/icons-react';
 
-export default function LabelPicker({ selectedLabels = [], onChange, triggerStyle = {}, onOpenChange }) {
+export default function LabelPicker({ selectedLabels = [], onChange, triggerStyle = {}, onOpenChange, iconSize = 16, buttonSize = "sm" }) {
     const { labels, fetchLabels, getOrCreateLabel, isLoading } = useLabelsStore();
     const [opened, setOpened] = useState(false);
     const [newLabelName, setNewLabelName] = useState('');
@@ -81,8 +81,9 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
                 }}
                 title="Add labels"
                 style={triggerStyle}
+                size={buttonSize}
             >
-                <IconTag size={16} />
+                <IconTag size={iconSize} />
             </ActionIcon>
 
             <Modal

@@ -52,7 +52,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
     return (
         <Card
             shadow="sm"
-            padding="md"
+            padding={note.type === 'picture' ? 0 : "md"}
             radius="md"
             withBorder
             onClick={() => {
@@ -92,24 +92,18 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             )}
 
             {note.images && note.images.length > 0 && (
-                <SimpleGrid cols={3} spacing={4} mb="xs">
-                    {note.images.slice(0, 3).map((img, index) => (
-                        <AspectRatio key={index} ratio={1} style={{ position: 'relative' }}>
-                            <Image
-                                src={img.url}
-                                radius="sm"
-                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                            {index === 2 && note.images.length > 3 && (
-                                <Overlay color="#000" opacity={0.6} zIndex={1} radius="sm">
-                                    <Center h="100%">
-                                        <Text c="white" fw={700} size="lg">+{note.images.length - 3}</Text>
-                                    </Center>
-                                </Overlay>
-                            )}
-                        </AspectRatio>
-                    ))}
-                </SimpleGrid>
+                <Card.Section mb={note.type === 'picture' ? 0 : "xs"}>
+                    <SimpleGrid cols={note.images.length === 1 ? 1 : 2} spacing={1}>
+                        {note.images.slice(0, 2).map((img, index) => (
+                            <Box key={index} style={{ position: 'relative', height: note.type === 'picture' ? 160 : 120, overflow: 'hidden' }}>
+                                <Image
+                                    src={img.thumb_small || img.url}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
+                                />
+                            </Box>
+                        ))}
+                    </SimpleGrid>
+                </Card.Section>
             )}
 
             {note.title && (
@@ -164,7 +158,22 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                 </Group>
             )}
 
-            <Group mt="sm" justify="space-between" align="center">
+            <Group
+                mt={note.type === 'picture' ? 0 : "sm"}
+                justify="space-between"
+                align="center"
+                style={note.type === 'picture' ? {
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    padding: 'var(--mantine-spacing-sm)',
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)',
+                    zIndex: 10,
+                    opacity: (isHovered || isTouchDevice) ? 1 : 0,
+                    transition: 'opacity 0.15s'
+                } : {}}
+            >
                 {/* Left side: Action buttons */}
                 <Group gap="xs" style={{ opacity: (isHovered || isTouchDevice) ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
                     {onPin && note.is_owner !== false && (
@@ -173,7 +182,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onPin(note.id, !note.is_pinned))}
                             title={note.is_pinned ? 'Unpin' : 'Pin'}
-                            style={{ color: textColor }}
+                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                         >
                             {note.is_pinned ? <IconPinFilled size={isTouchDevice ? 20 : 16} /> : <IconPin size={isTouchDevice ? 20 : 16} />}
                         </ActionIcon>
@@ -185,7 +194,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onArchive(note.id))}
                             title="Archive"
-                            style={{ color: textColor }}
+                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                         >
                             <IconArchive size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
@@ -197,7 +206,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onUnarchive(note.id))}
                             title="Unarchive"
-                            style={{ color: textColor }}
+                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                         >
                             <IconArchiveOff size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
@@ -210,7 +219,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onShare(note))}
                             title="Share"
-                            style={{ color: textColor }}
+                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                         >
                             <IconShare size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
@@ -222,7 +231,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                             size={isTouchDevice ? "lg" : "sm"}
                             onClick={(e) => handleAction(e, () => onRestore(note.id))}
                             title="Restore"
-                            style={{ color: textColor }}
+                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                         >
                             <IconRestore size={isTouchDevice ? 20 : 16} />
                         </ActionIcon>
@@ -232,7 +241,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         <LabelPicker
                             selectedLabels={note.labels || []}
                             onChange={(labels) => onLabelsChange(note.id, labels)}
-                            triggerStyle={{ color: textColor }}
+                            triggerStyle={{ color: note.type === 'picture' ? '#fff' : textColor }}
                         />
                     )}
 
@@ -258,14 +267,14 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                                     size={isTouchDevice ? "lg" : "sm"}
                                     onClick={(e) => e.stopPropagation()}
                                     title="More options"
-                                    style={{ color: textColor }}
+                                    style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                                 >
                                     <IconDotsVertical size={isTouchDevice ? 20 : 16} />
                                 </ActionIcon>
                             </Menu.Target>
 
                             <Menu.Dropdown>
-                                {onVersionHistory && (
+                                {onVersionHistory && note.type !== 'picture' && (
                                     <Menu.Item
                                         leftSection={<IconHistory size={14} />}
                                         onClick={(e) => handleAction(e, () => onVersionHistory(note.id))}
@@ -274,23 +283,20 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                                     </Menu.Item>
                                 )}
                                 {onTrash && (
-                                    <>
-                                        <Menu.Divider />
-                                        <Menu.Item
-                                            color="red"
-                                            leftSection={<IconTrash size={14} />}
-                                            onClick={(e) => handleAction(e, () => onTrash(note.id))}
-                                        >
-                                            Move to trash
-                                        </Menu.Item>
-                                    </>
+                                    <Menu.Item
+                                        color="red"
+                                        leftSection={<IconTrash size={14} />}
+                                        onClick={(e) => handleAction(e, () => onTrash(note.id))}
+                                    >
+                                        Move to trash
+                                    </Menu.Item>
                                 )}
                             </Menu.Dropdown>
                         </Menu>
                     )}
                 </Group>
 
-                {/* Right side: Share indicator + last modified */}
+                {/* Right side: Share indicator - NO TIMESTAMP */}
                 <Group gap="xs" align="center">
                     {/* Show owner avatar for shared notes (not owned by current user) */}
                     {note.owner && (
@@ -304,11 +310,8 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                     {/* Shared with others indicator for owner */}
                     {note.is_shared && note.is_owner && (
                         <Tooltip label="Shared with others">
-                            <IconUsers size={14} style={{ color: textColor, opacity: 0.7 }} />
+                            <IconUsers size={14} style={{ color: note.type === 'picture' ? '#fff' : textColor, opacity: 0.7 }} />
                         </Tooltip>
-                    )}
-                    {lastModified && (
-                        <Text size="xs" style={{ color: textColor, opacity: 0.7 }}>{lastModified}</Text>
                     )}
                 </Group>
             </Group>

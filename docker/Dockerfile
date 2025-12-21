@@ -41,7 +41,8 @@ RUN mkdir -p /var/lib/postgresql/data && \
     chown -R postgres:postgres /var/lib/postgresql && \
     mkdir -p /run/postgresql && \
     chown -R postgres:postgres /run/postgresql && \
-    mkdir -p /var/lib/noteer
+    mkdir -p /var/lib/noteer && \
+    mkdir -p /var/lib/noteer/uploads && chmod 777 /var/lib/noteer/uploads
 
 # Create log directory
 RUN mkdir -p /var/log/supervisor

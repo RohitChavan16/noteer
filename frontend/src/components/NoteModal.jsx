@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useAuthStore } from '../stores/authStore';
 import { useMantineColorScheme } from '@mantine/core';
 import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone';
-import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, Image, LoadingOverlay, Overlay, AspectRatio } from '@mantine/core';
+import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, Image, LoadingOverlay, Overlay, AspectRatio, Center } from '@mantine/core';
 import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical, IconShare, IconUserMinus, IconUsers, IconChevronDown, IconChevronRight, IconPhoto, IconUpload, IconX } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
@@ -97,6 +97,9 @@ export default function NoteModal({ note, onClose }) {
     const isOwner = note?.is_owner !== false; // Default to true if not set (owned notes)
 
     const isChecklist = note?.type === 'checklist' || (note?.items && note.items.length > 0);
+
+    // Check if this is a picture-only note
+    const isPicture = note?.type === 'picture';
 
     const bgColor = getNoteColor(color, isDark);
     const textColor = getNoteTextColor(color, isDark);
@@ -216,9 +219,16 @@ export default function NoteModal({ note, onClose }) {
     };
 
     const handleDrop = async (files) => {
+        // Limit to 2 images total
+        const remainingSlots = 2 - images.length;
+        if (remainingSlots <= 0) {
+            return;
+        }
+        const filesToUpload = files.slice(0, remainingSlots);
+
         setIsUploading(true);
         try {
-            for (const file of files) {
+            for (const file of filesToUpload) {
                 const uploaded = await uploadImage(file);
                 if (uploaded) {
                     setImages(prev => [...prev, uploaded]);
@@ -279,13 +289,26 @@ export default function NoteModal({ note, onClose }) {
 
                     <Stack gap="md">
                         {images.length > 0 && (
-                            <SimpleGrid cols={3} spacing="xs">
+                            <SimpleGrid
+                                cols={images.length === 1 ? 1 : 2}
+                                spacing={1}
+                                style={{
+                                    margin: 'calc(-1 * var(--mantine-spacing-lg))',
+                                    marginBottom: 'var(--mantine-spacing-lg)',
+                                    width: 'calc(100% + 2 * var(--mantine-spacing-lg))',
+                                }}
+                            >
                                 {images.map((img, index) => (
-                                    <Box key={index} style={{ position: 'relative', aspectRatio: '1', cursor: 'zoom-in' }} onClick={() => setPreviewImage(img.url)}>
+                                    <Box key={index} style={{
+                                        position: 'relative',
+                                        height: isPicture ? 300 : 150,
+                                        cursor: 'zoom-in',
+                                        overflow: 'hidden'
+                                    }} onClick={() => setPreviewImage(img.url)}>
                                         <Image
-                                            src={img.url}
-                                            radius="sm"
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            src={img.thumb_medium || img.url}
+                                            radius={0}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
                                         />
                                         <ActionIcon
                                             variant="filled"
@@ -301,18 +324,22 @@ export default function NoteModal({ note, onClose }) {
                             </SimpleGrid>
                         )}
 
-                        <TextInput
-                            placeholder="Title"
-                            value={title}
-                            onChange={(e) => setTitle(e.currentTarget.value)}
-                            variant="unstyled"
-                            maxLength={200}
-                            size="lg"
-                            styles={{ input: { fontWeight: 700, fontSize: '1.5rem', color: textColor } }}
-                            data-autofocus={!note?.title}
-                        />
+                        {/* Hide title field for picture-only notes */}
+                        {!isPicture && (
+                            <TextInput
+                                placeholder="Title"
+                                value={title}
+                                onChange={(e) => setTitle(e.currentTarget.value)}
+                                variant="unstyled"
+                                maxLength={200}
+                                size="lg"
+                                styles={{ input: { fontWeight: 700, fontSize: '1.5rem', color: textColor } }}
+                                data-autofocus={!note?.title}
+                            />
+                        )}
 
-                        {isChecklist ? (
+                        {/* Hide content fields for picture-only notes */}
+                        {!isPicture && (isChecklist ? (
                             <Stack gap={4}>
                                 <DndContext
                                     sensors={sensors}
@@ -392,7 +419,7 @@ export default function NoteModal({ note, onClose }) {
                                 showToolbar={showFormatting}
                                 isDark={isDark}
                             />
-                        )}
+                        ))}
 
                         {/* Labels badges */}
                         {labels.length > 0 && (
@@ -407,37 +434,39 @@ export default function NoteModal({ note, onClose }) {
 
                         <Group justify="space-between" align="center">
                             <Group gap="xs">
-                                <Popover opened={showColors} onChange={setShowColors} position="top-start" shadow="md" width={200}>
-                                    <Popover.Target>
-                                        <ActionIcon
-                                            variant="subtle"
-                                            size={buttonSize}
-                                            onClick={() => setShowColors(!showColors)}
-                                            title="Background color"
-                                            style={{ color: textColor }}
-                                        >
-                                            <IconPalette size={iconSize} />
-                                        </ActionIcon>
-                                    </Popover.Target>
-                                    <Popover.Dropdown>
-                                        <Group gap="xs" wrap="wrap">
-                                            {Object.entries(NOTE_COLORS).map(([name, c]) => (
-                                                <ColorSwatch
-                                                    key={name}
-                                                    color={isDark ? c.dark : c.light}
-                                                    onClick={() => { setColor(name); setShowColors(false); }}
-                                                    style={{
-                                                        cursor: 'pointer',
-                                                        border: color === name ? `2px solid ${isDark ? '#fff' : '#000'}` : '1px solid rgba(0,0,0,0.1)'
-                                                    }}
-                                                    size={24}
-                                                />
-                                            ))}
-                                        </Group>
-                                    </Popover.Dropdown>
-                                </Popover>
+                                {!isPicture && (
+                                    <Popover opened={showColors} onChange={setShowColors} position="top-start" shadow="md" width={200}>
+                                        <Popover.Target>
+                                            <ActionIcon
+                                                variant="subtle"
+                                                size={buttonSize}
+                                                onClick={() => setShowColors(!showColors)}
+                                                title="Background color"
+                                                style={{ color: textColor }}
+                                            >
+                                                <IconPalette size={iconSize} />
+                                            </ActionIcon>
+                                        </Popover.Target>
+                                        <Popover.Dropdown>
+                                            <Group gap="xs" wrap="wrap">
+                                                {Object.entries(NOTE_COLORS).map(([name, c]) => (
+                                                    <ColorSwatch
+                                                        key={name}
+                                                        color={isDark ? c.dark : c.light}
+                                                        onClick={() => { setColor(name); setShowColors(false); }}
+                                                        style={{
+                                                            cursor: 'pointer',
+                                                            border: color === name ? `2px solid ${isDark ? '#fff' : '#000'}` : '1px solid rgba(0,0,0,0.1)'
+                                                        }}
+                                                        size={24}
+                                                    />
+                                                ))}
+                                            </Group>
+                                        </Popover.Dropdown>
+                                    </Popover>
+                                )}
 
-                                {!isChecklist && (
+                                {!isChecklist && !isPicture && (
                                     <ActionIcon
                                         variant={showFormatting ? "filled" : "subtle"}
                                         title="Formatting options"
@@ -451,10 +480,11 @@ export default function NoteModal({ note, onClose }) {
 
                                 <ActionIcon
                                     variant="subtle"
-                                    title="Add image"
-                                    style={{ color: textColor }}
-                                    onClick={() => openRef.current?.()}
+                                    title={images.length >= 2 ? "Maximum 2 images" : "Add image"}
+                                    style={{ color: textColor, opacity: images.length >= 2 ? 0.4 : 1 }}
+                                    onClick={() => images.length < 2 && openRef.current?.()}
                                     size={buttonSize}
+                                    disabled={images.length >= 2}
                                 >
                                     <IconPhoto size={iconSize} />
                                 </ActionIcon>
@@ -463,6 +493,8 @@ export default function NoteModal({ note, onClose }) {
                                     selectedLabels={labels}
                                     onChange={setLabels}
                                     triggerStyle={{ color: textColor }}
+                                    iconSize={iconSize}
+                                    buttonSize={buttonSize}
                                 />
 
                                 {/* Share button - only for owner */}

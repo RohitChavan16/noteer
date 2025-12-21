@@ -12,7 +12,7 @@ router.use(authenticateToken);
 const validateNote = [
     body('title').optional().trim().isLength({ max: 500 }),
     body('content').optional().trim(),
-    body('type').optional().isIn(['note', 'checklist']),
+    body('type').optional().isIn(['note', 'checklist', 'picture']),
     body('color').optional().isIn(['default', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'gray']),
     body('is_pinned').optional().isBoolean(),
     body('reminder_at').optional().isISO8601(),
