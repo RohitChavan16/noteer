@@ -298,7 +298,7 @@ export default function NoteModal({ note, onClose }) {
                 maxSize={10 * 1024 * 1024}
                 activateOnClick={false}
                 radius="md"
-                styles={{ root: { border: 'none', backgroundColor: 'transparent', padding: 0, overflow: 'hidden' } }}
+                styles={{ root: { border: 'none', backgroundColor: 'transparent', padding: 0, overflow: 'visible' } }}
             >
                 <Box style={{ position: 'relative' }}>
                     <LoadingOverlay visible={isUploading} overlayProps={{ radius: "sm", blur: 1 }} />
