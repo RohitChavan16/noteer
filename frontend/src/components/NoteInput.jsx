@@ -220,6 +220,7 @@ export default function NoteInput({ currentLabel }) {
             }
         } catch (error) {
             console.error(error);
+            notifications.show({ title: 'Upload failed', message: 'Failed to upload image', color: 'red' });
         } finally {
             setIsUploading(false);
         }
@@ -305,12 +306,13 @@ export default function NoteInput({ currentLabel }) {
                         const errors = files.flatMap(f => f.errors.map(e => e.message));
                         notifications.show({
                             title: 'Upload failed',
-                            message: errors.join(', ') || 'Only JPEG, PNG, GIF and WebP images are allowed',
+                            message: errors.join(', ') || 'Only JPEG, PNG, GIF and WebP images are allowed (max 10MB)',
                             color: 'red',
                             autoClose: 5000
                         });
                     }}
                     accept={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                    maxSize={10 * 1024 * 1024}
                     activateOnClick={false}
                     radius="md"
                     styles={{ root: { border: 'none', backgroundColor: 'transparent', padding: 0, overflow: 'hidden' } }}
