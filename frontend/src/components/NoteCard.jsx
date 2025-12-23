@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid, AspectRatio, Image, Overlay, Center } from '@mantine/core';
+import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid, Image } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory, IconUsers, IconShare } from '@tabler/icons-react';
 
@@ -12,24 +12,6 @@ function getInitials(givenName, familyName) {
     const last = familyName?.charAt(0)?.toUpperCase() || '';
     return first + last || '?';
 }
-
-const formatDate = (dateString) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-    } else if (diffDays === 1) {
-        return 'Yesterday';
-    } else if (diffDays < 7) {
-        return date.toLocaleDateString([], { weekday: 'short' });
-    } else {
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-};
 
 export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
     const { colorScheme } = useMantineColorScheme();
@@ -47,7 +29,6 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
 
     const bgColor = getNoteColor(note.color, isDark);
     const textColor = getNoteTextColor(note.color, isDark);
-    const lastModified = formatDate(note.updated_at || note.created_at);
 
     return (
         <Card

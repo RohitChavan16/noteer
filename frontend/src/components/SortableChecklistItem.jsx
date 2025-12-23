@@ -5,7 +5,6 @@ import { IconGripVertical, IconX } from '@tabler/icons-react';
 
 export default function SortableChecklistItem({
     item,
-    index,
     onToggle,
     onUpdate,
     onRemove,

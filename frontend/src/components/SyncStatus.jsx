@@ -1,7 +1,6 @@
-import { ActionIcon, Tooltip, rem, Loader, ThemeIcon } from '@mantine/core';
+import { ActionIcon, Tooltip, rem, Loader } from '@mantine/core';
 import { IconCloudCheck, IconCloudUpload } from '@tabler/icons-react';
 import { useNotesStore } from '../stores/notesStore';
-import { enUS } from 'date-fns/locale';
 import { formatDistanceToNow } from 'date-fns';
 
 export function SyncStatus() {

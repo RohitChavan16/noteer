@@ -2,10 +2,10 @@ import { useState, useRef } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useAuthStore } from '../stores/authStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone';
-import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, Image, LoadingOverlay, Overlay, AspectRatio, Center } from '@mantine/core';
+import { Dropzone } from '@mantine/dropzone';
+import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, Image, LoadingOverlay, Overlay, Center } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical, IconShare, IconUserMinus, IconUsers, IconChevronDown, IconChevronRight, IconPhoto, IconUpload, IconX } from '@tabler/icons-react';
+import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical, IconShare, IconUserMinus, IconUsers, IconChevronDown, IconChevronRight, IconPhoto, IconUpload } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import NoteRichTextEditor from './NoteRichTextEditor';
@@ -83,7 +83,7 @@ export default function NoteModal({ note, onClose }) {
         try {
             const stored = localStorage.getItem('noteer-checklist-completed-expanded');
             return stored !== null ? JSON.parse(stored) : true;
-        } catch (e) { return true; }
+        } catch { return true; }
     });
 
     const toggleCompletedExpanded = () => {
@@ -294,7 +294,7 @@ export default function NoteModal({ note, onClose }) {
                         autoClose: 5000
                     });
                 }}
-                accept={IMAGE_MIME_TYPE}
+                accept={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
                 maxSize={10 * 1024 * 1024}
                 activateOnClick={false}
                 radius="md"

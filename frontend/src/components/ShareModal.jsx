@@ -23,35 +23,26 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
 
     // Load current collaborators when modal opens
     useEffect(() => {
+        const loadCollaborators = async () => {
+            if (!note?.id) return;
+            setIsLoading(true);
+            try {
+                const res = await authFetch(`${API_URL}/notes/${note.id}/shares`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setCollaborators(data);
+                }
+            } catch (err) {
+                console.error('Failed to load collaborators:', err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
         if (opened && note?.id) {
             loadCollaborators();
         }
-    }, [opened, note?.id]);
-
-    // Reset search when modal closes
-    useEffect(() => {
-        if (!opened) {
-            setSearchQuery('');
-            setSearchResults([]);
-            setError(null);
-        }
-    }, [opened]);
-
-    const loadCollaborators = async () => {
-        if (!note?.id) return;
-        setIsLoading(true);
-        try {
-            const res = await authFetch(`${API_URL}/notes/${note.id}/shares`);
-            if (res.ok) {
-                const data = await res.json();
-                setCollaborators(data);
-            }
-        } catch (err) {
-            console.error('Failed to load collaborators:', err);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    }, [opened, note?.id, authFetch]);
 
     // Search users as user types
     useEffect(() => {
@@ -81,7 +72,7 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
 
         const debounce = setTimeout(searchUsers, 300);
         return () => clearTimeout(debounce);
-    }, [searchQuery, collaborators]);
+    }, [searchQuery, collaborators, authFetch]);
 
     const handleShare = async (userId) => {
         setError(null);

@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Title, Text, Paper, Table, Badge, ActionIcon, Group, Menu,
-    Modal, TextInput, PasswordInput, Button, Stack, Alert, Loader, Center
+    Modal, PasswordInput, Button, Stack, Alert, Loader, Center
 } from '@mantine/core';
 import {
     IconDotsVertical, IconShieldCheck, IconUser, IconKey, IconTrash,

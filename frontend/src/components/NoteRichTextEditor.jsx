@@ -1,19 +1,19 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
+// import Underline from '@tiptap/extension-underline';
 // import TextStyle from '@tiptap/extension-text-style'; // Causing build issues
 import Color from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
-import { ActionIcon, Group, Tooltip, Popover, ColorSwatch, SimpleGrid, Divider, useMantineTheme, Box } from '@mantine/core';
+import { ActionIcon, Group, Popover, ColorSwatch, SimpleGrid, Divider, useMantineTheme, Box } from '@mantine/core';
 import {
     IconBold, IconItalic, IconUnderline, IconStrikethrough,
     IconColorSwatch, IconHighlight, IconClearFormatting,
     IconMinus, IconPlus
 } from '@tabler/icons-react';
 import { NOTE_COLORS } from '../constants/noteColors';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Mark, mergeAttributes, getMarkAttributes } from '@tiptap/core';
 
 // Inline TextStyle definition to avoid build issues with the package

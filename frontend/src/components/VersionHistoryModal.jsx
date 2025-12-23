@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Text, Timeline, Button, Group, Loader, Center, Stack } from '@mantine/core';
+import { Modal, Text, Timeline, Button, Group, Loader, Center } from '@mantine/core';
 import { IconHistory, IconRestore } from '@tabler/icons-react';
 import { useNotesStore } from '../stores/notesStore';
 
@@ -10,22 +10,22 @@ export default function VersionHistoryModal({ opened, onClose, noteId }) {
     const [restoring, setRestoring] = useState(false);
 
     useEffect(() => {
+        const loadVersions = async () => {
+            setLoading(true);
+            try {
+                const data = await getNoteVersions(noteId);
+                setVersions(data);
+            } catch (error) {
+                console.error('Failed to load versions:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
         if (opened && noteId) {
             loadVersions();
         }
-    }, [opened, noteId]);
-
-    const loadVersions = async () => {
-        setLoading(true);
-        try {
-            const data = await getNoteVersions(noteId);
-            setVersions(data);
-        } catch (error) {
-            console.error('Failed to load versions:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [opened, noteId, getNoteVersions]);
 
     const handleRestore = async (versionId) => {
         if (!confirm('Are you sure you want to restore this version? Current state will be saved as a new version.')) return;

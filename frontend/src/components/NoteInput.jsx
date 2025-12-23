@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
-import { Dropzone, IMAGE_MIME_TYPE } from '@mantine/dropzone';
-import { Paper, TextInput, Textarea, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge, SimpleGrid, Image, LoadingOverlay, Overlay, AspectRatio } from '@mantine/core';
-import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconTag, IconPhoto, IconTrash, IconX, IconUpload, IconTypography } from '@tabler/icons-react';
+import { Dropzone } from '@mantine/dropzone';
+import { Paper, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge, SimpleGrid, Image, LoadingOverlay, Overlay } from '@mantine/core';
+import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconPhoto, IconTrash, IconUpload, IconTypography } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import { notifications } from '@mantine/notifications';

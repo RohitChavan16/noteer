@@ -12,7 +12,7 @@ export default function EditLabelsModal({ opened, onClose }) {
     const [newLabelName, setNewLabelName] = useState('');
     const [error, setError] = useState('');
 
-    // Refetch labels when modal opens (to get updated note counts)
+    // Refetch labels when modal opens
     useEffect(() => {
         if (opened) {
             const syncAndFetch = async () => {
@@ -20,10 +20,14 @@ export default function EditLabelsModal({ opened, onClose }) {
                 fetchLabels();
             };
             syncAndFetch();
-            setError('');
-            setNewLabelName('');
         }
     }, [opened, fetchLabels, flushPendingUpdates]);
+
+    const handleClose = () => {
+        setError('');
+        setNewLabelName('');
+        onClose();
+    };
 
     const handleCreate = async () => {
         if (!newLabelName.trim()) return;
@@ -53,7 +57,7 @@ export default function EditLabelsModal({ opened, onClose }) {
     return (
         <Modal
             opened={opened}
-            onClose={onClose}
+            onClose={handleClose}
             title={
                 <Group gap="xs">
                     <IconTag size={20} />
