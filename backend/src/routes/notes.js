@@ -219,7 +219,7 @@ router.post('/batch', async (req, res, next) => {
             try {
                 switch (op.op) {
                     case 'create': {
-                        const { title, content, type, color, is_pinned, items, labels } = op.data || {};
+                        const { title, content, type, color, is_pinned, items } = op.data || {};
                         const result = await query(
                             `INSERT INTO notes (user_id, title, content, type, color, is_pinned)
                              VALUES ($1, $2, $3, $4, $5, $6)

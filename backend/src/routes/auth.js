@@ -81,7 +81,7 @@ router.get('/oidc/login', async (req, res, next) => {
 });
 
 // GET /api/auth/callback
-router.get('/callback', async (req, res, next) => {
+router.get('/callback', async (req, res) => {
     try {
         if (!process.env.OIDC_ISSUER_URL) {
             return res.status(503).send('OIDC not configured');
