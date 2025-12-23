@@ -1,17 +1,12 @@
 import { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid, Image } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory, IconUsers, IconShare } from '@tabler/icons-react';
 
 import { getNoteColor, getNoteTextColor } from '../constants/noteColors';
+import { getInitials } from '../utils/helpers';
 import LabelPicker from './LabelPicker';
-
-// Get initials from name parts
-function getInitials(givenName, familyName) {
-    const first = givenName?.charAt(0)?.toUpperCase() || '';
-    const last = familyName?.charAt(0)?.toUpperCase() || '';
-    return first + last || '?';
-}
 
 export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
     const { colorScheme } = useMantineColorScheme();
@@ -22,7 +17,6 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
     const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
     const handleAction = (e, action) => {
-        console.log('NoteCard action clicked', note.id);
         e.stopPropagation();
         action();
     };
@@ -36,10 +30,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             padding={note.type === 'picture' ? 0 : "md"}
             radius="md"
             withBorder
-            onClick={() => {
-                console.log('NoteCard onClick fired for note:', note.id, note.title);
-                onClick?.(note);
-            }}
+            onClick={() => onClick?.(note)}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             style={{
@@ -95,7 +86,7 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
 
             {note.content && (
                 <Text size="sm" lineClamp={6} component="div" style={{ color: textColor, opacity: 0.8 }} className="note-content">
-                    <div dangerouslySetInnerHTML={{ __html: note.content }} />
+                    <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(note.content) }} />
                 </Text>
             )}
 

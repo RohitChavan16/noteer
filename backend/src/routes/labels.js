@@ -16,11 +16,8 @@ router.get('/', async (req, res, next) => {
             `SELECT l.id, l.name, l.created_at,
              (
                 SELECT COUNT(DISTINCT note_id)
-                FROM (
-                    SELECT note_id FROM note_labels WHERE label_id = l.id
-                    UNION
-                    SELECT note_id FROM user_note_labels WHERE label_id = l.id
-                ) all_links
+                FROM user_note_labels
+                WHERE label_id = l.id
              ) :: integer as note_count
              FROM labels l
              WHERE l.user_id = $1
@@ -88,7 +85,7 @@ router.delete('/:id', [
             return res.status(404).json({ error: 'Label not found' });
         }
 
-        // Delete label (note_labels will cascade)
+        // Delete label (user_note_labels will cascade)
         await query('DELETE FROM labels WHERE id = $1', [id]);
 
         res.status(204).send();

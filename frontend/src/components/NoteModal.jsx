@@ -8,6 +8,8 @@ import { notifications } from '@mantine/notifications';
 import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical, IconShare, IconUserMinus, IconUsers, IconChevronDown, IconChevronRight, IconPhoto, IconUpload } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
+import { NOTE_LIMITS } from '../constants/limits';
+import { formatDate, getInitials, generateId } from '../utils/helpers';
 import NoteRichTextEditor from './NoteRichTextEditor';
 import LabelPicker from './LabelPicker';
 import ShareModal from './ShareModal';
@@ -28,28 +30,6 @@ import {
 } from '@dnd-kit/sortable';
 
 import SortableChecklistItem from './SortableChecklistItem';
-
-// Robust ID generator fallback
-const generateId = () => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-};
-
-const formatDate = (dateString) => {
-    if (!dateString) return null;
-    const date = new Date(dateString);
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) +
-        ' at ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-};
-
-// Get initials from name parts
-function getInitials(givenName, familyName) {
-    const first = givenName?.charAt(0)?.toUpperCase() || '';
-    const last = familyName?.charAt(0)?.toUpperCase() || '';
-    return first + last || '?';
-}
 
 export default function NoteModal({ note, onClose }) {
     const { colorScheme } = useMantineColorScheme();

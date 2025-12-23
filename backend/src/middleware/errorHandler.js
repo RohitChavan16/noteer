@@ -1,32 +1,125 @@
-export function errorHandler(err, req, res, _next) {
-    console.error('Error:', err);
+/**
+ * Centralized Error Handler
+ * 
+ * Structured error logging with environment-aware output.
+ * In production: logs to structured JSON format (ready for log aggregation)
+ * In development: logs to console with full stack traces
+ */
 
-    // PostgreSQL errors
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Request counter for correlation
+let requestCounter = 0;
+
+/**
+ * Generate a request ID for correlation
+ */
+export function requestId(req, res, next) {
+    req.requestId = `req_${Date.now()}_${++requestCounter}`;
+    res.set('X-Request-Id', req.requestId);
+    next();
+}
+
+/**
+ * Log error with structured format
+ */
+function logError(err, req) {
+    const errorLog = {
+        timestamp: new Date().toISOString(),
+        requestId: req.requestId,
+        method: req.method,
+        path: req.path,
+        userId: req.user?.id,
+        error: {
+            name: err.name,
+            message: err.message,
+            code: err.code,
+        },
+    };
+
+    if (!isProduction) {
+        errorLog.stack = err.stack;
+        errorLog.details = err;
+    }
+
+    // In production, this would go to log aggregation (e.g., stdout for Docker/K8s)
+    console.error(isProduction
+        ? JSON.stringify(errorLog)
+        : `[ERROR] ${errorLog.requestId}: ${err.message}\n${err.stack}`
+    );
+
+    return errorLog;
+}
+
+/**
+ * Main error handler middleware
+ */
+export function errorHandler(err, req, res, _next) {
+    const errorLog = logError(err, req);
+
+    // PostgreSQL constraint errors
     if (err.code === '23505') {
-        return res.status(409).json({ error: 'Resource already exists' });
+        return res.status(409).json({
+            error: 'Resource already exists',
+            requestId: req.requestId,
+        });
     }
     if (err.code === '23503') {
-        return res.status(400).json({ error: 'Referenced resource not found' });
+        return res.status(400).json({
+            error: 'Referenced resource not found',
+            requestId: req.requestId,
+        });
+    }
+    if (err.code === '23502') {
+        return res.status(400).json({
+            error: 'Missing required field',
+            requestId: req.requestId,
+        });
     }
 
     // JWT errors
     if (err.name === 'JsonWebTokenError') {
-        return res.status(403).json({ error: 'Invalid token' });
+        return res.status(403).json({
+            error: 'Invalid token',
+            requestId: req.requestId,
+        });
     }
     if (err.name === 'TokenExpiredError') {
-        return res.status(403).json({ error: 'Token expired' });
+        return res.status(403).json({
+            error: 'Token expired',
+            requestId: req.requestId,
+        });
     }
 
     // Validation errors
     if (err.type === 'entity.parse.failed') {
-        return res.status(400).json({ error: 'Invalid JSON' });
+        return res.status(400).json({
+            error: 'Invalid JSON',
+            requestId: req.requestId,
+        });
     }
 
-    // Default error
-    console.error('SERVER ERROR DETAIL:', err.message, err.stack);
-    res.status(err.status || 500).json({
-        error: err.message,
-        stack: err.stack,
-        details: err
+    // Default server error - hide details in production
+    const status = err.status || 500;
+    const response = {
+        error: isProduction ? 'Internal server error' : err.message,
+        requestId: req.requestId,
+    };
+
+    if (!isProduction) {
+        response.stack = err.stack;
+    }
+
+    res.status(status).json(response);
+}
+
+/**
+ * Not found handler for undefined routes
+ */
+export function notFoundHandler(req, res) {
+    res.status(404).json({
+        error: 'Not found',
+        path: req.path,
+        requestId: req.requestId,
     });
 }

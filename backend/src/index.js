@@ -11,10 +11,14 @@ import cookieParser from 'cookie-parser';
 
 import authRoutes from './routes/auth.js';
 import notesRoutes from './routes/notes.js';
+import noteSyncRoutes from './routes/noteSync.js';
+import noteVersionsRoutes from './routes/noteVersions.js';
+import noteSharesRoutes from './routes/noteShares.js';
 import usersRoutes from './routes/users.js';
 import labelsRoutes from './routes/labels.js';
 import uploadRoutes from './routes/upload.js';
-import { errorHandler } from './middleware/errorHandler.js';
+import { errorHandler, requestId, notFoundHandler } from './middleware/errorHandler.js';
+import { apiLimiter, authLimiter, uploadLimiter } from './middleware/rateLimit.js';
 import { initializeDatabase } from './db/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -80,12 +84,16 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Debug logging middleware
-app.use((req, res, next) => {
-  console.log(`[Request] ${req.method} ${req.url}`);
-  console.log(`[Request] Auth Header: ${req.headers['authorization'] ? 'Present' : 'Missing'}`);
-  next();
-});
+// Request ID for correlation
+app.use(requestId);
+
+// Debug logging middleware (development only)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`[${req.requestId}] ${req.method} ${req.url}`);
+    next();
+  });
+}
 
 // Serve uploads from persistent storage
 const UPLOADS_PATH = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
@@ -96,17 +104,23 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(join(__dirname, '../../frontend/dist')));
 }
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/notes', notesRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/labels', labelsRoutes);
-app.use('/api/upload', uploadRoutes);
+// API Routes with rate limiting
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/notes/sync', apiLimiter, noteSyncRoutes);    // Sync API - must be before :id routes
+app.use('/api/notes', apiLimiter, noteVersionsRoutes);      // Versions API
+app.use('/api/notes', apiLimiter, noteSharesRoutes);        // Shares API
+app.use('/api/notes', apiLimiter, notesRoutes);             // Main CRUD
+app.use('/api/users', apiLimiter, usersRoutes);
+app.use('/api/labels', apiLimiter, labelsRoutes);
+app.use('/api/upload', uploadLimiter, uploadRoutes);
 
-// Health check
+// Health check (no rate limit)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// 404 handler for undefined API routes
+app.use('/api', notFoundHandler);
 
 // Error handler
 app.use(errorHandler);
