@@ -320,98 +320,100 @@ export default function AdminPage() {
                     User Management ({users.length} users)
                 </Text>
 
-                <Table striped highlightOnHover>
-                    <Table.Thead>
-                        <Table.Tr>
-                            <Table.Th>ID</Table.Th>
-                            <Table.Th>Name</Table.Th>
-                            <Table.Th>Email</Table.Th>
-                            <Table.Th>Role</Table.Th>
-                            <Table.Th>Auth</Table.Th>
-                            <Table.Th>Created</Table.Th>
-                            <Table.Th style={{ width: 60 }}>Actions</Table.Th>
-                        </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>
-                        {users.map((u) => (
-                            <Table.Tr key={u.id}>
-                                <Table.Td>{u.id}</Table.Td>
-                                <Table.Td>{u.name || '-'}</Table.Td>
-                                <Table.Td>{u.email}</Table.Td>
-                                <Table.Td>
-                                    <Badge
-                                        color={u.role === 'admin' ? 'blue' : 'gray'}
-                                        variant="light"
-                                        tt="capitalize"
-                                    >
-                                        {u.role}
-                                    </Badge>
-                                </Table.Td>
-                                <Table.Td>
-                                    <Badge
-                                        color={u.oidc_subject ? 'teal' : 'orange'}
-                                        variant="light"
-                                        size="sm"
-                                    >
-                                        {u.oidc_subject ? 'SSO' : 'Local'}
-                                    </Badge>
-                                </Table.Td>
-                                <Table.Td>
-                                    {new Date(u.created_at).toLocaleDateString()}
-                                </Table.Td>
-                                <Table.Td>
-                                    <Menu shadow="md" width={200} position="bottom-end">
-                                        <Menu.Target>
-                                            <ActionIcon variant="subtle" color="gray">
-                                                <IconDotsVertical size={16} />
-                                            </ActionIcon>
-                                        </Menu.Target>
-
-                                        <Menu.Dropdown>
-                                            {u.role === 'user' ? (
-                                                <Menu.Item
-                                                    leftSection={<IconShieldCheck size={14} />}
-                                                    onClick={() => handleRoleChange(u, 'admin')}
-                                                    disabled={u.id === user.id}
-                                                >
-                                                    Promote to Admin
-                                                </Menu.Item>
-                                            ) : (
-                                                <Menu.Item
-                                                    leftSection={<IconUser size={14} />}
-                                                    onClick={() => handleRoleChange(u, 'user')}
-                                                    disabled={u.id === user.id}
-                                                >
-                                                    Demote to User
-                                                </Menu.Item>
-                                            )}
-
-                                            {!u.oidc_subject && (
-                                                <Menu.Item
-                                                    leftSection={<IconKey size={14} />}
-                                                    onClick={() => openPasswordModal(u)}
-                                                >
-                                                    Reset Password
-                                                </Menu.Item>
-                                            )}
-
-                                            <Menu.Divider />
-
-                                            <Menu.Item
-                                                color="red"
-                                                leftSection={<IconTrash size={14} />}
-                                                onClick={() => openDeleteModal(u)}
-                                                disabled={u.id === user.id}
-                                            >
-                                                Delete User
-                                            </Menu.Item>
-                                        </Menu.Dropdown>
-                                    </Menu>
-                                </Table.Td>
+                <Table.ScrollContainer minWidth={600}>
+                    <Table striped highlightOnHover>
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>ID</Table.Th>
+                                <Table.Th>Name</Table.Th>
+                                <Table.Th>Email</Table.Th>
+                                <Table.Th>Role</Table.Th>
+                                <Table.Th>Auth</Table.Th>
+                                <Table.Th>Created</Table.Th>
+                                <Table.Th style={{ width: 60 }}>Actions</Table.Th>
                             </Table.Tr>
-                        ))}
-                    </Table.Tbody>
-                </Table>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {users.map((u) => (
+                                <Table.Tr key={u.id}>
+                                    <Table.Td>{u.id}</Table.Td>
+                                    <Table.Td>{u.name || '-'}</Table.Td>
+                                    <Table.Td>{u.email}</Table.Td>
+                                    <Table.Td>
+                                        <Badge
+                                            color={u.role === 'admin' ? 'blue' : 'gray'}
+                                            variant="light"
+                                            tt="capitalize"
+                                        >
+                                            {u.role}
+                                        </Badge>
+                                    </Table.Td>
+                                    <Table.Td>
+                                        <Badge
+                                            color={u.oidc_subject ? 'teal' : 'orange'}
+                                            variant="light"
+                                            size="sm"
+                                        >
+                                            {u.oidc_subject ? 'SSO' : 'Local'}
+                                        </Badge>
+                                    </Table.Td>
+                                    <Table.Td>
+                                        {new Date(u.created_at).toLocaleDateString()}
+                                    </Table.Td>
+                                    <Table.Td>
+                                        <Menu shadow="md" width={200} position="bottom-end">
+                                            <Menu.Target>
+                                                <ActionIcon variant="subtle" color="gray">
+                                                    <IconDotsVertical size={16} />
+                                                </ActionIcon>
+                                            </Menu.Target>
+
+                                            <Menu.Dropdown>
+                                                {u.role === 'user' ? (
+                                                    <Menu.Item
+                                                        leftSection={<IconShieldCheck size={14} />}
+                                                        onClick={() => handleRoleChange(u, 'admin')}
+                                                        disabled={u.id === user.id}
+                                                    >
+                                                        Promote to Admin
+                                                    </Menu.Item>
+                                                ) : (
+                                                    <Menu.Item
+                                                        leftSection={<IconUser size={14} />}
+                                                        onClick={() => handleRoleChange(u, 'user')}
+                                                        disabled={u.id === user.id}
+                                                    >
+                                                        Demote to User
+                                                    </Menu.Item>
+                                                )}
+
+                                                {!u.oidc_subject && (
+                                                    <Menu.Item
+                                                        leftSection={<IconKey size={14} />}
+                                                        onClick={() => openPasswordModal(u)}
+                                                    >
+                                                        Reset Password
+                                                    </Menu.Item>
+                                                )}
+
+                                                <Menu.Divider />
+
+                                                <Menu.Item
+                                                    color="red"
+                                                    leftSection={<IconTrash size={14} />}
+                                                    onClick={() => openDeleteModal(u)}
+                                                    disabled={u.id === user.id}
+                                                >
+                                                    Delete User
+                                                </Menu.Item>
+                                            </Menu.Dropdown>
+                                        </Menu>
+                                    </Table.Td>
+                                </Table.Tr>
+                            ))}
+                        </Table.Tbody>
+                    </Table>
+                </Table.ScrollContainer>
             </Paper>
 
             {/* Password Reset Modal */}
