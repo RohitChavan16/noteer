@@ -13,6 +13,7 @@ const UPLOADS_BASE = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
 // Thumbnail sizes
 const THUMB_SMALL = 100;  // For NoteCard overview
 const THUMB_MEDIUM = 400; // For NoteModal
+const MAX_DIMENSION = 3840; // Max 4K resolution
 
 // Configure storage - store in memory first, then save with thumbnails
 const storage = multer.memoryStorage();
@@ -37,36 +38,54 @@ const upload = multer({
     }
 });
 
-// Generate thumbnails and save all versions
+// Generate thumbnails and save all versions (all converted to WebP)
 async function saveWithThumbnails(file, userId) {
     const uploadDir = path.join(UPLOADS_BASE, 'users', String(userId));
     fs.mkdirSync(uploadDir, { recursive: true });
 
-    const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const baseName = uniqueSuffix;
 
-    const originalFilename = `${baseName}${ext}`;
-    const thumbSmallFilename = `${baseName}_thumb_small.jpg`;
-    const thumbMediumFilename = `${baseName}_thumb_medium.jpg`;
+    // All files saved as WebP
+    const originalFilename = `${baseName}.webp`;
+    const thumbSmallFilename = `${baseName}_thumb_small.webp`;
+    const thumbMediumFilename = `${baseName}_thumb_medium.webp`;
 
     const originalPath = path.join(uploadDir, originalFilename);
     const thumbSmallPath = path.join(uploadDir, thumbSmallFilename);
     const thumbMediumPath = path.join(uploadDir, thumbMediumFilename);
 
-    // Save original
-    await fs.promises.writeFile(originalPath, file.buffer);
+    // Get image metadata to check dimensions
+    const metadata = await sharp(file.buffer).metadata();
+    const needsResize = metadata.width > MAX_DIMENSION || metadata.height > MAX_DIMENSION;
 
-    // Generate small thumbnail (100px)
+    // Save original as WebP (resize if larger than 4K)
+    let sharpInstance = sharp(file.buffer);
+
+    if (needsResize) {
+        sharpInstance = sharpInstance.resize(MAX_DIMENSION, MAX_DIMENSION, {
+            fit: 'inside',
+            withoutEnlargement: true
+        });
+    }
+
+    await sharpInstance
+        .webp({ quality: 85 })
+        .toFile(originalPath);
+
+    // Get actual file size after conversion
+    const stats = await fs.promises.stat(originalPath);
+
+    // Generate small thumbnail (100px) as WebP
     await sharp(file.buffer)
         .resize(THUMB_SMALL, THUMB_SMALL, { fit: 'cover' })
-        .jpeg({ quality: 80 })
+        .webp({ quality: 80 })
         .toFile(thumbSmallPath);
 
-    // Generate medium thumbnail (400px)
+    // Generate medium thumbnail (400px) as WebP
     await sharp(file.buffer)
         .resize(THUMB_MEDIUM, THUMB_MEDIUM, { fit: 'inside' })
-        .jpeg({ quality: 85 })
+        .webp({ quality: 85 })
         .toFile(thumbMediumPath);
 
     return {
@@ -74,8 +93,8 @@ async function saveWithThumbnails(file, userId) {
         thumb_small: `/uploads/users/${userId}/${thumbSmallFilename}`,
         thumb_medium: `/uploads/users/${userId}/${thumbMediumFilename}`,
         original_name: file.originalname,
-        mime_type: file.mimetype,
-        size: file.size
+        mime_type: 'image/webp',  // Always WebP now
+        size: stats.size  // Actual size after conversion
     };
 }
 
