@@ -64,11 +64,8 @@ services:
     environment:
       - ADMIN_EMAIL=admin@example.com
       - ADMIN_PASSWORD=your-secure-password
-      # Optional OIDC
-      # - OIDC_ENABLED=true
-      # - OIDC_ISSUER_URL=https://auth.example.com
-      # - OIDC_CLIENT_ID=noteer
-      # - OIDC_CLIENT_SECRET=your-client-secret
+      # Optional: Set APP_URL for correct OIDC redirect URIs
+      # - APP_URL=https://notes.example.com
 
 volumes:
   noteer-db:
@@ -88,25 +85,34 @@ volumes:
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
 | `NOTE_VERSION_LIMIT` | `10` | Max stored versions per note (FIFO) |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
-| `OIDC_ENABLED` | `false` | Enable OIDC authentication |
-| `OIDC_ISSUER_URL` | - | OIDC provider URL (e.g. `https://auth.example.com`) |
-| `OIDC_CLIENT_ID` | - | OIDC client ID |
-| `OIDC_CLIENT_SECRET` | - | OIDC client secret |
-| `APP_URL` | - | Public URL of the app (e.g., `https://notes.example.com`). Recommended for OIDC. |
+| `APP_URL` | - | Public URL of the app (e.g., `https://notes.example.com`). Required for OIDC. |
 | `SSL_ENABLED` | `false` | Enable direct HTTPS |
 | `SSL_CERT_PATH` | - | Path to SSL certificate |
 | `SSL_KEY_PATH` | - | Path to SSL key |
 
-### OIDC Configuration
+### SSO / OIDC Configuration
 
-If you enable OIDC (by setting `OIDC_ISSUER_URL`), you must register the **Callback URL** in your Identity Provider (Authentik, Keycloak, etc.).
+Noteer supports OpenID Connect (OIDC) for single sign-on with providers like Authentik, Authelia, Keycloak, and more.
 
-**Callback URL pattern:**
+**Configuration via Admin Panel:**
+1. Login as admin
+2. Navigate to **Admin Panel**
+3. Find the **SSO / OIDC Settings** section
+4. Enter your OIDC provider details:
+   - Issuer URL (e.g., `https://auth.example.com`)
+   - Client ID
+   - Client Secret
+5. Click **Test Connection** to verify
+6. Click **Save Settings**
+
+**Callback URL for your Identity Provider:**
 `[YOUR_APP_URL]/api/auth/callback`
 
 Examples:
 - Local: `http://localhost:3000/api/auth/callback`
 - Production: `https://notes.example.com/api/auth/callback`
+
+> **Note:** OIDC settings can also be provided via environment variables (`OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) for backward compatibility, but Admin Panel configuration is recommended.
 
 ### Reverse Proxy (Recommended)
 

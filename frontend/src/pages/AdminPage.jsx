@@ -3,12 +3,13 @@ import { useAuthStore } from '../stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Title, Text, Paper, Table, Badge, ActionIcon, Group, Menu,
-    Modal, PasswordInput, Button, Stack, Alert, Loader, Center
+    Modal, PasswordInput, Button, Stack, Alert, Loader, Center, TextInput, Divider, Collapse, UnstyledButton
 } from '@mantine/core';
 import {
     IconDotsVertical, IconShieldCheck, IconUser, IconKey, IconTrash,
-    IconAlertCircle, IconCheck
+    IconAlertCircle, IconCheck, IconPlugConnected, IconSettings, IconChevronDown, IconChevronRight
 } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 
 export default function AdminPage() {
     const { user, authFetch } = useAuthStore();
@@ -27,6 +28,18 @@ export default function AdminPage() {
     // Delete confirmation modal state
     const [deleteModal, setDeleteModal] = useState({ open: false, user: null });
     const [deleteLoading, setDeleteLoading] = useState(false);
+
+    // OIDC Settings state
+    const [oidcSettings, setOidcSettings] = useState({
+        issuerUrl: '',
+        clientId: '',
+        clientSecret: '',
+        hasSecret: false
+    });
+    const [oidcLoading, setOidcLoading] = useState(true);
+    const [oidcSaving, setOidcSaving] = useState(false);
+    const [oidcTesting, setOidcTesting] = useState(false);
+    const [oidcExpanded, setOidcExpanded] = useState(false);
 
     // Redirect non-admins
     useEffect(() => {
@@ -53,8 +66,84 @@ export default function AdminPage() {
     useEffect(() => {
         if (user?.role === 'admin') {
             fetchUsers();
+            fetchOidcSettings();
         }
     }, [user, fetchUsers]);
+
+    // Fetch OIDC settings
+    const fetchOidcSettings = async () => {
+        try {
+            setOidcLoading(true);
+            const res = await authFetch('/api/admin/settings');
+            if (res.ok) {
+                const data = await res.json();
+                setOidcSettings({
+                    issuerUrl: data.oidc?.issuerUrl || '',
+                    clientId: data.oidc?.clientId || '',
+                    clientSecret: '',
+                    hasSecret: data.oidc?.hasSecret || false
+                });
+            }
+        } catch (err) {
+            console.error('Failed to fetch OIDC settings:', err);
+        } finally {
+            setOidcLoading(false);
+        }
+    };
+
+    // Save OIDC settings
+    const saveOidcSettings = async () => {
+        try {
+            setOidcSaving(true);
+            const res = await authFetch('/api/admin/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    oidc: {
+                        issuerUrl: oidcSettings.issuerUrl,
+                        clientId: oidcSettings.clientId,
+                        clientSecret: oidcSettings.clientSecret
+                    }
+                })
+            });
+            if (!res.ok) throw new Error('Failed to save settings');
+            notifications.show({ title: 'Settings saved', message: 'OIDC configuration updated successfully', color: 'green' });
+            // Update hasSecret if we just set one
+            if (oidcSettings.clientSecret) {
+                setOidcSettings(prev => ({ ...prev, hasSecret: true, clientSecret: '' }));
+            }
+        } catch (err) {
+            notifications.show({ title: 'Error', message: err.message, color: 'red' });
+        } finally {
+            setOidcSaving(false);
+        }
+    };
+
+    // Test OIDC connection
+    const testOidcConnection = async () => {
+        try {
+            setOidcTesting(true);
+            const res = await authFetch('/api/admin/settings/test-oidc', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                notifications.show({
+                    title: 'Connection successful',
+                    message: `Connected to ${data.issuer}`,
+                    color: 'green'
+                });
+            } else {
+                notifications.show({
+                    title: 'Connection failed',
+                    message: data.error || 'Failed to connect',
+                    color: 'red'
+                });
+            }
+        } catch (err) {
+            notifications.show({ title: 'Error', message: err.message, color: 'red' });
+        } finally {
+            setOidcTesting(false);
+        }
+    };
 
     const handleRoleChange = async (targetUser, newRole) => {
         try {
@@ -155,6 +244,76 @@ export default function AdminPage() {
                     {error}
                 </Alert>
             )}
+
+            {/* OIDC Settings Section */}
+            <Paper shadow="xs" radius="md" p="lg" withBorder mb="xl">
+                <UnstyledButton
+                    onClick={() => setOidcExpanded(!oidcExpanded)}
+                    style={{ width: '100%' }}
+                >
+                    <Group justify="space-between">
+                        <Group>
+                            {oidcSettings.issuerUrl ? (
+                                oidcExpanded ? <IconChevronDown size={20} /> : <IconChevronRight size={20} />
+                            ) : (
+                                <IconSettings size={20} />
+                            )}
+                            <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+                                SSO / OIDC Settings
+                            </Text>
+                        </Group>
+                        {oidcSettings.issuerUrl && (
+                            <Badge color="green" variant="light">Enabled</Badge>
+                        )}
+                    </Group>
+                </UnstyledButton>
+
+                {oidcLoading ? (
+                    <Center p="md"><Loader size="sm" /></Center>
+                ) : (
+                    <Collapse in={oidcExpanded || !oidcSettings.issuerUrl}>
+                        <Stack gap="md" mt="md">
+                            <TextInput
+                                label="Issuer URL"
+                                placeholder="https://auth.example.com"
+                                value={oidcSettings.issuerUrl}
+                                onChange={(e) => setOidcSettings(prev => ({ ...prev, issuerUrl: e.target.value }))}
+                                description="The OpenID Connect provider URL (e.g., Authentik, Authelia)"
+                            />
+                            <TextInput
+                                label="Client ID"
+                                placeholder="abc-123-def-456"
+                                value={oidcSettings.clientId}
+                                onChange={(e) => setOidcSettings(prev => ({ ...prev, clientId: e.target.value }))}
+                            />
+                            <PasswordInput
+                                label="Client Secret"
+                                placeholder={oidcSettings.hasSecret ? '••••••••••••••••' : 'Enter secret'}
+                                value={oidcSettings.clientSecret}
+                                onChange={(e) => setOidcSettings(prev => ({ ...prev, clientSecret: e.target.value }))}
+                                description={oidcSettings.hasSecret ? 'Leave empty to keep current secret' : ''}
+                            />
+                            <Group justify="flex-end">
+                                <Button
+                                    variant="light"
+                                    leftSection={<IconPlugConnected size={16} />}
+                                    onClick={testOidcConnection}
+                                    loading={oidcTesting}
+                                    disabled={!oidcSettings.issuerUrl || !oidcSettings.clientId}
+                                >
+                                    Test Connection
+                                </Button>
+                                <Button
+                                    onClick={saveOidcSettings}
+                                    loading={oidcSaving}
+                                >
+                                    Save Settings
+                                </Button>
+                            </Group>
+                        </Stack>
+                    </Collapse>
+                )}
+            </Paper>
 
             <Paper shadow="xs" radius="md" p="lg" withBorder>
                 <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">

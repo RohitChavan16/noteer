@@ -5,19 +5,53 @@ import { body, validationResult } from 'express-validator';
 import * as client from 'openid-client';
 import { query } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { getOIDCSettingsFromDB } from './settings.js';
 
 const router = Router();
 
-// Define OIDC configuration here to reuse it
+// OIDC Configuration loader - checks database first, then falls back to env vars
 async function getOIDCConfig() {
-    if (!process.env.OIDC_ISSUER_URL) throw new Error('OIDC_ISSUER_URL not set');
+    // Try database first
+    let issuerUrl, clientId, clientSecret;
 
-    const issuer = new URL(process.env.OIDC_ISSUER_URL);
-    const config = await client.discovery(issuer, process.env.OIDC_CLIENT_ID, process.env.OIDC_CLIENT_SECRET, undefined, {
+    try {
+        const dbConfig = await getOIDCSettingsFromDB();
+        issuerUrl = dbConfig.issuerUrl;
+        clientId = dbConfig.clientId;
+        clientSecret = dbConfig.clientSecret;
+    } catch (e) {
+        console.log('[OIDC] Database config not available, using env vars');
+    }
+
+    // Fallback to env vars if DB config is empty
+    if (!issuerUrl) {
+        issuerUrl = process.env.OIDC_ISSUER_URL;
+        clientId = process.env.OIDC_CLIENT_ID;
+        clientSecret = process.env.OIDC_CLIENT_SECRET;
+    }
+
+    if (!issuerUrl) throw new Error('OIDC not configured');
+
+    const issuer = new URL(issuerUrl);
+    const config = await client.discovery(issuer, clientId, clientSecret, undefined, {
         execute: [client.allowInsecureRequests] // Allow http for testing if needed
     });
 
+    // Store issuer URL for later use (e.g., when saving to user record)
+    config._issuerUrl = issuerUrl;
+
     return config;
+}
+
+// Helper to check if OIDC is configured (sync check for /config endpoint)
+async function isOIDCConfigured() {
+    try {
+        const dbConfig = await getOIDCSettingsFromDB();
+        if (dbConfig.issuerUrl) return true;
+    } catch (e) {
+        // Ignore
+    }
+    return !!process.env.OIDC_ISSUER_URL;
 }
 
 // GET /api/auth/debug - Log frontend messages
@@ -29,7 +63,8 @@ router.get('/debug', (req, res) => {
 // GET /api/auth/oidc/login
 router.get('/oidc/login', async (req, res, next) => {
     try {
-        if (!process.env.OIDC_ISSUER_URL) {
+        const oidcConfigured = await isOIDCConfigured();
+        if (!oidcConfigured) {
             return res.status(503).send('OIDC not configured');
         }
 
@@ -83,7 +118,8 @@ router.get('/oidc/login', async (req, res, next) => {
 // GET /api/auth/callback
 router.get('/callback', async (req, res) => {
     try {
-        if (!process.env.OIDC_ISSUER_URL) {
+        const oidcConfigured = await isOIDCConfigured();
+        if (!oidcConfigured) {
             return res.status(503).send('OIDC not configured');
         }
 
@@ -194,14 +230,14 @@ router.get('/callback', async (req, res) => {
                 // Strategy: For good UX, we sync names from OIDC on link
                 await query(
                     'UPDATE users SET oidc_subject = $1, oidc_issuer = $2, given_name = COALESCE($3, given_name), family_name = COALESCE($4, family_name), avatar_url = COALESCE($5, avatar_url) WHERE id = $6',
-                    [sub, process.env.OIDC_ISSUER_URL, given_name, family_name, picture || null, user.id]
+                    [sub, config._issuerUrl || process.env.OIDC_ISSUER_URL, given_name, family_name, picture || null, user.id]
                 );
             } else {
                 // 3. Create new user
                 console.log(`[OIDC] Creating new user ${email}`);
                 const insertResult = await query(
                     'INSERT INTO users (email, given_name, family_name, role, oidc_subject, oidc_issuer, avatar_url) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-                    [email, given_name, family_name || '', 'user', sub, process.env.OIDC_ISSUER_URL, picture || null]
+                    [email, given_name, family_name || '', 'user', sub, config._issuerUrl || process.env.OIDC_ISSUER_URL, picture || null]
                 );
                 user = insertResult.rows[0];
             }
@@ -260,10 +296,11 @@ function generateToken(user) {
 }
 
 // GET /api/auth/config - Get public auth config
-router.get('/config', (req, res) => {
+router.get('/config', async (req, res) => {
+    const oidcEnabled = await isOIDCConfigured();
     res.json({
         registrationEnabled: process.env.REGISTRATION_ENABLED !== 'false',
-        oidcEnabled: !!process.env.OIDC_ISSUER_URL,
+        oidcEnabled,
     });
 });
 

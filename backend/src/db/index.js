@@ -146,6 +146,20 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_note_images_note_id ON note_images(note_id);
     CREATE INDEX IF NOT EXISTS idx_note_images_user_id ON note_images(user_id);
 
+    -- App settings (key-value store for runtime configuration)
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key VARCHAR(100) PRIMARY KEY,
+      value TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_by INTEGER REFERENCES users(id)
+    );
+
+    -- Apply trigger to app_settings table
+    DROP TRIGGER IF EXISTS app_settings_updated_at ON app_settings;
+    CREATE TRIGGER app_settings_updated_at
+      BEFORE UPDATE ON app_settings
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
     -- Automatic updated_at trigger function
     CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$

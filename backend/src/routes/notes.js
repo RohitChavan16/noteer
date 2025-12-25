@@ -257,7 +257,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
                     COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
                     COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels
              FROM notes n WHERE n.id = $1`,
-            [id]
+            [id, userId]
         );
 
         if (currentState.rows.length > 0) {

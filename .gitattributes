@@ -1,0 +1,27 @@
+# Git line ending normalization
+* text=auto
+
+# Shell scripts must use LF (Unix-style line endings)
+*.sh text eol=lf
+
+# Docker config files must use LF
+docker/*.conf text eol=lf
+docker/entrypoint.sh text eol=lf
+
+# Frontend/Backend source files
+*.js text eol=auto
+*.jsx text eol=auto
+*.ts text eol=auto
+*.tsx text eol=auto
+*.json text eol=auto
+*.css text eol=auto
+*.html text eol=auto
+*.md text eol=auto
+
+# Keep binary files as-is
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
