@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+
+const UPLOADS_PATH = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
 
 const router = Router();
 
@@ -196,14 +200,64 @@ router.delete('/:id', [requireRole('admin'), param('id').isInt()], async (req, r
             return res.status(400).json({ error: 'Cannot delete yourself' });
         }
 
-        const result = await query(
-            'DELETE FROM users WHERE id = $1 RETURNING id',
+        // Check if user exists
+        const userCheck = await query('SELECT id FROM users WHERE id = $1', [id]);
+        if (userCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Find all image files owned by this user (through their notes)
+        const imagesResult = await query(
+            `SELECT ni.url FROM note_images ni
+             JOIN notes n ON ni.note_id = n.id
+             WHERE n.user_id = $1`,
             [id]
         );
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
+        // Delete physical files from filesystem
+        for (const row of imagesResult.rows) {
+            try {
+                // URL format: /uploads/user_X/filename.jpg
+                const urlPath = row.url;
+                if (urlPath && urlPath.startsWith('/uploads/')) {
+                    const relativePath = urlPath.replace('/uploads/', '');
+                    const filePath = path.join(UPLOADS_PATH, relativePath);
+
+                    // Delete original file
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+
+                    // Delete thumbnails (thumb_small_*, thumb_medium_*)
+                    const dir = path.dirname(filePath);
+                    const filename = path.basename(filePath);
+                    const smallThumb = path.join(dir, `thumb_small_${filename}`);
+                    const mediumThumb = path.join(dir, `thumb_medium_${filename}`);
+
+                    if (fs.existsSync(smallThumb)) fs.unlinkSync(smallThumb);
+                    if (fs.existsSync(mediumThumb)) fs.unlinkSync(mediumThumb);
+                }
+            } catch (fileErr) {
+                console.error(`Failed to delete file ${row.url}:`, fileErr.message);
+                // Continue with deletion even if file cleanup fails
+            }
         }
+
+        // Try to remove user's upload directory if empty
+        try {
+            const userDir = path.join(UPLOADS_PATH, `user_${id}`);
+            if (fs.existsSync(userDir)) {
+                const files = fs.readdirSync(userDir);
+                if (files.length === 0) {
+                    fs.rmdirSync(userDir);
+                }
+            }
+        } catch (dirErr) {
+            // Ignore directory cleanup errors
+        }
+
+        // Now delete user from database (CASCADE will handle notes, images records, etc.)
+        await query('DELETE FROM users WHERE id = $1', [id]);
 
         res.status(204).send();
     } catch (error) {
