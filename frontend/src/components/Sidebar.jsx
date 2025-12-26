@@ -3,7 +3,7 @@ import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useNotesStore } from '../stores/notesStore';
 import { useLabelsStore } from '../stores/labelsStore';
-import { Stack, NavLink, Avatar, Group, Text, ActionIcon, Divider, Box, Title, ScrollArea } from '@mantine/core';
+import { Stack, NavLink, Avatar, Group, Text, ActionIcon, Divider, Box, Title, ScrollArea, Image } from '@mantine/core';
 import { IconNote, IconArchive, IconTrash, IconSettings, IconLogout, IconShieldCog, IconTag, IconPencil } from '@tabler/icons-react';
 import EditLabelsModal from './EditLabelsModal';
 
@@ -42,18 +42,7 @@ export default function Sidebar({ onClose }) {
             <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 {/* Logo */}
                 <Group p="md" pb="xs">
-                    <Box
-                        component="svg"
-                        viewBox="0 0 100 100"
-                        w={36}
-                        h={36}
-                        c="blue"
-                    >
-                        <rect x="15" y="10" width="70" height="80" rx="8" fill="currentColor" />
-                        <line x1="28" y1="30" x2="72" y2="30" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                        <line x1="28" y1="45" x2="65" y2="45" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                        <line x1="28" y1="60" x2="58" y2="60" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                    </Box>
+                    <Image src="/logo.png" w={36} h={36} fit="contain" alt="Noteer Logo" />
                     <Title order={3} c="blue">Noteer</Title>
                 </Group>
 
