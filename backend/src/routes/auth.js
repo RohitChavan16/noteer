@@ -23,12 +23,7 @@ async function getOIDCConfig() {
         console.log('[OIDC] Database config not available, using env vars');
     }
 
-    // Fallback to env vars if DB config is empty
-    if (!issuerUrl) {
-        issuerUrl = process.env.OIDC_ISSUER_URL;
-        clientId = process.env.OIDC_CLIENT_ID;
-        clientSecret = process.env.OIDC_CLIENT_SECRET;
-    }
+    // Fallback to env vars removed. OIDC must be configured via Admin Panel.
 
     if (!issuerUrl) throw new Error('OIDC not configured');
 
@@ -51,7 +46,7 @@ async function isOIDCConfigured() {
     } catch (e) {
         // Ignore
     }
-    return !!process.env.OIDC_ISSUER_URL;
+    return false;
 }
 
 // GET /api/auth/debug - Log frontend messages
@@ -230,14 +225,14 @@ router.get('/callback', async (req, res) => {
                 // Strategy: For good UX, we sync names from OIDC on link
                 await query(
                     'UPDATE users SET oidc_subject = $1, oidc_issuer = $2, given_name = COALESCE($3, given_name), family_name = COALESCE($4, family_name), avatar_url = COALESCE($5, avatar_url) WHERE id = $6',
-                    [sub, config._issuerUrl || process.env.OIDC_ISSUER_URL, given_name, family_name, picture || null, user.id]
+                    [sub, config._issuerUrl, given_name, family_name, picture || null, user.id]
                 );
             } else {
                 // 3. Create new user
                 console.log(`[OIDC] Creating new user ${email}`);
                 const insertResult = await query(
                     'INSERT INTO users (email, given_name, family_name, role, oidc_subject, oidc_issuer, avatar_url) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-                    [email, given_name, family_name || '', 'user', sub, config._issuerUrl || process.env.OIDC_ISSUER_URL, picture || null]
+                    [email, given_name, family_name || '', 'user', sub, config._issuerUrl, picture || null]
                 );
                 user = insertResult.rows[0];
             }

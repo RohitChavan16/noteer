@@ -32,7 +32,7 @@ export default function LoginPage() {
         <Center mih="100vh" p="md">
             <Box w="100%" maw={400}>
                 <Stack align="center" mb="xl">
-                    <Image src="/logo.png" w={64} h={64} fit="contain" alt="Noteer Logo" />
+                    <Image src="/logo.svg" w={64} h={64} fit="contain" alt="Noteer Logo" />
                     <Title order={1} c="blue">Noteer</Title>
                 </Stack>
 

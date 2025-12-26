@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useMantineColorScheme } from '@mantine/core';
 import {
     Box, Title, Text, Paper, TextInput, PasswordInput, Button, Stack,
-    Alert, Group, SegmentedControl, Badge, Divider
+    Alert, Group, SegmentedControl, Badge, Divider, Image
 } from '@mantine/core';
 import { IconAlertCircle, IconCheck, IconInfoCircle } from '@tabler/icons-react';
 
@@ -192,18 +192,7 @@ export default function SettingsPage() {
                 <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">About</Text>
 
                 <Group gap="lg" align="flex-start">
-                    <Box
-                        component="svg"
-                        viewBox="0 0 100 100"
-                        w={56}
-                        h={56}
-                        c="blue"
-                    >
-                        <rect x="15" y="10" width="70" height="80" rx="8" fill="currentColor" />
-                        <line x1="28" y1="30" x2="72" y2="30" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                        <line x1="28" y1="45" x2="65" y2="45" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                        <line x1="28" y1="60" x2="58" y2="60" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                    </Box>
+                    <Image src="/logo.svg" w={56} h={56} fit="contain" alt="Noteer Logo" />
                     <Box>
                         <Title order={2} c="blue" mb={4}>Noteer</Title>
                         <Text size="sm" c="dimmed">Version 0.1.0</Text>

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📝 Noteer
+# <img src="docs/images/logo.png" width="48" height="48" align="center" style="margin-right: 10px;" /> Noteer
 
 **A modern, self-hosted notes application**
 
@@ -112,7 +112,7 @@ Examples:
 - Local: `http://localhost:3000/api/auth/callback`
 - Production: `https://notes.example.com/api/auth/callback`
 
-> **Note:** OIDC settings can also be provided via environment variables (`OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`) for backward compatibility, but Admin Panel configuration is recommended.
+
 
 ### Reverse Proxy (Recommended)
 

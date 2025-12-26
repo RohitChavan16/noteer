@@ -154,12 +154,6 @@ export async function initializeDatabase() {
       updated_by INTEGER REFERENCES users(id)
     );
 
-    -- Apply trigger to app_settings table
-    DROP TRIGGER IF EXISTS app_settings_updated_at ON app_settings;
-    CREATE TRIGGER app_settings_updated_at
-      BEFORE UPDATE ON app_settings
-      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
     -- Automatic updated_at trigger function
     CREATE OR REPLACE FUNCTION update_updated_at_column()
     RETURNS TRIGGER AS $$
@@ -168,6 +162,12 @@ export async function initializeDatabase() {
       RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
+
+    -- Apply trigger to app_settings table
+    DROP TRIGGER IF EXISTS app_settings_updated_at ON app_settings;
+    CREATE TRIGGER app_settings_updated_at
+      BEFORE UPDATE ON app_settings
+      FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
     -- Apply trigger to users table
     DROP TRIGGER IF EXISTS users_updated_at ON users;
