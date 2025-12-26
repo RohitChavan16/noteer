@@ -23,9 +23,9 @@
 - 🕒 **Version History** - Store file versions and restore/rollback to previous states
 - 🎨 **Color Coding** - 11 beautiful colors to categorize your notes
 - 🔒 **Secure Authentication** - Local login or OIDC (Authentik, Authelia, PocketID, etc.)
+- 🔐 **End-to-End Encryption** - Your notes are encrypted with a 24-word recovery phrase. Zero-knowledge - not even the server admin can read your data.
 - 👥 **Multi-user & Admin Panel** - User management with admin/user roles
 - 📱 **Responsive Design** - Works beautifully on desktop and mobile
-- 🔐 **SSL/TLS Ready** - Use with reverse proxy or direct HTTPS
 
 ---
 

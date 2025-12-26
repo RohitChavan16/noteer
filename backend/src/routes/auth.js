@@ -195,7 +195,7 @@ router.get('/callback', async (req, res) => {
 
         // 1. Try to find user by OIDC Subject (stable ID)
         // This handles cases where the user changed their email in the OIDC provider
-        let result = await query('SELECT * FROM users WHERE oidc_subject = $1', [sub]);
+        let result = await query('SELECT *, public_key FROM users WHERE oidc_subject = $1', [sub]);
         let user = result.rows[0];
 
         if (user) {
@@ -249,9 +249,10 @@ router.get('/callback', async (req, res) => {
         res.clearCookie('oidc_session');
         res.clearCookie('oidc_verifier'); // Cleanup old cookie if exists
 
-        // Redirect to frontend with token
+        // Redirect to frontend with token and encryption status
         // In a SPA, we usually redirect to a page that grabs the token from query param
-        res.redirect(`/?token=${token}`);
+        const hasEncryptionKey = !!user.public_key ? '1' : '0';
+        res.redirect(`/?token=${token}&enc=${hasEncryptionKey}`);
 
     } catch (error) {
         console.error('OIDC Error:', error);
@@ -332,6 +333,7 @@ router.post('/login', validateLogin, async (req, res, next) => {
                 name: `${user.given_name || ''} ${user.family_name || ''}`.trim() || user.email, // Computed name for frontend convenience
                 role: user.role,
                 isOidc: !!user.oidc_subject,
+                hasEncryptionKey: !!user.public_key,
             },
         });
     } catch (error) {
@@ -381,6 +383,7 @@ router.post('/register', validateRegister, async (req, res, next) => {
                 name: `${user.given_name || ''} ${user.family_name || ''}`.trim() || user.email,
                 role: user.role,
                 isOidc: false,
+                hasEncryptionKey: false, // New user, no encryption key yet
             },
         });
     } catch (error) {
@@ -393,7 +396,7 @@ router.get('/me', authenticateToken, async (req, res, next) => {
     try {
         // Fetch full user data from database to get avatar_url
         const result = await query(
-            'SELECT id, email, given_name, family_name, role, avatar_url FROM users WHERE id = $1',
+            'SELECT id, email, given_name, family_name, role, avatar_url, public_key FROM users WHERE id = $1',
             [req.user.id]
         );
 
@@ -405,8 +408,10 @@ router.get('/me', authenticateToken, async (req, res, next) => {
         const user = {
             ...dbUser,
             isOidc: !!req.user.isOidc,
-            name: `${dbUser.given_name || ''} ${dbUser.family_name || ''}`.trim() || dbUser.email
+            name: `${dbUser.given_name || ''} ${dbUser.family_name || ''}`.trim() || dbUser.email,
+            hasEncryptionKey: !!dbUser.public_key,
         };
+        delete user.public_key; // Don't send the actual key
         res.json({ user });
     } catch (error) {
         next(error);

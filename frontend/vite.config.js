@@ -1,8 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { Buffer } from 'buffer';
 
 export default defineConfig({
     plugins: [react()],
+    define: {
+        global: 'globalThis',
+    },
     server: {
         port: 5173,
         proxy: {
@@ -16,4 +20,11 @@ export default defineConfig({
         outDir: 'dist',
         sourcemap: false,
     },
+    optimizeDeps: {
+        esbuildOptions: {
+            define: {
+                global: 'globalThis'
+            }
+        }
+    }
 });

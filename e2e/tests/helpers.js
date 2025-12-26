@@ -11,13 +11,51 @@ export const TEST_CREDENTIALS = {
 /**
  * Login with test credentials
  * @param {import('@playwright/test').Page} page
+ * @param {string} mnemonic - Optional mnemonic for encryption unlock
  */
-export async function login(page) {
+export async function login(page, mnemonic = null) {
     await page.goto('/');
     await page.fill('input[type="email"]', TEST_CREDENTIALS.email);
     await page.fill('input[type="password"]', TEST_CREDENTIALS.password);
     await page.click('button:has-text("Sign in")');
-    await expect(page.locator('text=Take a note...')).toBeVisible({ timeout: 10000 });
+
+    // Handle encryption modals if they appear
+    try {
+        // Check if unlock modal appears (returning user with encryption)
+        const unlockModal = page.getByRole('heading', { name: 'Unlock Notes' });
+        const isUnlockVisible = await unlockModal.isVisible({ timeout: 3000 }).catch(() => false);
+
+        if (isUnlockVisible && mnemonic) {
+            // Paste mnemonic and unlock
+            const firstInput = page.locator('.mantine-Autocomplete-input').first();
+            await firstInput.fill(mnemonic);
+            await page.getByRole('button', { name: 'Unlock' }).click();
+        } else if (isUnlockVisible) {
+            // No mnemonic provided but unlock modal appeared - skip test or fail
+            throw new Error('Encryption unlock required but no mnemonic provided');
+        }
+
+        // Check if setup modal appears (new user)
+        const setupModal = page.getByRole('heading', { name: 'Encryption Setup' });
+        const isSetupVisible = await setupModal.isVisible({ timeout: 1000 }).catch(() => false);
+
+        if (isSetupVisible) {
+            // Complete setup flow
+            await page.getByText('I have written down all 24 words').click();
+            await page.getByRole('button', { name: 'Continue' }).click();
+            await expect(page.getByText('Encryption is active')).toBeVisible({ timeout: 30000 });
+            await page.getByRole('button', { name: 'Start using Noteer' }).click();
+        }
+    } catch (error) {
+        // If no encryption modals, continue normally
+        if (!error.message.includes('Encryption')) {
+            console.log('No encryption modal detected, continuing...');
+        } else {
+            throw error;
+        }
+    }
+
+    await expect(page.locator('text=Take a note...')).toBeVisible({ timeout: 15000 });
 }
 
 /**

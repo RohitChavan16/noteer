@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore';
 import { useNotesStore } from './stores/notesStore';
 import { Loader, Center } from '@mantine/core';
 import Layout from './components/Layout';
+import { EncryptionGate } from './components/EncryptionGate';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import NotesPage from './pages/NotesPage';
@@ -14,7 +15,10 @@ import AdminPage from './pages/AdminPage';
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated } = useAuthStore();
-    return isAuthenticated ? children : <Navigate to="/login" replace />;
+    if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+    // Wrap in EncryptionGate to ensure encryption is set up
+    return <EncryptionGate>{children}</EncryptionGate>;
 }
 
 function PublicRoute({ children }) {
@@ -49,12 +53,11 @@ export default function App() {
         const params = new URLSearchParams(window.location.search);
         const token = params.get('token');
 
-        fetch('/api/auth/debug?msg=' + encodeURIComponent('App mounted. Token found: ' + (token ? 'YES' : 'NO')));
+
 
         if (token) {
             // Verification already active via initial state
             loginWithToken(token).then(success => {
-                fetch('/api/auth/debug?msg=' + encodeURIComponent('Login result: ' + success));
                 if (success) {
                     // Remove token from URL without refresh
                     window.history.replaceState({}, document.title, window.location.pathname);

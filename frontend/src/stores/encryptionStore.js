@@ -1,0 +1,375 @@
+/**
+ * Encryption Store - Manages encryption keys and state
+ * 
+ * Keys are stored in sessionStorage (cleared when browser closes) for convenience.
+ * This means user only needs to enter mnemonic once per browser session.
+ */
+
+import { create } from 'zustand';
+import {
+    generateMnemonic,
+    validateMnemonic,
+    deriveMasterKey,
+    deriveKeyPair,
+    generateNoteKey,
+    encryptContent,
+    decryptContent,
+    encryptNoteKeyWithMasterKey,
+    decryptNoteKeyWithMasterKey,
+    encryptNoteKeyForRecipient,
+    decryptNoteKeyWithPrivateKey,
+    encryptImage,
+    decryptImage,
+    bufferToBase64,
+    bytesToHex,
+    hexToBytes
+} from '../utils/crypto';
+
+const API_URL = '/api';
+const SESSION_KEY = 'noteer-encryption-keys';
+
+/**
+ * Save keys to sessionStorage (encrypted with a session-specific key would be ideal,
+ * but for now we use base64 encoding as sessionStorage is already browser-session-scoped)
+ */
+function saveKeysToSession(masterKey, privateKey, publicKey) {
+    try {
+        const data = {
+            masterKey: bytesToHex(masterKey),
+            privateKey: JSON.stringify(privateKey),
+            publicKey
+        };
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.warn('Failed to save keys to session:', e);
+    }
+}
+
+/**
+ * Load keys from sessionStorage
+ */
+function loadKeysFromSession() {
+    try {
+        const stored = sessionStorage.getItem(SESSION_KEY);
+        if (!stored) return null;
+        const data = JSON.parse(stored);
+        return {
+            masterKey: hexToBytes(data.masterKey),
+            privateKey: JSON.parse(data.privateKey),
+            publicKey: data.publicKey
+        };
+    } catch (e) {
+        console.warn('Failed to load keys from session:', e);
+        return null;
+    }
+}
+
+/**
+ * Clear keys from sessionStorage
+ */
+function clearKeysFromSession() {
+    try {
+        sessionStorage.removeItem(SESSION_KEY);
+    } catch (e) {
+        console.warn('Failed to clear keys from session:', e);
+    }
+}
+
+// Check for existing session on load
+const storedKeys = loadKeysFromSession();
+
+export const useEncryptionStore = create((set, get) => ({
+    // State
+    isUnlocked: !!storedKeys,
+    isSetupComplete: false,
+    isLoading: false,
+    error: null,
+
+    // Keys (loaded from session if available)
+    masterKey: storedKeys?.masterKey || null,
+    privateKey: storedKeys?.privateKey || null,
+    publicKey: storedKeys?.publicKey || null,
+
+    // Note keys cache (noteId -> decrypted Note Key)
+    noteKeysCache: new Map(),
+
+    /**
+     * Check if user has encryption setup (has public key on server)
+     */
+    checkSetupStatus: async (authFetch) => {
+        try {
+            const response = await authFetch(`${API_URL}/encryption/status`);
+            if (response.ok) {
+                const data = await response.json();
+                set({ isSetupComplete: data.hasPublicKey });
+                return data.hasPublicKey;
+            }
+            return false;
+        } catch (error) {
+            console.error('Failed to check encryption status:', error);
+            return false;
+        }
+    },
+
+    /**
+     * Generate a new mnemonic for setup (fast, just generates words)
+     * @returns {string} Generated mnemonic for user to save
+     */
+    generateNewMnemonic: () => {
+        const mnemonic = generateMnemonic();
+        return mnemonic;
+    },
+
+    /**
+     * Confirm encryption setup after user has saved mnemonic
+     * Does the slow key derivation and stores public key
+     * @param {string} mnemonic - The mnemonic user was shown
+     * @param {string} passphrase - Optional passphrase
+     * @param {Function} authFetch - Auth fetch function
+     */
+    confirmSetup: async (mnemonic, passphrase = '', authFetch) => {
+        set({ isLoading: true, error: null });
+
+        try {
+            // 1. Derive Master Key (slow - PBKDF2 600k iterations)
+            const masterKey = await deriveMasterKey(mnemonic, passphrase);
+
+            // 2. Generate RSA keypair
+            const { publicKey, privateKey } = await deriveKeyPair(masterKey);
+
+            // 3. Store public key on server
+            const response = await authFetch(`${API_URL}/encryption/public-key`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ publicKey })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to store public key');
+            }
+
+            // 4. Store keys in memory and session
+            set({
+                isUnlocked: true,
+                isSetupComplete: true,
+                isLoading: false,
+                masterKey,
+                privateKey,
+                publicKey
+            });
+
+            // Save to sessionStorage for session persistence
+            saveKeysToSession(masterKey, privateKey, publicKey);
+
+            return true;
+        } catch (error) {
+            set({ isLoading: false, error: error.message });
+            throw error;
+        }
+    },
+
+    /**
+     * Unlock with existing mnemonic
+     */
+    unlockWithMnemonic: async (mnemonic, passphrase = '') => {
+        set({ isLoading: true, error: null });
+
+        try {
+            // Validate mnemonic
+            if (!validateMnemonic(mnemonic)) {
+                throw new Error('Invalid mnemonic - check the words and try again');
+            }
+
+            // Derive Master Key
+            const masterKey = await deriveMasterKey(mnemonic, passphrase);
+
+            // Generate RSA keypair (deterministic from same mnemonic)
+            const { publicKey, privateKey } = await deriveKeyPair(masterKey);
+
+            set({
+                isUnlocked: true,
+                isLoading: false,
+                masterKey,
+                privateKey,
+                publicKey
+            });
+
+            // Save to sessionStorage for session persistence
+            saveKeysToSession(masterKey, privateKey, publicKey);
+
+            return true;
+        } catch (error) {
+            set({ isLoading: false, error: error.message });
+            throw error;
+        }
+    },
+
+    /**
+     * Lock encryption (clear keys from memory)
+     */
+    lock: () => {
+        clearKeysFromSession();
+        set({
+            isUnlocked: false,
+            masterKey: null,
+            privateKey: null,
+            publicKey: null,
+            noteKeysCache: new Map()
+        });
+    },
+
+    /**
+     * Encrypt a note before saving
+     * @param {object} note - { title, content, ... }
+     * @returns {object} Note with encrypted fields + encryption metadata
+     */
+    encryptNote: async (note) => {
+        const { masterKey, noteKeysCache } = get();
+        if (!masterKey) throw new Error('Encryption not unlocked');
+
+        // Generate new Note Key if new note, or use cached one
+        let noteKey;
+        if (note.id && noteKeysCache.has(note.id)) {
+            noteKey = noteKeysCache.get(note.id);
+        } else {
+            noteKey = generateNoteKey();
+        }
+
+        // Encrypt title and content
+        const [encryptedTitle, encryptedContent] = await Promise.all([
+            encryptContent(note.title || '', noteKey),
+            encryptContent(note.content || '', noteKey)
+        ]);
+
+        // Encrypt Note Key with Master Key
+        const encryptedNoteKey = await encryptNoteKeyWithMasterKey(noteKey, masterKey);
+
+        return {
+            ...note,
+            title: JSON.stringify(encryptedTitle),
+            content: JSON.stringify(encryptedContent),
+            encrypted: true,
+            encrypted_note_key: JSON.stringify(encryptedNoteKey)
+        };
+    },
+
+    /**
+     * Decrypt a note after fetching
+     * @param {object} note - Note with encrypted fields
+     * @returns {object} Decrypted note
+     */
+    decryptNote: async (note) => {
+        if (!note.encrypted) return note;
+
+        const { masterKey, privateKey, noteKeysCache } = get();
+        if (!masterKey || !privateKey) throw new Error('Encryption not unlocked');
+
+        try {
+            // Get Note Key
+            let noteKey;
+
+            if (noteKeysCache.has(note.id)) {
+                noteKey = noteKeysCache.get(note.id);
+            } else {
+                // Try to decrypt with Master Key (owner) or Private Key (shared)
+                if (note.encrypted_note_key) {
+                    const keyData = JSON.parse(note.encrypted_note_key);
+                    noteKey = await decryptNoteKeyWithMasterKey(
+                        keyData.ciphertext,
+                        keyData.iv,
+                        masterKey
+                    );
+                } else if (note.shared_note_key) {
+                    // Shared note - decrypt with private key
+                    noteKey = await decryptNoteKeyWithPrivateKey(note.shared_note_key, privateKey);
+                } else {
+                    throw new Error('No encryption key available for this note');
+                }
+
+                // Cache the Note Key
+                noteKeysCache.set(note.id, noteKey);
+                set({ noteKeysCache: new Map(noteKeysCache) });
+            }
+
+            // Decrypt title and content
+            const titleData = JSON.parse(note.title);
+            const contentData = JSON.parse(note.content);
+
+            const [decryptedTitle, decryptedContent] = await Promise.all([
+                decryptContent(titleData.ciphertext, titleData.iv, noteKey),
+                decryptContent(contentData.ciphertext, contentData.iv, noteKey)
+            ]);
+
+            return {
+                ...note,
+                title: decryptedTitle,
+                content: decryptedContent
+            };
+        } catch (error) {
+            console.error('Failed to decrypt note:', error);
+            return {
+                ...note,
+                title: '[Decryption failed]',
+                content: '[Unable to decrypt this note. Check your mnemonic.]',
+                decryptionError: true
+            };
+        }
+    },
+
+    /**
+     * Encrypt an image before upload
+     * @param {File} file - Image file
+     * @param {number} noteId - Note ID (to get Note Key)
+     * @returns {Promise<{encryptedBlob: Blob, iv: string}>}
+     */
+    encryptImage: async (file, noteId) => {
+        const { noteKeysCache } = get();
+        const noteKey = noteKeysCache.get(noteId);
+        if (!noteKey) throw new Error('Note key not found - save the note first');
+
+        const buffer = await file.arrayBuffer();
+        const { ciphertext, iv } = await encryptImage(buffer, noteKey);
+
+        return {
+            encryptedBlob: new Blob([ciphertext], { type: 'application/octet-stream' }),
+            iv,
+            originalType: file.type,
+            originalName: file.name
+        };
+    },
+
+    /**
+     * Decrypt an image for display
+     * @param {ArrayBuffer} encryptedData - Encrypted image data
+     * @param {string} iv - IV from metadata
+     * @param {number} noteId - Note ID (to get Note Key)
+     * @returns {Promise<Blob>}
+     */
+    decryptImage: async (encryptedData, iv, noteId, mimeType = 'image/jpeg') => {
+        const { noteKeysCache } = get();
+        const noteKey = noteKeysCache.get(noteId);
+        if (!noteKey) throw new Error('Note key not found');
+
+        const decryptedBuffer = await decryptImage(encryptedData, iv, noteKey);
+        return new Blob([decryptedBuffer], { type: mimeType });
+    },
+
+    /**
+     * Get encrypted Note Key for sharing with another user
+     * @param {number} noteId - Note ID
+     * @param {JsonWebKey} recipientPublicKey - Recipient's public key
+     * @returns {Promise<string>}
+     */
+    getEncryptedKeyForRecipient: async (noteId, recipientPublicKey) => {
+        const { noteKeysCache } = get();
+        const noteKey = noteKeysCache.get(noteId);
+        if (!noteKey) throw new Error('Note key not found');
+
+        return await encryptNoteKeyForRecipient(noteKey, recipientPublicKey);
+    },
+
+    /**
+     * Clear error
+     */
+    clearError: () => set({ error: null })
+}));

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { useEncryptionStore } from './encryptionStore';
+
 const API_URL = '/api';
 
 export const useAuthStore = create(
@@ -116,10 +118,19 @@ export const useAuthStore = create(
             },
 
             logout: () => {
+                // Clear encryption keys from memory and session
+                try {
+                    useEncryptionStore.getState().lock();
+                } catch (e) {
+                    console.warn('Failed to lock encryption store:', e);
+                }
+
                 set({ user: null, token: null, isAuthenticated: false });
                 // Force redirect to login
                 window.location.href = '/login';
             },
+
+            setUser: (user) => set({ user }),
 
             clearError: () => set({ error: null }),
 

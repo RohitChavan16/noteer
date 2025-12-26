@@ -1,3 +1,7 @@
+// Buffer polyfill for bip39 library (uses Node.js Buffer)
+import { Buffer } from 'buffer';
+window.Buffer = Buffer;
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

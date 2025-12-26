@@ -1,11 +1,15 @@
 import { create } from 'zustand';
 import _ from 'lodash';
 import { useAuthStore } from './authStore';
+import { useEncryptionStore } from './encryptionStore';
 
 const API_URL = '/api';
 
 // Helper to get authFetch from authStore
 const getAuthFetch = () => useAuthStore.getState().authFetch;
+
+// Helper to get encryption functions
+const getEncryption = () => useEncryptionStore.getState();
 
 // Detect touch device for default view mode (phones, tablets)
 const getDefaultViewMode = () => {
@@ -78,7 +82,14 @@ export const useNotesStore = create((set, get) => {
 
                 if (!res.ok) throw new Error('Failed to fetch notes');
 
-                const notes = await res.json();
+                let notes = await res.json();
+
+                // Decrypt notes if encryption is unlocked
+                const { isUnlocked, decryptNote } = getEncryption();
+                if (isUnlocked) {
+                    notes = await Promise.all(notes.map(note => decryptNote(note)));
+                }
+
                 set({ notes, isLoading: false });
             } catch (error) {
                 if (!silent) {
@@ -91,16 +102,31 @@ export const useNotesStore = create((set, get) => {
 
         createNote: async (noteData) => {
             try {
+                // Encrypt note before sending to server
+                const { isUnlocked, encryptNote } = getEncryption();
+                let dataToSend = noteData;
+                if (isUnlocked) {
+                    dataToSend = await encryptNote(noteData);
+                }
+
                 const authFetch = getAuthFetch();
                 const res = await authFetch(`${API_URL}/notes`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(noteData),
+                    body: JSON.stringify(dataToSend),
                 });
 
                 if (!res.ok) throw new Error('Failed to create note');
 
-                const note = await res.json();
+                const serverNote = await res.json();
+
+                // Keep the original unencrypted data for local state
+                const note = {
+                    ...serverNote,
+                    title: noteData.title,
+                    content: noteData.content
+                };
+
                 set((state) => ({ notes: [note, ...state.notes] }));
                 return note;
             } catch (error) {
@@ -121,11 +147,39 @@ export const useNotesStore = create((set, get) => {
             const saveToBackend = async (dataToSave) => {
                 set({ isSyncing: true });
                 try {
+                    // Encrypt before sending - ONLY if sensitive fields are changing
+                    const { isUnlocked, encryptNote } = getEncryption();
+                    let encryptedData = dataToSave;
+
+                    const sensitiveFields = ['title', 'content'];
+                    const hasSensitiveChange = sensitiveFields.some(f => dataToSave[f] !== undefined);
+
+                    if (isUnlocked && hasSensitiveChange) {
+                        // To encrypt correctly, we need the FULL note content (even if only title changed, 
+                        // we need content to re-encrypt both with the same key/IV handling if needed, 
+                        // or just to avoid sending empty string for the missing field)
+                        const currentNote = get().notes.find(n => n.id === id);
+
+                        // Safety check
+                        if (currentNote) {
+                            const merged = { ...currentNote, ...dataToSave };
+                            const encryptedResult = await encryptNote(merged);
+
+                            encryptedData = {
+                                ...dataToSave,
+                                title: encryptedResult.title,
+                                content: encryptedResult.content,
+                                encrypted: true,
+                                encrypted_note_key: encryptedResult.encrypted_note_key
+                            };
+                        }
+                    }
+
                     const authFetch = getAuthFetch();
                     const res = await authFetch(`${API_URL}/notes/${id}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(dataToSave),
+                        body: JSON.stringify(encryptedData),
                     });
 
                     if (!res.ok) throw new Error('Failed to update note');

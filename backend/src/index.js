@@ -18,6 +18,7 @@ import usersRoutes from './routes/users.js';
 import labelsRoutes from './routes/labels.js';
 import uploadRoutes from './routes/upload.js';
 import settingsRoutes from './routes/settings.js';
+import encryptionRoutes from './routes/encryption.js';
 import { errorHandler, requestId, notFoundHandler } from './middleware/errorHandler.js';
 import { apiLimiter, authLimiter, uploadLimiter } from './middleware/rateLimit.js';
 import { initializeDatabase } from './db/index.js';
@@ -115,6 +116,7 @@ app.use('/api/users', apiLimiter, usersRoutes);
 app.use('/api/labels', apiLimiter, labelsRoutes);
 app.use('/api/upload', uploadLimiter, uploadRoutes);
 app.use('/api/admin/settings', apiLimiter, settingsRoutes);
+app.use('/api/encryption', apiLimiter, encryptionRoutes);
 
 // Health check (no rate limit)
 app.get('/api/health', (req, res) => {

@@ -53,6 +53,7 @@ export async function initializeDatabase() {
       role VARCHAR(50) DEFAULT 'user',
       oidc_subject VARCHAR(255),
       oidc_issuer VARCHAR(255),
+      public_key TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -141,10 +142,23 @@ export async function initializeDatabase() {
       original_name TEXT,
       mime_type TEXT,
       size BIGINT,
+      encryption_iv TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_note_images_note_id ON note_images(note_id);
     CREATE INDEX IF NOT EXISTS idx_note_images_user_id ON note_images(user_id);
+
+    -- Note encryption keys (for E2E encrypted sharing)
+    CREATE TABLE IF NOT EXISTS note_keys (
+      id SERIAL PRIMARY KEY,
+      note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      encrypted_key TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(note_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_note_keys_note_id ON note_keys(note_id);
+    CREATE INDEX IF NOT EXISTS idx_note_keys_user_id ON note_keys(user_id);
 
     -- App settings (key-value store for runtime configuration)
     CREATE TABLE IF NOT EXISTS app_settings (
@@ -244,6 +258,36 @@ export async function initializeDatabase() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'type') THEN
         ALTER TABLE notes ADD COLUMN type VARCHAR(50) DEFAULT 'note';
         UPDATE notes SET type = 'checklist' WHERE id IN (SELECT DISTINCT note_id FROM note_items);
+      END IF;
+
+      -- Migration: add public_key column to users for E2E encryption
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'public_key') THEN
+        ALTER TABLE users ADD COLUMN public_key TEXT;
+        RAISE NOTICE 'Added public_key column to users';
+      END IF;
+
+      -- Migration: add encryption_iv column to note_images for encrypted images
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'note_images' AND column_name = 'encryption_iv') THEN
+        ALTER TABLE note_images ADD COLUMN encryption_iv TEXT;
+        RAISE NOTICE 'Added encryption_iv column to note_images';
+      END IF;
+
+      -- Migration: add encryption_version column to notes for future cipher upgrades
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'encryption_version') THEN
+        ALTER TABLE notes ADD COLUMN encryption_version INTEGER DEFAULT 1;
+        RAISE NOTICE 'Added encryption_version column to notes';
+      END IF;
+
+      -- Migration: add encrypted column to notes
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'encrypted') THEN
+        ALTER TABLE notes ADD COLUMN encrypted BOOLEAN DEFAULT FALSE;
+        RAISE NOTICE 'Added encrypted column to notes';
+      END IF;
+
+      -- Migration: add encrypted_note_key column to notes (for owner)
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'encrypted_note_key') THEN
+        ALTER TABLE notes ADD COLUMN encrypted_note_key TEXT;
+        RAISE NOTICE 'Added encrypted_note_key column to notes';
       END IF;
     END $$;
   `);

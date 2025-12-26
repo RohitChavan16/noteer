@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useAuthStore } from '../stores/authStore';
+import { useEncryptionStore } from '../stores/encryptionStore';
 import { useMantineColorScheme } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, Image, LoadingOverlay, Overlay, Center } from '@mantine/core';
@@ -223,9 +224,30 @@ export default function NoteModal({ note, onClose }) {
 
         setIsUploading(true);
         try {
+            const { isUnlocked, encryptImage: encryptImageFn } = useEncryptionStore.getState();
+
             for (const file of filesToUpload) {
-                const uploaded = await uploadImage(file);
+                let fileToUpload = file;
+                let encryptionIv = null;
+
+                // Encrypt image if encryption is unlocked and note has been saved
+                if (isUnlocked && note?.id) {
+                    try {
+                        const { encryptedBlob, iv } = await encryptImageFn(file, note.id);
+                        fileToUpload = new File([encryptedBlob], file.name + '.enc', { type: 'application/octet-stream' });
+                        encryptionIv = iv;
+                    } catch (encError) {
+                        console.warn('Image encryption failed, uploading unencrypted:', encError);
+                        // Fall back to unencrypted upload
+                    }
+                }
+
+                const uploaded = await uploadImage(fileToUpload);
                 if (uploaded) {
+                    // Store encryption IV with image metadata
+                    if (encryptionIv) {
+                        uploaded.encryption_iv = encryptionIv;
+                    }
                     setImages(prev => [...prev, uploaded]);
                 }
             }

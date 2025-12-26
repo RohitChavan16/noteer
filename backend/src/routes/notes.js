@@ -29,6 +29,8 @@ const validateNote = [
     body('color').optional().isIn(['default', 'red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'brown', 'gray']),
     body('is_pinned').optional().isBoolean(),
     body('reminder_at').optional().isISO8601(),
+    body('encrypted').optional().isBoolean(),
+    body('encrypted_note_key').optional().isString(),
 ];
 
 // GET /api/notes - List notes (owned + shared with me)
@@ -161,14 +163,24 @@ router.post('/', validateNote, async (req, res, next) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { title, content, type, color, is_pinned, reminder_at, items, labels, images } = req.body;
+        const { title, content, type, color, is_pinned, reminder_at, items, labels, images, encrypted, encrypted_note_key } = req.body;
         const userId = req.user.id;
 
         const result = await query(
-            `INSERT INTO notes (user_id, title, content, type, color, is_pinned, reminder_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO notes (user_id, title, content, type, color, is_pinned, reminder_at, encrypted, encrypted_note_key)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING *`,
-            [userId, title || '', content || '', type || 'note', color || 'default', is_pinned || false, reminder_at || null]
+            [
+                userId,
+                title || '',
+                content || '',
+                type || 'note',
+                color || 'default',
+                is_pinned || false,
+                reminder_at || null,
+                encrypted || false,
+                encrypted_note_key || null
+            ]
         );
 
         const note = result.rows[0];
@@ -198,7 +210,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         const { id } = req.params;
         const userId = req.user.id;
-        const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels, images } = req.body;
+        const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels, images, encrypted, encrypted_note_key } = req.body;
 
         // Check if user owns the note or has shared access
         const noteCheck = await query(
@@ -241,7 +253,10 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         if (color !== undefined) { updates.push(`color = $${paramIndex++}`); params.push(color); }
         if (is_pinned !== undefined && isOwner) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
         if (is_archived !== undefined && isOwner) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
+        if (is_archived !== undefined && isOwner) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
         if (reminder_at !== undefined) { updates.push(`reminder_at = $${paramIndex++}`); params.push(reminder_at); }
+        if (encrypted !== undefined) { updates.push(`encrypted = $${paramIndex++}`); params.push(encrypted); }
+        if (encrypted_note_key !== undefined) { updates.push(`encrypted_note_key = $${paramIndex++}`); params.push(encrypted_note_key); }
 
         if (updates.length === 0 && !items && !labels) {
             return res.json({ success: true });

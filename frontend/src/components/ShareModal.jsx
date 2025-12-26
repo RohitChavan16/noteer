@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Modal, TextInput, Button, Group, Stack, Text, Avatar, ActionIcon, Loader, Box } from '@mantine/core';
 import { IconSearch, IconX, IconUserPlus } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
+import { useEncryptionStore } from '../stores/encryptionStore';
 
 const API_URL = '/api';
 
@@ -77,6 +78,7 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
     const handleShare = async (userId) => {
         setError(null);
         try {
+            // First share the note via API
             const res = await authFetch(`${API_URL}/notes/${note.id}/share`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -85,6 +87,30 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
 
             if (res.ok) {
                 const data = await res.json();
+
+                // Encrypt note key for recipient if encryption is active
+                const { isUnlocked, getEncryptedKeyForRecipient } = useEncryptionStore.getState();
+                if (isUnlocked) {
+                    try {
+                        // Get recipient's public key
+                        const pubKeyRes = await authFetch(`${API_URL}/encryption/public-key/${userId}`);
+                        if (pubKeyRes.ok) {
+                            const { publicKey } = await pubKeyRes.json();
+                            // Encrypt note key for recipient
+                            const encryptedKey = await getEncryptedKeyForRecipient(note.id, publicKey);
+                            // Store encrypted key for recipient
+                            await authFetch(`${API_URL}/encryption/notes/${note.id}/keys`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ recipientId: userId, encryptedKey }),
+                            });
+                        }
+                    } catch (encError) {
+                        console.warn('Failed to share encryption key:', encError);
+                        // Note is still shared, just not encrypted for recipient
+                    }
+                }
+
                 const newCollabs = [...collaborators, data.user];
                 setCollaborators(newCollabs);
                 setSearchResults(prev => prev.filter(u => u.id !== userId));
