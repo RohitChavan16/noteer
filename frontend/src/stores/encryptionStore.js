@@ -137,18 +137,25 @@ export const useEncryptionStore = create((set, get) => ({
             // 2. Generate RSA keypair
             const { publicKey, privateKey } = await deriveKeyPair(masterKey);
 
-            // 3. Store public key on server
-            const response = await authFetch(`${API_URL}/encryption/public-key`, {
+            // 3. Encrypt Private Key with Master Key for storage
+            const privateKeyJson = JSON.stringify(privateKey);
+            const encryptedPrivateKey = await encryptContent(privateKeyJson, masterKey);
+
+            // 4. Store keys on server
+            const response = await authFetch(`${API_URL}/encryption/keys`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ publicKey })
+                body: JSON.stringify({
+                    publicKey,
+                    encryptedPrivateKey
+                })
             });
 
             if (!response.ok) {
-                throw new Error('Failed to store public key');
+                throw new Error('Failed to store encryption keys');
             }
 
-            // 4. Store keys in memory and session
+            // 5. Store keys in memory and session
             set({
                 isUnlocked: true,
                 isSetupComplete: true,
@@ -171,7 +178,7 @@ export const useEncryptionStore = create((set, get) => ({
     /**
      * Unlock with existing mnemonic
      */
-    unlockWithMnemonic: async (mnemonic, passphrase = '') => {
+    unlockWithMnemonic: async (mnemonic, passphrase = '', authFetch) => {
         set({ isLoading: true, error: null });
 
         try {
@@ -183,8 +190,33 @@ export const useEncryptionStore = create((set, get) => ({
             // Derive Master Key
             const masterKey = await deriveMasterKey(mnemonic, passphrase);
 
-            // Generate RSA keypair (deterministic from same mnemonic)
-            const { publicKey, privateKey } = await deriveKeyPair(masterKey);
+            // Fetch encrypted keys from server
+            // Note: We need authFetch passed in, or we can use the one from authStore if available globally (it is not).
+            // So caller must provide it.
+            if (!authFetch) throw new Error('Auth fetch function required for unlocking');
+
+            const response = await authFetch(`${API_URL}/encryption/keys`);
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('Encryption keys not found on server. You may need to reset encryption.');
+                }
+                throw new Error('Failed to fetch encryption keys');
+            }
+
+            const { publicKey, encryptedPrivateKey } = await response.json();
+
+            if (!encryptedPrivateKey) {
+                throw new Error('Legacy encryption setup found (missing private key). Please reset encryption in settings.');
+            }
+
+            // Decrypt Private Key
+            const privateKeyJson = await decryptContent(
+                encryptedPrivateKey.ciphertext,
+                encryptedPrivateKey.iv,
+                masterKey
+            );
+            const privateKey = JSON.parse(privateKeyJson);
 
             set({
                 isUnlocked: true,
@@ -199,7 +231,13 @@ export const useEncryptionStore = create((set, get) => ({
 
             return true;
         } catch (error) {
-            set({ isLoading: false, error: error.message });
+            console.error('Unlock error:', error);
+            // Provide friendly error message for decryption failure
+            if (error.name === 'OperationError' || error.message.includes('decrypt')) {
+                set({ isLoading: false, error: 'Failed to decrypt private key. Wrong mnemonic or passphrase?' });
+            } else {
+                set({ isLoading: false, error: error.message });
+            }
             throw error;
         }
     },

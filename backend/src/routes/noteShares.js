@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
-import { query } from '../db/index.js';
+import { query, getPool } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
@@ -17,50 +17,81 @@ router.post('/:id/share', [param('id').isInt(), body('user_id').isInt()], async 
         }
 
         const { id } = req.params;
-        const { user_id: targetUserId } = req.body;
+        const { user_id: targetUserId, encrypted_key } = req.body;
         const userId = req.user.id;
 
-        // Verify ownership
-        const noteCheck = await query('SELECT user_id FROM notes WHERE id = $1', [id]);
-        if (noteCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Note not found' });
-        }
-        if (noteCheck.rows[0].user_id !== userId) {
-            return res.status(403).json({ error: 'Only the owner can share this note' });
-        }
-
-        // Cannot share with yourself
+        // Optimization: Check logic constraints BEFORE acquiring DB connection
+        // Cannot share with yourself - Fail fast
         if (targetUserId === userId) {
             return res.status(400).json({ error: 'Cannot share note with yourself' });
         }
 
-        // Check target user exists
-        const targetUser = await query(
-            'SELECT id, email, given_name, family_name, avatar_url FROM users WHERE id = $1',
-            [targetUserId]
-        );
-        if (targetUser.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const client = await getPool().connect();
+        try {
+            await client.query('BEGIN');
 
-        // Create share (ignore if already exists)
-        await query(
-            `INSERT INTO note_shares (note_id, shared_with_id) 
+            // Verify ownership
+            // Security: Return 404 for both "Not Found" and "Forbidden" to prevent ID enumeration
+            const noteCheck = await client.query('SELECT user_id FROM notes WHERE id = $1', [id]);
+
+            const isNotFound = noteCheck.rows.length === 0;
+            const isNotOwner = !isNotFound && noteCheck.rows[0].user_id !== userId;
+
+            if (isNotFound || isNotOwner) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Note not found' });
+            }
+
+            // Check target user exists
+            const targetUser = await client.query(
+                'SELECT id, email, given_name, family_name, avatar_url FROM users WHERE id = $1',
+                [targetUserId]
+            );
+            if (targetUser.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            // Create share (ignore if already exists)
+            await client.query(
+                `INSERT INTO note_shares (note_id, shared_with_id) 
              VALUES ($1, $2) 
              ON CONFLICT (note_id, shared_with_id) DO NOTHING`,
-            [id, targetUserId]
-        );
+                [id, targetUserId]
+            );
 
-        // Update note's updated_at for sync
-        await query('UPDATE notes SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
-
-        res.status(201).json({
-            success: true,
-            user: {
-                ...targetUser.rows[0],
-                name: `${targetUser.rows[0].given_name || ''} ${targetUser.rows[0].family_name || ''}`.trim() || targetUser.rows[0].email
+            // Insert encrypted key if provided
+            if (encrypted_key) {
+                // Ensure explicit JSON serialization for TEXT column
+                const encryptedKeyJson = JSON.stringify(encrypted_key);
+                await client.query(
+                    `INSERT INTO note_keys (note_id, user_id, encrypted_key)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (note_id, user_id) 
+                 DO UPDATE SET encrypted_key = EXCLUDED.encrypted_key`,
+                    [id, targetUserId, encryptedKeyJson]
+                );
             }
-        });
+
+            // Update note's updated_at for sync
+            await client.query('UPDATE notes SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+
+            await client.query('COMMIT');
+
+            res.status(201).json({
+                success: true,
+                user: {
+                    ...targetUser.rows[0],
+                    name: `${targetUser.rows[0].given_name || ''} ${targetUser.rows[0].family_name || ''}`.trim() || targetUser.rows[0].email
+                }
+            });
+        } catch (error) {
+            await client.query('ROLLBACK');
+            console.error('Share transaction error:', error);
+            throw error; // Propagate to outer catch
+        } finally {
+            client.release();
+        }
     } catch (error) {
         next(error);
     }

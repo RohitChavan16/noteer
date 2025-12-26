@@ -15,6 +15,16 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticateToken);
 
+// Helper for safe JSON parsing
+const safeParse = (str) => {
+    try {
+        return str ? JSON.parse(str) : null;
+    } catch (e) {
+        console.warn('Failed to parse JSON for user key:', e.message);
+        return null;
+    }
+};
+
 /**
  * GET /api/encryption/status
  * Check if current user has encryption setup (has public key)
@@ -36,31 +46,76 @@ router.get('/status', async (req, res) => {
 });
 
 /**
- * POST /api/encryption/public-key
- * Store user's RSA public key (during mnemonic setup)
+ * POST /api/encryption/keys
+ * Store user's RSA keypair (public + encrypted private key)
+ * This is called once during initial setup.
  */
-router.post('/public-key', async (req, res) => {
+router.post('/keys', async (req, res) => {
     try {
-        const { publicKey } = req.body;
+        const { publicKey, encryptedPrivateKey } = req.body;
 
-        if (!publicKey) {
-            return res.status(400).json({ error: 'Public key is required' });
+        if (!publicKey || !encryptedPrivateKey) {
+            return res.status(400).json({ error: 'Both public key and encrypted private key are required' });
         }
 
-        // Store as JSON string
-        const publicKeyJson = typeof publicKey === 'string'
-            ? publicKey
-            : JSON.stringify(publicKey);
+        // Enforce Strict Types: Keys must be JSON objects (JWK / Encrypted Payload)
+        // We reject strings to avoid ambiguity.
+        if (typeof publicKey !== 'object' || Array.isArray(publicKey)) {
+            return res.status(400).json({ error: 'Public key must be a JSON object (JWK)' });
+        }
+        if (typeof encryptedPrivateKey !== 'object' || Array.isArray(encryptedPrivateKey)) {
+            return res.status(400).json({ error: 'Encrypted private key must be a JSON object' });
+        }
+
+        const publicKeyJson = JSON.stringify(publicKey);
+        const privateKeyJson = JSON.stringify(encryptedPrivateKey);
 
         await query(
-            'UPDATE users SET public_key = $1 WHERE id = $2',
-            [publicKeyJson, req.user.id]
+            'UPDATE users SET public_key = $1, encrypted_private_key = $2 WHERE id = $3',
+            [publicKeyJson, privateKeyJson, req.user.id]
         );
 
         res.json({ success: true });
     } catch (error) {
-        console.error('Store public key error:', error);
-        res.status(500).json({ error: 'Failed to store public key' });
+        console.error('Store keys error:', error);
+        res.status(500).json({ error: 'Failed to store encryption keys' });
+    }
+});
+
+/**
+ * GET /api/encryption/keys
+ * Get user's encrypted private key and public key (for restoration)
+ */
+router.get('/keys', async (req, res) => {
+    try {
+        const result = await query(
+            'SELECT public_key, encrypted_private_key FROM users WHERE id = $1',
+            [req.user.id]
+        );
+
+        const user = result.rows[0];
+
+        if (!user || !user.public_key) {
+            return res.status(404).json({ error: 'Encryption keys not found' });
+        }
+
+        // If private key is missing but public key exists (legacy broken state),
+        // client should handle this (reset setup).
+
+        const publicKey = safeParse(user.public_key);
+        const encryptedPrivateKey = safeParse(user.encrypted_private_key);
+
+        if (!publicKey) {
+            return res.status(404).json({ error: 'Encryption keys corrupted' });
+        }
+
+        res.json({
+            publicKey,
+            encryptedPrivateKey
+        });
+    } catch (error) {
+        console.error('Get keys error:', error);
+        res.status(500).json({ error: 'Failed to retrieve encryption keys' });
     }
 });
 
@@ -85,9 +140,15 @@ router.get('/public-key/:userId', async (req, res) => {
             return res.status(404).json({ error: 'User has no encryption key' });
         }
 
-        // Return the public key (already JSON string)
+        const publicKey = safeParse(result.rows[0].public_key);
+
+        if (!publicKey) {
+            return res.status(404).json({ error: 'User public key corrupted' });
+        }
+
+        // Return the public key
         res.json({
-            publicKey: JSON.parse(result.rows[0].public_key)
+            publicKey
         });
     } catch (error) {
         console.error('Get public key error:', error);

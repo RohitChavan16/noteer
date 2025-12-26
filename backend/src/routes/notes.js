@@ -14,6 +14,7 @@ import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
 import { bulkInsertItems, bulkInsertImages, setNoteLabels } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { PAGINATION } from '../config/constants.js';
 
 const router = Router();
 
@@ -33,11 +34,31 @@ const validateNote = [
     body('encrypted_note_key').optional().isString(),
 ];
 
+// SQL Subqueries construction
+const getCommonSubqueries = (userIdParamIdx) => ({
+    labels: `(SELECT array_agg(DISTINCT l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $${userIdParamIdx} AND l.name IS NOT NULL)`,
+    items: `COALESCE((
+        SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
+        FROM note_items ni WHERE ni.note_id = n.id
+    ), '[]'::json)`,
+    images: `COALESCE((
+        SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name, 'mime_type', img.mime_type, 'size', img.size, 'created_at', img.created_at))
+        FROM note_images img WHERE img.note_id = n.id
+    ), '[]'::json)`
+});
+
+const getCollabsQuery = `(SELECT json_agg(json_build_object(
+    'id', u.id, 'email', u.email, 'given_name', u.given_name, 
+    'family_name', u.family_name, 'avatar_url', u.avatar_url
+)) FROM note_shares ns JOIN users u ON ns.shared_with_id = u.id WHERE ns.note_id = n.id)`;
+
 // GET /api/notes - List notes (owned + shared with me)
 router.get('/', async (req, res, next) => {
     try {
         const { archived, trashed, label, search } = req.query;
         const userId = req.user.id;
+
+        const subq = getCommonSubqueries(1);
 
         let sql = `
             WITH note_data AS (
@@ -45,21 +66,13 @@ router.get('/', async (req, res, next) => {
                 SELECT n.*, 
                        TRUE as is_owner,
                        FALSE as share_is_archived,
-                       (SELECT array_agg(DISTINCT l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $1 AND l.name IS NOT NULL) as labels,
-                       COALESCE((
-                           SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
-                           FROM note_items ni WHERE ni.note_id = n.id
-                       ), '[]'::json) as items,
-                       COALESCE((
-                           SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name, 'mime_type', img.mime_type, 'size', img.size, 'created_at', img.created_at))
-                           FROM note_images img WHERE img.note_id = n.id
-                       ), '[]'::json) as images,
+                       ${subq.labels} as labels,
+                       ${subq.items} as items,
+                       ${subq.images} as images,
                        (SELECT COUNT(*) > 0 FROM note_shares ns WHERE ns.note_id = n.id) as is_shared,
-                       (SELECT json_agg(json_build_object(
-                           'id', u.id, 'email', u.email, 'given_name', u.given_name, 
-                           'family_name', u.family_name, 'avatar_url', u.avatar_url
-                       )) FROM note_shares ns JOIN users u ON ns.shared_with_id = u.id WHERE ns.note_id = n.id) as collaborators,
-                       NULL::json as owner
+                       ${getCollabsQuery} as collaborators,
+                       NULL::json as owner,
+                       NULL::text as shared_note_key
                 FROM notes n
                 WHERE n.user_id = $1
 
@@ -69,25 +82,21 @@ router.get('/', async (req, res, next) => {
                 SELECT n.*, 
                        FALSE as is_owner,
                        ns.is_archived as share_is_archived,
-                       (SELECT array_agg(DISTINCT l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $1 AND l.name IS NOT NULL) as labels,
-                       COALESCE((
-                           SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
-                           FROM note_items ni WHERE ni.note_id = n.id
-                       ), '[]'::json) as items,
-                       COALESCE((
-                           SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name, 'mime_type', img.mime_type, 'size', img.size, 'created_at', img.created_at))
-                           FROM note_images img WHERE img.note_id = n.id
-                       ), '[]'::json) as images,
+                       ${subq.labels} as labels,
+                       ${subq.items} as items,
+                       ${subq.images} as images,
                        FALSE as is_shared,
                        NULL::json as collaborators,
                        json_build_object(
                            'id', owner_user.id, 'email', owner_user.email, 
                            'given_name', owner_user.given_name, 'family_name', owner_user.family_name,
                            'avatar_url', owner_user.avatar_url
-                       ) as owner
+                       ) as owner,
+                       nk.encrypted_key as shared_note_key
                 FROM notes n
                 JOIN note_shares ns ON ns.note_id = n.id AND ns.shared_with_id = $1
                 JOIN users owner_user ON n.user_id = owner_user.id
+                LEFT JOIN note_keys nk ON nk.note_id = n.id AND nk.user_id = $1
                 WHERE n.is_trashed = false
             )
             SELECT * FROM note_data nd
@@ -120,6 +129,14 @@ router.get('/', async (req, res, next) => {
         }
 
         sql += ` ORDER BY nd.is_pinned DESC, nd.updated_at DESC`;
+
+        const limitRaw = parseInt(req.query.limit);
+        // Default and limit using constants
+        const limit = Math.min(Math.max(1, !isNaN(limitRaw) ? limitRaw : PAGINATION.DEFAULT_LIMIT), PAGINATION.MAX_LIMIT);
+        const offset = Math.max(0, parseInt(req.query.offset) || PAGINATION.DEFAULT_OFFSET);
+
+        sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+        params.push(limit, offset);
 
         const result = await query(sql, params);
         res.json(result.rows);

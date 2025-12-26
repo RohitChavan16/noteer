@@ -26,6 +26,7 @@ import {
 } from '@tabler/icons-react';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { getWordlist } from '../utils/crypto';
+import { useAuthStore } from '../stores/authStore';
 
 export function MnemonicUnlockModal({ opened, onUnlock }) {
     const [words, setWords] = useState(Array(24).fill(''));
@@ -35,6 +36,7 @@ export function MnemonicUnlockModal({ opened, onUnlock }) {
     const inputRefs = useRef([]);
 
     const { unlockWithMnemonic, error, clearError } = useEncryptionStore();
+    const authFetch = useAuthStore(state => state.authFetch);
     const wordlist = getWordlist();
 
     useEffect(() => {
@@ -96,7 +98,7 @@ export function MnemonicUnlockModal({ opened, onUnlock }) {
 
         setIsSubmitting(true);
         try {
-            await unlockWithMnemonic(mnemonic, passphrase);
+            await unlockWithMnemonic(mnemonic, passphrase, authFetch);
             onUnlock?.();
         } catch (err) {
             console.error('Failed to unlock:', err);

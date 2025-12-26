@@ -1,0 +1,5 @@
+export const PAGINATION = {
+    DEFAULT_LIMIT: 50,
+    MAX_LIMIT: 1000,
+    DEFAULT_OFFSET: 0
+};
