@@ -87,5 +87,5 @@ export const apiLimiter = rateLimit({
 
 export const uploadLimiter = rateLimit({
     windowMs: 60000,    // 1 minute
-    max: 20,            // 20 uploads per minute
+    max: 1000,           // 100 uploads per minute
 });

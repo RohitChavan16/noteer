@@ -30,10 +30,10 @@ const upload = multer({
     storage: storage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: (req, file, cb) => {
-        if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        if (ALLOWED_MIME_TYPES.includes(file.mimetype) || file.mimetype === 'application/octet-stream') {
             cb(null, true);
         } else {
-            cb(new Error('Only JPEG, PNG, GIF and WebP images are allowed'));
+            cb(new Error('Only JPEG, PNG, GIF, WebP and Encrypted files are allowed'));
         }
     }
 });
@@ -45,6 +45,25 @@ async function saveWithThumbnails(file, userId) {
 
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     const baseName = uniqueSuffix;
+
+    const isEncrypted = file.originalname.endsWith('.enc') || file.mimetype === 'application/octet-stream';
+
+    if (isEncrypted) {
+        // Save encrypted file directly
+        const filename = `${baseName}.enc`;
+        const filePath = path.join(uploadDir, filename);
+        await fs.promises.writeFile(filePath, file.buffer);
+
+        return {
+            url: `/uploads/users/${userId}/${filename}`,
+            thumb_small: `/uploads/users/${userId}/${filename}`, // No thumbnails for encrypted
+            thumb_medium: `/uploads/users/${userId}/${filename}`,
+            original_name: file.originalname,
+            mime_type: 'application/octet-stream',
+            size: file.size,
+            encryption_iv: null // Will be populated by caller if available
+        };
+    }
 
     // All files saved as WebP
     const originalFilename = `${baseName}.webp`;

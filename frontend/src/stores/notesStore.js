@@ -120,6 +120,12 @@ export const useNotesStore = create((set, get) => {
 
                 const serverNote = await res.json();
 
+                // Decrypt the response to ensure the new Note Key is cached
+                // This is critical for subsequent operations like image upload which require the key
+                if (isUnlocked && serverNote.encrypted && serverNote.encrypted_note_key) {
+                    await getEncryption().decryptNote(serverNote);
+                }
+
                 // Keep the original unencrypted data for local state
                 const note = {
                     ...serverNote,

@@ -14,6 +14,7 @@ import { formatDate, getInitials, generateId } from '../utils/helpers';
 import NoteRichTextEditor from './NoteRichTextEditor';
 import LabelPicker from './LabelPicker';
 import ShareModal from './ShareModal';
+import EncryptedImage from './EncryptedImage';
 
 import {
     DndContext,
@@ -115,25 +116,25 @@ export default function NoteModal({ note, onClose }) {
             return;
         }
 
-        const hasChanges = title !== (note?.title || '') ||
-            content !== (note?.content || '') ||
-            color !== (note?.color || 'default') ||
-            JSON.stringify(items) !== JSON.stringify(note?.items || []) ||
-            JSON.stringify(labels.sort()) !== JSON.stringify((note?.labels || []).sort()) ||
-            JSON.stringify(images) !== JSON.stringify(note?.images || []);
+        // Check for specific field changes to enable partial updates (merging)
+        const changes = {};
 
-        if (hasChanges) {
+        if (title !== (note?.title || '')) changes.title = title;
+        if (content !== (note?.content || '')) changes.content = content;
+        if (color !== (note?.color || 'default')) changes.color = color;
+
+        // Check array changes using JSON stringify
+        if (JSON.stringify(items) !== JSON.stringify(note?.items || [])) changes.items = items;
+
+        const currentLabels = [...labels].sort();
+        const originalLabels = [...(note?.labels || [])].sort();
+        if (JSON.stringify(currentLabels) !== JSON.stringify(originalLabels)) changes.labels = labels;
+
+        if (JSON.stringify(images) !== JSON.stringify(note?.images || [])) changes.images = images;
+
+        if (Object.keys(changes).length > 0) {
             setIsSaving(true);
-            await updateNote(note.id, {
-                title,
-                content,
-                color,
-                items,
-                labels,
-                images,
-                // Don't convert status fields back to stale props
-                type: note.type
-            });
+            await updateNote(note.id, changes);
             setIsSaving(false);
         }
         onClose();
@@ -335,9 +336,12 @@ export default function NoteModal({ note, onClose }) {
                                         height: isPicture ? 300 : 150,
                                         cursor: 'zoom-in',
                                         overflow: 'hidden'
-                                    }} onClick={() => setPreviewImage(img.url)}>
-                                        <Image
+                                    }} onClick={() => setPreviewImage(img)}>
+                                        <EncryptedImage
                                             src={img.thumb_medium || img.url}
+                                            noteId={note.id}
+                                            encryptionIv={img.encryption_iv}
+                                            originalName={img.original_name}
                                             radius={0}
                                             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
                                         />
@@ -480,14 +484,14 @@ export default function NoteModal({ note, onClose }) {
                                         </Popover.Target>
                                         <Popover.Dropdown>
                                             <Group gap="xs" wrap="wrap">
-                                                {Object.entries(NOTE_COLORS).map(([name, c]) => (
+                                                {NOTE_COLORS.map((c) => (
                                                     <ColorSwatch
-                                                        key={name}
+                                                        key={c.id}
                                                         color={isDark ? c.dark : c.light}
-                                                        onClick={() => { setColor(name); setShowColors(false); }}
+                                                        onClick={() => { setColor(c.id); setShowColors(false); }}
                                                         style={{
                                                             cursor: 'pointer',
-                                                            border: color === name ? `2px solid ${isDark ? '#fff' : '#000'}` : '1px solid rgba(0,0,0,0.1)'
+                                                            border: color === c.id ? `2px solid ${isDark ? '#fff' : '#000'}` : '1px solid rgba(0,0,0,0.1)'
                                                         }}
                                                         size={24}
                                                     />
@@ -711,7 +715,15 @@ export default function NoteModal({ note, onClose }) {
             />
 
             <Modal opened={!!previewImage} onClose={() => setPreviewImage(null)} size="auto" centered withCloseButton={false} p={0} styles={{ body: { padding: 0 }, header: { display: 'none' }, content: { backgroundColor: 'transparent', boxShadow: 'none' } }}>
-                {previewImage && <Image src={previewImage} style={{ maxHeight: '90vh', maxWidth: '90vw' }} fit="contain" />}
+                {previewImage && (
+                    <EncryptedImage
+                        src={previewImage.url || previewImage}
+                        noteId={note?.id}
+                        encryptionIv={previewImage.encryption_iv}
+                        originalName={previewImage.original_name}
+                        style={{ maxHeight: '90vh', maxWidth: '90vw', objectFit: 'contain' }}
+                    />
+                )}
             </Modal>
         </Modal>
     );

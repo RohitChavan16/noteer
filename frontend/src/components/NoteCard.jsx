@@ -8,6 +8,8 @@ import { getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import { getInitials } from '../utils/helpers';
 import LabelPicker from './LabelPicker';
 
+import EncryptedImage from './EncryptedImage';
+
 export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
@@ -71,8 +73,11 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                     <SimpleGrid cols={note.images.length === 1 ? 1 : 2} spacing={1}>
                         {note.images.slice(0, 2).map((img, index) => (
                             <Box key={index} style={{ position: 'relative', height: note.type === 'picture' ? 160 : 120, overflow: 'hidden' }}>
-                                <Image
+                                <EncryptedImage
                                     src={img.thumb_medium || img.thumb_small || img.url}
+                                    noteId={note.id}
+                                    encryptionIv={img.encryption_iv}
+                                    originalName={img.original_name}
                                     style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }}
                                 />
                             </Box>

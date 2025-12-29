@@ -42,7 +42,7 @@ const getCommonSubqueries = (userIdParamIdx) => ({
         FROM note_items ni WHERE ni.note_id = n.id
     ), '[]'::json)`,
     images: `COALESCE((
-        SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name, 'mime_type', img.mime_type, 'size', img.size, 'created_at', img.created_at))
+        SELECT json_agg(json_build_object('id', img.id, 'url', img.url, 'original_name', img.original_name, 'mime_type', img.mime_type, 'size', img.size, 'created_at', img.created_at, 'encryption_iv', img.encryption_iv))
         FROM note_images img WHERE img.note_id = n.id
     ), '[]'::json)`
 });
@@ -303,32 +303,44 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         if (encrypted !== undefined) { updates.push(`encrypted = $${paramIndex++}`); params.push(encrypted); }
         if (encrypted_note_key !== undefined) { updates.push(`encrypted_note_key = $${paramIndex++}`); params.push(encrypted_note_key); }
 
-        if (updates.length === 0 && !items && !labels) {
+        let result;
+        const hasShareUpdates = !isOwner && (is_pinned !== undefined || is_archived !== undefined);
+
+        if (updates.length === 0 && !items && !labels && !images && !hasShareUpdates) {
             return res.json({ success: true });
         }
 
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
-        params.push(id);
 
-        // Save version before updating
-        const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
-        const currentState = await query(
-            `SELECT n.*, 
-                    COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
-                    COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels
-             FROM notes n WHERE n.id = $1`,
-            [id, userId]
-        );
 
-        if (currentState.rows.length > 0) {
-            await query('INSERT INTO note_versions (note_id, data) VALUES ($1, $2)', [id, JSON.stringify(currentState.rows[0])]);
-            await query(
-                `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
-                [id, versionLimit]
+
+
+
+        if (updates.length > 1) { // updated_at is always pushed, so check if any other fields
+            // Save version before updating
+            const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
+            const currentState = await query(
+                `SELECT n.*, 
+                        COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
+                        COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels
+                 FROM notes n WHERE n.id = $1`,
+                [id, userId]
             );
-        }
 
-        const result = await query(`UPDATE notes SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`, params);
+            if (currentState.rows.length > 0) {
+                await query('INSERT INTO note_versions (note_id, data) VALUES ($1, $2)', [id, JSON.stringify(currentState.rows[0])]);
+                await query(
+                    `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
+                    [id, versionLimit]
+                );
+            }
+
+            params.push(id);
+            result = await query(`UPDATE notes SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`, params);
+        } else {
+            // No updates to main note, but maybe to shares/items. Fetch note to return it.
+            result = await query('SELECT * FROM notes WHERE id = $1', [id]);
+        }
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Note not found' });
@@ -381,6 +393,12 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         if (labels) responseNote.labels = labels;
         if (images) responseNote.images = images;
 
+        // Inject shared state into response so frontend store updates correctly
+        if (!isOwner) {
+            if (is_pinned !== undefined) responseNote.share_is_pinned = is_pinned;
+            if (is_archived !== undefined) responseNote.share_is_archived = is_archived;
+        }
+
         res.json(responseNote);
     } catch (error) {
         next(error);
@@ -427,6 +445,7 @@ router.post('/:id/restore', param('id').isInt(), async (req, res, next) => {
 
         res.json(result.rows[0]);
     } catch (error) {
+        console.error('Update Note Error:', error);
         next(error);
     }
 });

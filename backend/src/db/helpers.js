@@ -39,11 +39,12 @@ export async function bulkInsertImages(noteId, userId, images) {
     const names = images.map(i => i.original_name || null);
     const mimes = images.map(i => i.mime_type || null);
     const sizes = images.map(i => i.size || null);
+    const ivs = images.map(i => i.encryption_iv || null);
 
     await query(
-        `INSERT INTO note_images (note_id, user_id, url, original_name, mime_type, size)
-         SELECT $1, $2, unnest($3::text[]), unnest($4::text[]), unnest($5::text[]), unnest($6::bigint[])`,
-        [noteId, userId, urls, names, mimes, sizes]
+        `INSERT INTO note_images (note_id, user_id, url, original_name, mime_type, size, encryption_iv)
+         SELECT $1, $2, unnest($3::text[]), unnest($4::text[]), unnest($5::text[]), unnest($6::bigint[]), unnest($7::text[])`,
+        [noteId, userId, urls, names, mimes, sizes, ivs]
     );
 }
 
