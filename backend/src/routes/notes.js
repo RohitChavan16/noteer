@@ -445,7 +445,6 @@ router.post('/:id/restore', param('id').isInt(), async (req, res, next) => {
 
         res.json(result.rows[0]);
     } catch (error) {
-        console.error('Update Note Error:', error);
         next(error);
     }
 });
