@@ -8,7 +8,7 @@ chmod 755 /var/log/supervisor
 
 # Create Noteer data directory for JWT secret and uploads
 mkdir -p /var/lib/noteer
-chmod 755 /var/lib/noteer
+chmod 777 /var/lib/noteer
 
 # Initialize PostgreSQL if not already done
 if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then

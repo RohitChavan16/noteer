@@ -26,31 +26,32 @@ import {
 } from '../utils/crypto';
 
 const API_URL = '/api';
-const SESSION_KEY = 'noteer-encryption-keys';
+// Keys are stored in localStorage for persistence across browser sessions until logout.
+
+const STORAGE_KEY = 'noteer-encryption-keys';
 
 /**
- * Save keys to sessionStorage (encrypted with a session-specific key would be ideal,
- * but for now we use base64 encoding as sessionStorage is already browser-session-scoped)
+ * Save keys to localStorage
  */
-function saveKeysToSession(masterKey, privateKey, publicKey) {
+function saveKeysToStorage(masterKey, privateKey, publicKey) {
     try {
         const data = {
             masterKey: bytesToHex(masterKey),
             privateKey: JSON.stringify(privateKey),
             publicKey
         };
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
-        console.warn('Failed to save keys to session:', e);
+        console.warn('Failed to save keys to storage:', e);
     }
 }
 
 /**
- * Load keys from sessionStorage
+ * Load keys from localStorage
  */
-function loadKeysFromSession() {
+function loadKeysFromStorage() {
     try {
-        const stored = sessionStorage.getItem(SESSION_KEY);
+        const stored = localStorage.getItem(STORAGE_KEY);
         if (!stored) return null;
         const data = JSON.parse(stored);
         return {
@@ -59,24 +60,24 @@ function loadKeysFromSession() {
             publicKey: data.publicKey
         };
     } catch (e) {
-        console.warn('Failed to load keys from session:', e);
+        console.warn('Failed to load keys from storage:', e);
         return null;
     }
 }
 
 /**
- * Clear keys from sessionStorage
+ * Clear keys from localStorage
  */
-function clearKeysFromSession() {
+function clearKeysFromStorage() {
     try {
-        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
-        console.warn('Failed to clear keys from session:', e);
+        console.warn('Failed to clear keys from storage:', e);
     }
 }
 
-// Check for existing session on load
-const storedKeys = loadKeysFromSession();
+// Check for existing storage on load
+const storedKeys = loadKeysFromStorage();
 
 export const useEncryptionStore = create((set, get) => ({
     // State
@@ -165,8 +166,8 @@ export const useEncryptionStore = create((set, get) => ({
                 publicKey
             });
 
-            // Save to sessionStorage for session persistence
-            saveKeysToSession(masterKey, privateKey, publicKey);
+            // Save to localStorage for persistence
+            saveKeysToStorage(masterKey, privateKey, publicKey);
 
             return true;
         } catch (error) {
@@ -226,8 +227,8 @@ export const useEncryptionStore = create((set, get) => ({
                 publicKey
             });
 
-            // Save to sessionStorage for session persistence
-            saveKeysToSession(masterKey, privateKey, publicKey);
+            // Save to localStorage for persistence
+            saveKeysToStorage(masterKey, privateKey, publicKey);
 
             return true;
         } catch (error) {
@@ -246,7 +247,7 @@ export const useEncryptionStore = create((set, get) => ({
      * Lock encryption (clear keys from memory)
      */
     lock: () => {
-        clearKeysFromSession();
+        clearKeysFromStorage();
         set({
             isUnlocked: false,
             masterKey: null,
@@ -265,11 +266,31 @@ export const useEncryptionStore = create((set, get) => ({
         const { masterKey, noteKeysCache } = get();
         if (!masterKey) throw new Error('Encryption not unlocked');
 
-        // Generate new Note Key if new note, or use cached one
+        // Get Note Key: use cached, or decrypt existing, or generate new
         let noteKey;
         if (note.id && noteKeysCache.has(note.id)) {
+            // Use cached key
             noteKey = noteKeysCache.get(note.id);
+        } else if (note.id && note.encrypted_note_key) {
+            // CRITICAL: For existing encrypted notes, decrypt the existing Note Key
+            // instead of generating a new one (which would make old content unreadable)
+            try {
+                const keyData = typeof note.encrypted_note_key === 'string'
+                    ? JSON.parse(note.encrypted_note_key)
+                    : note.encrypted_note_key;
+                noteKey = await decryptNoteKeyWithMasterKey(
+                    keyData.ciphertext,
+                    keyData.iv,
+                    masterKey
+                );
+                // Cache it for future use
+                noteKeysCache.set(note.id, noteKey);
+            } catch (e) {
+                console.error('Failed to decrypt existing note key, generating new one:', e);
+                noteKey = generateNoteKey();
+            }
         } else {
+            // New note - generate fresh key
             noteKey = generateNoteKey();
         }
 
@@ -310,16 +331,18 @@ export const useEncryptionStore = create((set, get) => ({
                 noteKey = noteKeysCache.get(note.id);
             } else {
                 // Try to decrypt with Master Key (owner) or Private Key (shared)
-                if (note.encrypted_note_key) {
+                // IMPORTANT: Check shared_note_key FIRST for non-owned notes!
+                if (note.shared_note_key && note.is_owner === false) {
+                    // Shared note - decrypt Note Key with our RSA private key
+                    noteKey = await decryptNoteKeyWithPrivateKey(note.shared_note_key, privateKey);
+                } else if (note.encrypted_note_key) {
+                    // Our own note - decrypt Note Key with our Master Key
                     const keyData = JSON.parse(note.encrypted_note_key);
                     noteKey = await decryptNoteKeyWithMasterKey(
                         keyData.ciphertext,
                         keyData.iv,
                         masterKey
                     );
-                } else if (note.shared_note_key) {
-                    // Shared note - decrypt with private key
-                    noteKey = await decryptNoteKeyWithPrivateKey(note.shared_note_key, privateKey);
                 } else {
                     throw new Error('No encryption key available for this note');
                 }

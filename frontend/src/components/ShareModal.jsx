@@ -80,22 +80,31 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
         try {
             let encryptedKey = null;
 
-            // 1. Prepare encryption key if applicable
-            const { isUnlocked, getEncryptedKeyForRecipient } = useEncryptionStore.getState();
-            if (isUnlocked) {
+            // 1. Prepare encryption key if note is encrypted
+            const { isUnlocked, getEncryptedKeyForRecipient, noteKeysCache, decryptNote } = useEncryptionStore.getState();
+            if (isUnlocked && note.encrypted) {
                 try {
+                    // Ensure note key is cached by decrypting the note first if needed
+                    if (!noteKeysCache.has(note.id)) {
+                        await decryptNote(note);
+                    }
+
                     // Get recipient's public key
                     const pubKeyRes = await authFetch(`${API_URL}/encryption/public-key/${userId}`);
                     if (pubKeyRes.ok) {
                         const { publicKey } = await pubKeyRes.json();
                         // Encrypt note key for recipient
                         encryptedKey = await getEncryptedKeyForRecipient(note.id, publicKey);
+                    } else {
+                        // Recipient doesn't have encryption set up - cannot share encrypted note
+                        setError('Cannot share encrypted note: recipient has not set up encryption');
+                        return;
                     }
                 } catch (encError) {
                     console.warn('Failed to prepare encryption key:', encError);
-                    // Decide if we should block sharing if encryption fails?
-                    // User might want to share anyway (recipient sees encrypted content).
-                    // Let's proceed but warn.
+                    // Block sharing if we can't prepare the encryption key for encrypted notes
+                    setError('Failed to prepare encryption key for sharing. Please try again.');
+                    return;
                 }
             }
 

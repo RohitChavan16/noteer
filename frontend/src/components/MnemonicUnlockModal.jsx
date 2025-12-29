@@ -22,7 +22,8 @@ import {
 import {
     IconLock,
     IconLockOpen,
-    IconAlertCircle
+    IconAlertCircle,
+    IconLogout
 } from '@tabler/icons-react';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { getWordlist } from '../utils/crypto';
@@ -36,7 +37,7 @@ export function MnemonicUnlockModal({ opened, onUnlock }) {
     const inputRefs = useRef([]);
 
     const { unlockWithMnemonic, error, clearError } = useEncryptionStore();
-    const authFetch = useAuthStore(state => state.authFetch);
+    const { authFetch, logout } = useAuthStore();
     const wordlist = getWordlist();
 
     useEffect(() => {
@@ -161,6 +162,16 @@ export function MnemonicUnlockModal({ opened, onUnlock }) {
                 )}
 
                 <Group justify="space-between">
+                    <Button
+                        variant="subtle"
+                        color="gray"
+                        onClick={logout}
+                        leftSection={<IconLogout size={16} />}
+                        size="xs"
+                    >
+                        Logout
+                    </Button>
+
                     <Checkbox
                         label="I have a passphrase"
                         checked={showPassphrase}

@@ -139,7 +139,33 @@ router.get('/', async (req, res, next) => {
         params.push(limit, offset);
 
         const result = await query(sql, params);
-        res.json(result.rows);
+
+        const notes = result.rows.map(note => {
+            // Resilient Parsing: Try to parse (for backward compatibility or double-encoded data), 
+            // but fallback to raw string if parsing fails (e.g. raw Base64)
+            let sharedKey = note.shared_note_key;
+            if (typeof sharedKey === 'string') {
+                try {
+                    const parsed = JSON.parse(sharedKey);
+                    // Only use parsed if it's not null/undefined
+                    if (parsed) sharedKey = parsed;
+                } catch (e) {
+                    // Not a JSON string (likely raw Base64), keep original
+                }
+            }
+
+            return {
+                ...note,
+                shared_note_key: sharedKey,
+                // Ensure arrays
+                labels: note.labels || [],
+                items: note.items || [],
+                images: note.images || [],
+                collaborators: note.collaborators || []
+            };
+        });
+
+        res.json(notes);
     } catch (error) {
         next(error);
     }

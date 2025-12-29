@@ -170,8 +170,14 @@ export const useNotesStore = create((set, get) => {
                                 title: encryptedResult.title,
                                 content: encryptedResult.content,
                                 encrypted: true,
-                                encrypted_note_key: encryptedResult.encrypted_note_key
                             };
+
+                            // CRITICAL: Only owners should update encrypted_note_key
+                            // Recipients don't have the owner's master key, so their
+                            // re-encrypted key would be unreadable by the owner
+                            if (currentNote.is_owner !== false) {
+                                encryptedData.encrypted_note_key = encryptedResult.encrypted_note_key;
+                            }
                         }
                     }
 
@@ -184,7 +190,13 @@ export const useNotesStore = create((set, get) => {
 
                     if (!res.ok) throw new Error('Failed to update note');
 
-                    const updatedNote = await res.json();
+                    let updatedNote = await res.json();
+
+                    // Decrypt the response from backend before updating state
+                    // This prevents ciphertext flash when backend returns encrypted data
+                    if (getEncryption().isUnlocked && updatedNote.encrypted) {
+                        updatedNote = await getEncryption().decryptNote(updatedNote);
+                    }
 
                     // Update state with confirmed data from backend (e.g. updated_at)
                     set((state) => ({
@@ -229,7 +241,12 @@ export const useNotesStore = create((set, get) => {
                 });
 
                 if (!res.ok) throw new Error('Failed to update note');
-                const updatedNote = await res.json();
+                let updatedNote = await res.json();
+
+                // Decrypt the response from backend before updating state
+                if (getEncryption().isUnlocked && updatedNote.encrypted) {
+                    updatedNote = await getEncryption().decryptNote(updatedNote);
+                }
 
                 set((state) => ({
                     notes: state.notes.map((n) => (n.id === id ? { ...n, ...updatedNote } : n)),

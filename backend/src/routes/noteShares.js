@@ -62,8 +62,11 @@ router.post('/:id/share', [param('id').isInt(), body('user_id').isInt()], async 
 
             // Insert encrypted key if provided
             if (encrypted_key) {
-                // Ensure explicit JSON serialization for TEXT column
-                const encryptedKeyJson = JSON.stringify(encrypted_key);
+                // Determine format: if object, stringify; if string, keep as is
+                const encryptedKeyJson = typeof encrypted_key === 'object'
+                    ? JSON.stringify(encrypted_key)
+                    : String(encrypted_key);
+
                 await client.query(
                     `INSERT INTO note_keys (note_id, user_id, encrypted_key)
                  VALUES ($1, $2, $3)

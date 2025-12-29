@@ -55,12 +55,15 @@ function getOrGenerateJwtSecret() {
   try {
     const dir = dirname(JWT_SECRET_FILE);
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
     }
+    // Ensure directory is writable
+    fs.accessSync(dir, fs.constants.W_OK);
     fs.writeFileSync(JWT_SECRET_FILE, newSecret, { mode: 0o600 });
     console.log('🔑 Generated and saved new JWT secret');
-  } catch (_err) {
-    console.warn('⚠️ Could not save JWT secret to file, using ephemeral secret');
+  } catch (err) {
+    console.error('⚠️ Could not save JWT secret to file:', err.message);
+    console.warn('   Sessions will not persist across container restarts');
   }
 
   return newSecret;

@@ -252,21 +252,56 @@ export async function encryptNoteKeyForRecipient(noteKey, recipientPublicKey) {
  * @returns {Promise<Uint8Array>}
  */
 export async function decryptNoteKeyWithPrivateKey(encryptedKey, privateKey) {
-    const privKey = await crypto.subtle.importKey(
-        'jwk',
-        privateKey,
-        { name: 'RSA-OAEP', hash: 'SHA-256' },
-        false,
-        ['decrypt']
-    );
+    // 1. Validate Inputs
+    if (!encryptedKey) throw new Error("Missing encryptedKey");
+    if (!privateKey) throw new Error("Missing privateKey");
 
-    const decryptedBuffer = await crypto.subtle.decrypt(
-        { name: 'RSA-OAEP' },
-        privKey,
-        base64ToBuffer(encryptedKey)
-    );
+    // 2. Prepare Data
+    let cleanPrivateKey;
+    let cleanEncryptedKey;
+    try {
+        cleanPrivateKey = JSON.parse(JSON.stringify(privateKey));
+        cleanEncryptedKey = encryptedKey.trim();
+    } catch (e) {
+        throw new Error("Input sanitization failed: " + e.message);
+    }
 
-    return new Uint8Array(decryptedBuffer);
+    // 3. Import Key
+    let privKey;
+    try {
+        // Ensure algorithm is set correctly for WebCrypto if missing
+        if (!cleanPrivateKey.alg) cleanPrivateKey.alg = 'RSA-OAEP-256';
+
+        privKey = await crypto.subtle.importKey(
+            'jwk',
+            cleanPrivateKey,
+            { name: 'RSA-OAEP', hash: 'SHA-256' },
+            false,
+            ['decrypt']
+        );
+    } catch (e) {
+        throw new Error("ImportKey Failed: " + e.message);
+    }
+
+    // 4. Decode Ciphertext
+    let buffer;
+    try {
+        buffer = base64ToBuffer(cleanEncryptedKey);
+    } catch (e) {
+        throw new Error("Base64 Decode Failed: " + e.message);
+    }
+
+    // 5. Decrypt
+    try {
+        const decryptedBuffer = await crypto.subtle.decrypt(
+            { name: 'RSA-OAEP' },
+            privKey,
+            buffer
+        );
+        return new Uint8Array(decryptedBuffer);
+    } catch (e) {
+        throw new Error("Crypto Decrypt Failed: " + e.message);
+    }
 }
 
 // ============================================
