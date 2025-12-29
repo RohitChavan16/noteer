@@ -45,18 +45,25 @@ export function MnemonicSetupModal({ opened, onComplete }) {
     useEffect(() => {
         if (opened && !mnemonic) {
             // Generate mnemonic immediately (fast operation)
-            const newMnemonic = generateNewMnemonic();
-            setMnemonic(newMnemonic);
+            // Use setTimeout to avoid synchronous setState warning
+            const timer = setTimeout(() => {
+                const newMnemonic = generateNewMnemonic();
+                setMnemonic(newMnemonic);
+            }, 0);
+            return () => clearTimeout(timer);
         }
         if (!opened) {
             // Reset state when modal closes
-            setMnemonic('');
-            setHasWrittenDown(false);
-            setPassphrase('');
-            setStep(1);
-            clearError();
+            const timer = setTimeout(() => {
+                setMnemonic('');
+                setHasWrittenDown(false);
+                setPassphrase('');
+                setStep(1);
+                clearError();
+            }, 0);
+            return () => clearTimeout(timer);
         }
-    }, [opened]);
+    }, [opened, mnemonic, generateNewMnemonic, clearError]);
 
     const handleContinue = async () => {
         if (step === 1 && hasWrittenDown) {

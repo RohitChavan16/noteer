@@ -20,7 +20,6 @@ import {
     decryptNoteKeyWithPrivateKey,
     encryptImage,
     decryptImage,
-    bufferToBase64,
     bytesToHex,
     hexToBytes
 } from '../utils/crypto';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import DOMPurify from 'dompurify';
-import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid, Image } from '@mantine/core';
+import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
 import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory, IconUsers, IconShare } from '@tabler/icons-react';
 

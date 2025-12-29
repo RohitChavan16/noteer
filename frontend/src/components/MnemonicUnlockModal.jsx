@@ -47,7 +47,7 @@ export function MnemonicUnlockModal({ opened, onUnlock }) {
             setShowPassphrase(false);
             clearError();
         }
-    }, [opened]);
+    }, [opened, clearError]);
 
     const handleWordChange = (index, value) => {
         const newWords = [...words];

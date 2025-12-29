@@ -4,12 +4,11 @@ import { useAuthStore } from '../stores/authStore';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { useMantineColorScheme } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
-import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, Image, LoadingOverlay, Overlay, Center } from '@mantine/core';
+import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, LoadingOverlay, Overlay, Center } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconPalette, IconPlus, IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconTypography, IconRestore, IconDotsVertical, IconShare, IconUserMinus, IconUsers, IconChevronDown, IconChevronRight, IconPhoto, IconUpload } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
-import { NOTE_LIMITS } from '../constants/limits';
 import { formatDate, getInitials, generateId } from '../utils/helpers';
 import NoteRichTextEditor from './NoteRichTextEditor';
 import LabelPicker from './LabelPicker';

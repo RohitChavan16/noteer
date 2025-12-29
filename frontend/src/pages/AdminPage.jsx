@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Title, Text, Paper, Table, Badge, ActionIcon, Group, Menu,
-    Modal, PasswordInput, Button, Stack, Alert, Loader, Center, TextInput, Divider, Collapse, UnstyledButton
+    Modal, PasswordInput, Button, Stack, Alert, Loader, Center, TextInput, Collapse, UnstyledButton
 } from '@mantine/core';
 import {
     IconDotsVertical, IconShieldCheck, IconUser, IconKey, IconTrash,
@@ -68,10 +68,10 @@ export default function AdminPage() {
             fetchUsers();
             fetchOidcSettings();
         }
-    }, [user, fetchUsers]);
+    }, [user, fetchUsers, fetchOidcSettings]);
 
     // Fetch OIDC settings
-    const fetchOidcSettings = async () => {
+    const fetchOidcSettings = useCallback(async () => {
         try {
             setOidcLoading(true);
             const res = await authFetch('/api/admin/settings');
@@ -89,7 +89,7 @@ export default function AdminPage() {
         } finally {
             setOidcLoading(false);
         }
-    };
+    }, [authFetch]);
 
     // Save OIDC settings
     const saveOidcSettings = async () => {

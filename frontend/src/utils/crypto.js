@@ -97,16 +97,11 @@ export async function deriveMasterKey(mnemonic, passphrase = '') {
  * @param {Uint8Array} masterKey - 256-bit Master Key
  * @returns {Promise<{publicKey: JsonWebKey, privateKey: JsonWebKey}>}
  */
-export async function deriveKeyPair(masterKey) {
+export async function deriveKeyPair(_masterKey) {
     // Use Web Crypto API to generate RSA-OAEP keypair
     // We use masterKey as seed for deterministic generation via HKDF
-    const keyMaterial = await crypto.subtle.importKey(
-        'raw',
-        masterKey,
-        'HKDF',
-        false,
-        ['deriveBits']
-    );
+    // Note: HKDF derivation for RSA is complex in WebCrypto, using non-deterministic generation for now
+    // and storing the keypair securely.
 
     // Generate RSA keypair (non-deterministic, but we'll store it)
     const keyPair = await crypto.subtle.generateKey(
