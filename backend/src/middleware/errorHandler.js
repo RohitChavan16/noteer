@@ -55,7 +55,7 @@ function logError(err, req) {
  * Main error handler middleware
  */
 export function errorHandler(err, req, res, _next) {
-    const errorLog = logError(err, req);
+    logError(err, req);
 
     // PostgreSQL constraint errors
     if (err.code === '23505') {

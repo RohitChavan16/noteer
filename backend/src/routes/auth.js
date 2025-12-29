@@ -19,7 +19,7 @@ async function getOIDCConfig() {
         issuerUrl = dbConfig.issuerUrl;
         clientId = dbConfig.clientId;
         clientSecret = dbConfig.clientSecret;
-    } catch (e) {
+    } catch (_e) {
         console.log('[OIDC] Database config not available, using env vars');
     }
 
@@ -43,7 +43,7 @@ async function isOIDCConfigured() {
     try {
         const dbConfig = await getOIDCSettingsFromDB();
         if (dbConfig.issuerUrl) return true;
-    } catch (e) {
+    } catch (_e) {
         // Ignore
     }
     return false;
@@ -251,7 +251,7 @@ router.get('/callback', async (req, res) => {
 
         // Redirect to frontend with token and encryption status
         // In a SPA, we usually redirect to a page that grabs the token from query param
-        const hasEncryptionKey = !!user.public_key ? '1' : '0';
+        const hasEncryptionKey = user.public_key ? '1' : '0';
         res.redirect(`/?token=${token}&enc=${hasEncryptionKey}`);
 
     } catch (error) {

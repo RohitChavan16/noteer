@@ -252,7 +252,7 @@ router.delete('/:id', [requireRole('admin'), param('id').isInt()], async (req, r
                     fs.rmdirSync(userDir);
                 }
             }
-        } catch (dirErr) {
+        } catch (_dirErr) {
             // Ignore directory cleanup errors
         }
 

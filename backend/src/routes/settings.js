@@ -102,7 +102,7 @@ router.put('/', validateSettings, async (req, res, next) => {
 });
 
 // POST /api/admin/settings/test-oidc - Test OIDC connection
-router.post('/test-oidc', async (req, res, next) => {
+router.post('/test-oidc', async (req, res, _next) => {
     try {
         const oidcSettings = await getSettingsFromDB([
             'oidc_issuer_url',

@@ -151,7 +151,7 @@ router.get('/', async (req, res, next) => {
                     const parsed = JSON.parse(sharedKey);
                     // Only use parsed if it's not null/undefined
                     if (parsed) sharedKey = parsed;
-                } catch (e) {
+                } catch (_e) {
                     // Not a JSON string (likely raw Base64), keep original
                 }
             }
