@@ -297,6 +297,12 @@ export async function initializeDatabase() {
         ALTER TABLE notes ADD COLUMN encrypted_note_key TEXT;
         RAISE NOTICE 'Added encrypted_note_key column to notes';
       END IF;
+
+      -- Migration: add is_pinned column to note_shares (for per-user pin on shared notes)
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'note_shares' AND column_name = 'is_pinned') THEN
+        ALTER TABLE note_shares ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE;
+        RAISE NOTICE 'Added is_pinned column to note_shares';
+      END IF;
     END $$;
   `);
 

@@ -66,6 +66,7 @@ router.get('/', async (req, res, next) => {
                 SELECT n.*, 
                        TRUE as is_owner,
                        FALSE as share_is_archived,
+                       FALSE as share_is_pinned,
                        ${subq.labels} as labels,
                        ${subq.items} as items,
                        ${subq.images} as images,
@@ -82,6 +83,7 @@ router.get('/', async (req, res, next) => {
                 SELECT n.*, 
                        FALSE as is_owner,
                        ns.is_archived as share_is_archived,
+                       COALESCE(ns.is_pinned, FALSE) as share_is_pinned,
                        ${subq.labels} as labels,
                        ${subq.items} as items,
                        ${subq.images} as images,
@@ -347,6 +349,31 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         if (images && Array.isArray(images)) {
             await query('DELETE FROM note_images WHERE note_id = $1', [id]);
             await bulkInsertImages(id, userId, images);
+        }
+
+        // Handle recipient-specific pin/archive state (stored in note_shares)
+        if (!isOwner && (is_pinned !== undefined || is_archived !== undefined)) {
+            const shareUpdates = [];
+            const shareParams = [];
+            let shareParamIdx = 1;
+
+            if (is_pinned !== undefined) {
+                shareUpdates.push(`is_pinned = $${shareParamIdx++}`);
+                shareParams.push(is_pinned);
+            }
+            if (is_archived !== undefined) {
+                shareUpdates.push(`is_archived = $${shareParamIdx++}`);
+                shareParams.push(is_archived);
+            }
+
+            if (shareUpdates.length > 0) {
+                shareParams.push(id, userId);
+                await query(
+                    `UPDATE note_shares SET ${shareUpdates.join(', ')} 
+                     WHERE note_id = $${shareParamIdx++} AND shared_with_id = $${shareParamIdx}`,
+                    shareParams
+                );
+            }
         }
 
         const responseNote = { ...result.rows[0] };

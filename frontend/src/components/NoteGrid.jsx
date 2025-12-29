@@ -16,9 +16,12 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
     const isTrash = showDelete;
     const isArchive = showRestore && !showDelete;
 
+    // Helper to get correct pinned state (owner uses notes.is_pinned, recipient uses note_shares.is_pinned)
+    const isPinned = (note) => note.is_owner === false ? note.share_is_pinned : note.is_pinned;
+
     // In trash, we don't separate pinned notes
-    const pinnedNotes = isTrash ? [] : notes.filter((n) => n.is_pinned);
-    const otherNotes = isTrash ? notes : notes.filter((n) => !n.is_pinned);
+    const pinnedNotes = isTrash ? [] : notes.filter(isPinned);
+    const otherNotes = isTrash ? notes : notes.filter((n) => !isPinned(n));
 
     // Find shareNote from current notes array by ID
     const shareNote = shareNoteId ? notes.find(n => n.id === shareNoteId) : null;

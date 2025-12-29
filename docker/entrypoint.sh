@@ -7,8 +7,10 @@ chown -R root:root /var/log/supervisor
 chmod 755 /var/log/supervisor
 
 # Create Noteer data directory for JWT secret and uploads
+# Use node user (which runs the backend) with secure permissions
 mkdir -p /var/lib/noteer
-chmod 777 /var/lib/noteer
+chown -R node:node /var/lib/noteer
+chmod 755 /var/lib/noteer
 
 # Initialize PostgreSQL if not already done
 if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then

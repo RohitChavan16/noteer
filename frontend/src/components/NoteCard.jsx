@@ -16,6 +16,9 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
     // Detect touch device - show actions always on touch
     const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
 
+    // Helper to get correct pinned state (owner uses notes.is_pinned, recipient uses note_shares.is_pinned)
+    const isPinned = note.is_owner === false ? note.share_is_pinned : note.is_pinned;
+
     const handleAction = (e, action) => {
         e.stopPropagation();
         action();
@@ -48,11 +51,11 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
                         transform: 'translateY(-2px)',
                         boxShadow: theme.shadows.md,
                     },
-                    borderColor: note.is_pinned ? 'var(--mantine-color-blue-5)' : undefined,
+                    borderColor: isPinned ? 'var(--mantine-color-blue-5)' : undefined,
                 },
             })}
         >
-            {note.is_pinned && (
+            {isPinned && (
                 <ActionIcon
                     variant="transparent"
                     color={textColor === '#000000' ? 'dark' : 'blue'}
@@ -148,15 +151,15 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             >
                 {/* Left side: Action buttons */}
                 <Group gap="xs" style={{ opacity: (isHovered || isTouchDevice) ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
-                    {onPin && note.is_owner !== false && (
+                    {onPin && (
                         <ActionIcon
                             variant="subtle"
                             size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onPin(note.id, !note.is_pinned))}
-                            title={note.is_pinned ? 'Unpin' : 'Pin'}
+                            onClick={(e) => handleAction(e, () => onPin(note.id, !isPinned))}
+                            title={isPinned ? 'Unpin' : 'Pin'}
                             style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                         >
-                            {note.is_pinned ? <IconPinFilled size={isTouchDevice ? 20 : 16} /> : <IconPin size={isTouchDevice ? 20 : 16} />}
+                            {isPinned ? <IconPinFilled size={isTouchDevice ? 20 : 16} /> : <IconPin size={isTouchDevice ? 20 : 16} />}
                         </ActionIcon>
                     )}
 

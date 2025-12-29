@@ -78,6 +78,9 @@ export default function NoteModal({ note, onClose }) {
     // Check if current user is the owner
     const isOwner = note?.is_owner !== false; // Default to true if not set (owned notes)
 
+    // Helper to get correct pinned state (owner uses notes.is_pinned, recipient uses note_shares.is_pinned)
+    const isPinned = note?.is_owner === false ? note?.share_is_pinned : note?.is_pinned;
+
     const isChecklist = note?.type === 'checklist' || (note?.items && note.items.length > 0);
 
     // Check if this is a picture-only note
@@ -538,17 +541,20 @@ export default function NoteModal({ note, onClose }) {
                                     </ActionIcon>
                                 )}
 
+                                {!note.is_trashed && (
+                                    <ActionIcon
+                                        variant="subtle"
+                                        size={buttonSize}
+                                        onClick={() => updateNote(note.id, { is_pinned: !isPinned })}
+                                        title={isPinned ? "Unpin" : "Pin"}
+                                        style={{ color: textColor }}
+                                    >
+                                        {isPinned ? <IconPinFilled size={iconSize} /> : <IconPin size={iconSize} />}
+                                    </ActionIcon>
+                                )}
+
                                 {!note.is_trashed && isOwner && (
                                     <>
-                                        <ActionIcon
-                                            variant="subtle"
-                                            size={buttonSize}
-                                            onClick={() => updateNote(note.id, { is_pinned: !note.is_pinned })}
-                                            title={note.is_pinned ? "Unpin" : "Pin"}
-                                            style={{ color: textColor }}
-                                        >
-                                            {note.is_pinned ? <IconPinFilled size={iconSize} /> : <IconPin size={iconSize} />}
-                                        </ActionIcon>
 
                                         <ActionIcon
                                             variant="subtle"
@@ -598,13 +604,13 @@ export default function NoteModal({ note, onClose }) {
                                         variant="subtle"
                                         size={buttonSize}
                                         onClick={() => {
-                                            note.is_archived ? unarchiveNote(note.id) : archiveNote(note.id);
+                                            note.share_is_archived ? unarchiveNote(note.id) : archiveNote(note.id);
                                             onClose();
                                         }}
-                                        title={note.is_archived ? "Unarchive" : "Archive"}
+                                        title={note.share_is_archived ? "Unarchive" : "Archive"}
                                         style={{ color: textColor }}
                                     >
-                                        {note.is_archived ? <IconArchiveOff size={iconSize} /> : <IconArchive size={iconSize} />}
+                                        {note.share_is_archived ? <IconArchiveOff size={iconSize} /> : <IconArchive size={iconSize} />}
                                     </ActionIcon>
                                 )}
 
