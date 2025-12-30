@@ -89,3 +89,61 @@ export async function setNoteLabels(userId, noteId, labelNames) {
         );
     }
 }
+
+/**
+ * Cleanup orphan images after version rotation
+ * Deletes image files that are no longer referenced by current note or remaining versions
+ * @param {number} noteId 
+ * @param {Array} deletedVersionsData - Array of version data objects that were deleted
+ */
+export async function cleanupOrphanImages(noteId, deletedVersionsData) {
+    if (!deletedVersionsData || deletedVersionsData.length === 0) return;
+
+    const fs = await import('fs');
+    const path = await import('path');
+    const UPLOADS_BASE = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
+
+    // Collect all image URLs from deleted versions
+    const deletedImageUrls = new Set();
+    for (const versionData of deletedVersionsData) {
+        if (versionData.images && Array.isArray(versionData.images)) {
+            for (const img of versionData.images) {
+                if (img.url) deletedImageUrls.add(img.url);
+                if (img.thumb_small && img.thumb_small !== img.url) deletedImageUrls.add(img.thumb_small);
+                if (img.thumb_medium && img.thumb_medium !== img.url) deletedImageUrls.add(img.thumb_medium);
+            }
+        }
+    }
+
+    if (deletedImageUrls.size === 0) return;
+
+    // Get all image URLs still in use (current note + remaining versions)
+    const currentImages = await query('SELECT url FROM note_images WHERE note_id = $1', [noteId]);
+    const currentUrls = new Set(currentImages.rows.map(r => r.url));
+
+    const remainingVersions = await query('SELECT data FROM note_versions WHERE note_id = $1', [noteId]);
+    for (const row of remainingVersions.rows) {
+        const data = row.data;
+        if (data.images && Array.isArray(data.images)) {
+            for (const img of data.images) {
+                if (img.url) currentUrls.add(img.url);
+            }
+        }
+    }
+
+    // Delete orphan files
+    for (const url of deletedImageUrls) {
+        if (!currentUrls.has(url)) {
+            // URL format: /uploads/users/123/filename.webp
+            const relativePath = url.replace(/^\/uploads\//, '');
+            const filePath = path.join(UPLOADS_BASE, relativePath);
+            try {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (err) {
+                console.error(`Failed to delete orphan image: ${filePath}`, err);
+            }
+        }
+    }
+}

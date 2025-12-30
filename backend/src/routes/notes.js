@@ -12,7 +12,7 @@
 import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
-import { bulkInsertItems, bulkInsertImages, setNoteLabels } from '../db/helpers.js';
+import { bulkInsertItems, bulkInsertImages, setNoteLabels, cleanupOrphanImages } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { PAGINATION } from '../config/constants.js';
 
@@ -298,13 +298,13 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         if (color !== undefined) { updates.push(`color = $${paramIndex++}`); params.push(color); }
         if (is_pinned !== undefined && isOwner) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
         if (is_archived !== undefined && isOwner) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
-        if (is_archived !== undefined && isOwner) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
         if (reminder_at !== undefined) { updates.push(`reminder_at = $${paramIndex++}`); params.push(reminder_at); }
         if (encrypted !== undefined) { updates.push(`encrypted = $${paramIndex++}`); params.push(encrypted); }
         if (encrypted_note_key !== undefined) { updates.push(`encrypted_note_key = $${paramIndex++}`); params.push(encrypted_note_key); }
 
         let result;
         const hasShareUpdates = !isOwner && (is_pinned !== undefined || is_archived !== undefined);
+        const hasAnyChanges = updates.length > 0 || items || labels || images;
 
         if (updates.length === 0 && !items && !labels && !images && !hasShareUpdates) {
             return res.json({ success: true });
@@ -312,33 +312,46 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
-
-
-
-
-        if (updates.length > 1) { // updated_at is always pushed, so check if any other fields
-            // Save version before updating
+        // Save version before ANY changes (including items, labels, images)
+        if (hasAnyChanges && isOwner) {
             const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
             const currentState = await query(
                 `SELECT n.*, 
                         COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
-                        COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels
+                        COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels,
+                        COALESCE((SELECT json_agg(img) FROM note_images img WHERE img.note_id = n.id), '[]'::json) as images
                  FROM notes n WHERE n.id = $1`,
                 [id, userId]
             );
 
             if (currentState.rows.length > 0) {
                 await query('INSERT INTO note_versions (note_id, data) VALUES ($1, $2)', [id, JSON.stringify(currentState.rows[0])]);
+
+                // Get versions that will be deleted (for image cleanup)
+                const versionsToDelete = await query(
+                    `SELECT data FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
+                    [id, versionLimit]
+                );
+
+                // Delete old versions
                 await query(
                     `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
                     [id, versionLimit]
                 );
-            }
 
+                // Cleanup orphan images from deleted versions
+                if (versionsToDelete.rows.length > 0) {
+                    const deletedData = versionsToDelete.rows.map(r => r.data);
+                    await cleanupOrphanImages(id, deletedData);
+                }
+            }
+        }
+
+        if (updates.length > 1) { // updated_at is always pushed, so check if any other fields
             params.push(id);
             result = await query(`UPDATE notes SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`, params);
         } else {
-            // No updates to main note, but maybe to shares/items. Fetch note to return it.
+            // No updates to main note, but maybe to shares/items/images. Fetch note to return it.
             result = await query('SELECT * FROM notes WHERE id = $1', [id]);
         }
 

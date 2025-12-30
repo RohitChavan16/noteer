@@ -5,7 +5,7 @@ import { body, validationResult } from 'express-validator';
 import * as client from 'openid-client';
 import { query } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { getOIDCSettingsFromDB } from './settings.js';
+import { getOIDCSettingsFromDB, getAppUrl } from './settings.js';
 
 const router = Router();
 
@@ -69,11 +69,10 @@ router.get('/oidc/login', async (req, res, next) => {
         const state = client.randomState();
 
         // Determine base URL:
-        // 1. APP_URL env var (best for production behind proxy)
+        // 1. APP_URL from env or Admin Panel (best for production behind proxy)
         // 2. Request host (works for local/direct)
-        const baseUrl = process.env.APP_URL
-            ? process.env.APP_URL.replace(/\/$/, '')
-            : `${req.protocol}://${req.get('host')}`;
+        const configuredAppUrl = await getAppUrl();
+        const baseUrl = configuredAppUrl || `${req.protocol}://${req.get('host')}`;
 
         const redirect_uri = process.env.OIDC_CALLBACK_URL || `${baseUrl}/api/auth/callback`;
 

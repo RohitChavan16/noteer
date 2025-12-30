@@ -469,7 +469,13 @@ export default function NoteInput({ currentLabel }) {
                             {labels.length > 0 && (
                                 <Group gap="xs" mt="xs">
                                     {labels.map((label, idx) => (
-                                        <Badge key={idx} size="sm" variant="light" tt="none">
+                                        <Badge
+                                            key={idx}
+                                            size="sm"
+                                            variant="outline"
+                                            tt="none"
+                                            style={{ color: textColor, borderColor: textColor, opacity: 0.8 }}
+                                        >
                                             {label}
                                         </Badge>
                                     ))}

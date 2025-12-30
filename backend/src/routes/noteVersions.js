@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { param } from 'express-validator';
 import { query } from '../db/index.js';
-import { bulkInsertItems, setNoteLabels } from '../db/helpers.js';
+import { bulkInsertItems, bulkInsertImages, setNoteLabels, cleanupOrphanImages } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
@@ -57,7 +57,8 @@ router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('ver
         const currentState = await query(
             `SELECT n.*, 
                     COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
-                    COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels
+                    COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels,
+                    COALESCE((SELECT json_agg(img) FROM note_images img WHERE img.note_id = n.id), '[]'::json) as images
              FROM notes n
              WHERE n.id = $1`,
             [id, userId]
@@ -67,10 +68,24 @@ router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('ver
                 'INSERT INTO note_versions (note_id, data) VALUES ($1, $2)',
                 [id, JSON.stringify(currentState.rows[0])]
             );
+
+            // Get versions that will be deleted (for image cleanup)
+            const versionsToDelete = await query(
+                `SELECT data FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
+                [id, versionLimit]
+            );
+
+            // Delete old versions
             await query(
                 `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
                 [id, versionLimit]
             );
+
+            // Cleanup orphan images from deleted versions
+            if (versionsToDelete.rows.length > 0) {
+                const deletedData = versionsToDelete.rows.map(r => r.data);
+                await cleanupOrphanImages(id, deletedData);
+            }
         }
 
         // Restore core fields
@@ -87,6 +102,12 @@ router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('ver
 
         // Restore labels (bulk)
         await setNoteLabels(userId, id, versionData.labels);
+
+        // Restore images (bulk) - if version has images data
+        if (versionData.images && Array.isArray(versionData.images)) {
+            await query('DELETE FROM note_images WHERE note_id = $1', [id]);
+            await bulkInsertImages(id, userId, versionData.images);
+        }
 
         res.json({ message: 'Restored successfully' });
     } catch (error) {

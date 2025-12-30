@@ -64,8 +64,6 @@ services:
     environment:
       - ADMIN_EMAIL=admin@example.com
       - ADMIN_PASSWORD=your-secure-password
-      # Optional: Set APP_URL for correct OIDC redirect URIs
-      # - APP_URL=https://notes.example.com
 
 volumes:
   noteer-db:
@@ -85,7 +83,6 @@ volumes:
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
 | `NOTE_VERSION_LIMIT` | `10` | Max stored versions per note (FIFO) |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
-| `APP_URL` | - | Public URL of the app (e.g., `https://notes.example.com`). Required for OIDC. |
 | `SSL_ENABLED` | `false` | Enable direct HTTPS |
 | `SSL_CERT_PATH` | - | Path to SSL certificate |
 | `SSL_KEY_PATH` | - | Path to SSL key |
@@ -191,25 +188,36 @@ docker run -d \
 - Node.js 20+
 - PostgreSQL 16+ (or use Docker)
 
-### Setup
+### Building from Source (Docker)
+
+To build the image locally:
 
 ```bash
-# Clone the repository
 git clone https://github.com/bigtcze/noteer.git
 cd noteer
+docker build -t noteer:local -f docker/Dockerfile .
+```
 
-# Install backend dependencies
+### Local Development
+
+**Prerequisites:**
+- Node.js 20+
+- PostgreSQL 16+ (running locally or in Docker)
+- Git
+
+**Backend Setup:**
+```bash
 cd backend
 npm install
-cp .env.example .env  # Edit with your settings
+cp ../docker/.env.example .env
+npm run dev
+```
 
-# Install frontend dependencies
-cd ../frontend
+**Frontend Setup:**
+```bash
+cd frontend
 npm install
-
-# Start development servers
-cd ../backend && npm run dev  # Terminal 1
-cd ../frontend && npm run dev  # Terminal 2
+npm run dev
 ```
 
 ### Testing

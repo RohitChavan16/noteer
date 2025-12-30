@@ -46,15 +46,21 @@ router.get('/', async (req, res, next) => {
         const oidcSettings = await getSettingsFromDB([
             'oidc_issuer_url',
             'oidc_client_id',
-            'oidc_client_secret'
+            'oidc_client_secret',
+            'app_url'
         ]);
+
+        // Check if APP_URL is set via environment variable
+        const appUrlFromEnv = !!process.env.APP_URL;
 
         res.json({
             oidc: {
                 issuerUrl: oidcSettings.oidc_issuer_url || '',
                 clientId: oidcSettings.oidc_client_id || '',
                 // Never return the actual secret, just indicate if it exists
-                hasSecret: !!(oidcSettings.oidc_client_secret)
+                hasSecret: !!(oidcSettings.oidc_client_secret),
+                appUrl: appUrlFromEnv ? process.env.APP_URL : (oidcSettings.app_url || ''),
+                appUrlFromEnv
             }
         });
     } catch (error) {
@@ -67,6 +73,7 @@ const validateSettings = [
     body('oidc.issuerUrl').optional().isString().trim(),
     body('oidc.clientId').optional().isString().trim(),
     body('oidc.clientSecret').optional().isString(),
+    body('oidc.appUrl').optional().isString().trim(),
 ];
 
 router.put('/', validateSettings, async (req, res, next) => {
@@ -89,6 +96,10 @@ router.put('/', validateSettings, async (req, res, next) => {
             // Only update secret if a non-empty value is provided
             if (oidc.clientSecret && oidc.clientSecret.length > 0) {
                 await saveSetting('oidc_client_secret', oidc.clientSecret, userId);
+            }
+            // Only save appUrl if not overridden by ENV
+            if (oidc.appUrl !== undefined && !process.env.APP_URL) {
+                await saveSetting('app_url', oidc.appUrl, userId);
             }
         }
 
@@ -169,17 +180,29 @@ export async function getOIDCSettingsFromDB() {
     const settings = await getSettingsFromDB([
         'oidc_issuer_url',
         'oidc_client_id',
-        'oidc_client_secret'
+        'oidc_client_secret',
+        'app_url'
     ]);
 
     oidcConfigCache = {
         issuerUrl: settings.oidc_issuer_url || '',
         clientId: settings.oidc_client_id || '',
-        clientSecret: settings.oidc_client_secret || ''
+        clientSecret: settings.oidc_client_secret || '',
+        appUrl: settings.app_url || ''
     };
     oidcConfigCacheTime = Date.now();
 
     return oidcConfigCache;
 }
+
+// Export function to get App URL (ENV takes priority over DB)
+export async function getAppUrl() {
+    if (process.env.APP_URL) {
+        return process.env.APP_URL.replace(/\/$/, '');
+    }
+    const settings = await getOIDCSettingsFromDB();
+    return settings.appUrl ? settings.appUrl.replace(/\/$/, '') : null;
+}
+
 
 export default router;

@@ -34,12 +34,15 @@ export default function AdminPage() {
         issuerUrl: '',
         clientId: '',
         clientSecret: '',
-        hasSecret: false
+        hasSecret: false,
+        appUrl: '',
+        appUrlFromEnv: false
     });
     const [oidcLoading, setOidcLoading] = useState(true);
     const [oidcSaving, setOidcSaving] = useState(false);
     const [oidcTesting, setOidcTesting] = useState(false);
     const [oidcExpanded, setOidcExpanded] = useState(false);
+    const [oidcConfigured, setOidcConfigured] = useState(false); // Tracks if OIDC is saved on server
 
     // Redirect non-admins
     useEffect(() => {
@@ -63,13 +66,6 @@ export default function AdminPage() {
         }
     }, [authFetch]);
 
-    useEffect(() => {
-        if (user?.role === 'admin') {
-            fetchUsers();
-            fetchOidcSettings();
-        }
-    }, [user, fetchUsers, fetchOidcSettings]);
-
     // Fetch OIDC settings
     const fetchOidcSettings = useCallback(async () => {
         try {
@@ -81,8 +77,11 @@ export default function AdminPage() {
                     issuerUrl: data.oidc?.issuerUrl || '',
                     clientId: data.oidc?.clientId || '',
                     clientSecret: '',
-                    hasSecret: data.oidc?.hasSecret || false
+                    hasSecret: data.oidc?.hasSecret || false,
+                    appUrl: data.oidc?.appUrl || '',
+                    appUrlFromEnv: data.oidc?.appUrlFromEnv || false
                 });
+                setOidcConfigured(!!data.oidc?.issuerUrl);
             }
         } catch (err) {
             console.error('Failed to fetch OIDC settings:', err);
@@ -90,6 +89,13 @@ export default function AdminPage() {
             setOidcLoading(false);
         }
     }, [authFetch]);
+
+    useEffect(() => {
+        if (user?.role === 'admin') {
+            fetchUsers();
+            fetchOidcSettings();
+        }
+    }, [user, fetchUsers, fetchOidcSettings]);
 
     // Save OIDC settings
     const saveOidcSettings = async () => {
@@ -102,12 +108,15 @@ export default function AdminPage() {
                     oidc: {
                         issuerUrl: oidcSettings.issuerUrl,
                         clientId: oidcSettings.clientId,
-                        clientSecret: oidcSettings.clientSecret
+                        clientSecret: oidcSettings.clientSecret,
+                        appUrl: oidcSettings.appUrl
                     }
                 })
             });
             if (!res.ok) throw new Error('Failed to save settings');
             notifications.show({ title: 'Settings saved', message: 'OIDC configuration updated successfully', color: 'green' });
+            // Update oidcConfigured based on saved issuerUrl
+            setOidcConfigured(!!oidcSettings.issuerUrl);
             // Update hasSecret if we just set one
             if (oidcSettings.clientSecret) {
                 setOidcSettings(prev => ({ ...prev, hasSecret: true, clientSecret: '' }));
@@ -248,12 +257,12 @@ export default function AdminPage() {
             {/* OIDC Settings Section */}
             <Paper shadow="xs" radius="md" p="lg" withBorder mb="xl">
                 <UnstyledButton
-                    onClick={() => setOidcExpanded(!oidcExpanded)}
-                    style={{ width: '100%' }}
+                    onClick={() => oidcConfigured && setOidcExpanded(!oidcExpanded)}
+                    style={{ width: '100%', cursor: oidcConfigured ? 'pointer' : 'default' }}
                 >
                     <Group justify="space-between">
                         <Group>
-                            {oidcSettings.issuerUrl ? (
+                            {oidcConfigured ? (
                                 oidcExpanded ? <IconChevronDown size={20} /> : <IconChevronRight size={20} />
                             ) : (
                                 <IconSettings size={20} />
@@ -262,7 +271,7 @@ export default function AdminPage() {
                                 SSO / OIDC Settings
                             </Text>
                         </Group>
-                        {oidcSettings.issuerUrl && (
+                        {oidcConfigured && (
                             <Badge color="green" variant="light">Enabled</Badge>
                         )}
                     </Group>
@@ -271,7 +280,7 @@ export default function AdminPage() {
                 {oidcLoading ? (
                     <Center p="md"><Loader size="sm" /></Center>
                 ) : (
-                    <Collapse in={oidcExpanded || !oidcSettings.issuerUrl}>
+                    <Collapse in={oidcExpanded || !oidcConfigured}>
                         <Stack gap="md" mt="md">
                             <TextInput
                                 label="Issuer URL"
@@ -292,6 +301,16 @@ export default function AdminPage() {
                                 value={oidcSettings.clientSecret}
                                 onChange={(e) => setOidcSettings(prev => ({ ...prev, clientSecret: e.target.value }))}
                                 description={oidcSettings.hasSecret ? 'Leave empty to keep current secret' : ''}
+                            />
+                            <TextInput
+                                label="App URL"
+                                placeholder="https://notes.example.com"
+                                value={oidcSettings.appUrl}
+                                onChange={(e) => setOidcSettings(prev => ({ ...prev, appUrl: e.target.value }))}
+                                disabled={oidcSettings.appUrlFromEnv}
+                                description={oidcSettings.appUrlFromEnv
+                                    ? 'Set via environment variable (APP_URL)'
+                                    : 'Public URL for OIDC callback (e.g., https://notes.example.com)'}
                             />
                             <Group justify="flex-end">
                                 <Button
