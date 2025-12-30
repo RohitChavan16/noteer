@@ -42,7 +42,7 @@ export default function Sidebar({ onClose }) {
             <Box style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                 {/* Logo */}
                 <Group p="md" pb="xs">
-                    <Image src="/logo.svg" w={36} h={36} fit="contain" alt="Noteer Logo" />
+                    <Image src="/logo.png" w={36} h={36} fit="contain" alt="Noteer Logo" />
                     <Title order={3} c="blue">Noteer</Title>
                 </Group>
 
