@@ -15,9 +15,10 @@ router.get('/', async (req, res, next) => {
         const result = await query(
             `SELECT l.id, l.name, l.created_at,
              (
-                SELECT COUNT(DISTINCT note_id)
-                FROM user_note_labels
-                WHERE label_id = l.id
+                SELECT COUNT(DISTINCT unl.note_id)
+                FROM user_note_labels unl
+                JOIN notes n ON n.id = unl.note_id
+                WHERE unl.label_id = l.id AND n.is_trashed = false
              ) :: integer as note_count
              FROM labels l
              WHERE l.user_id = $1
