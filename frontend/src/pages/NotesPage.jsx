@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { useNotesStore } from '../stores/notesStore';
 import { Box, Center, Loader, Text, Stack, Group, Title } from '@mantine/core';
@@ -8,11 +8,34 @@ import NoteInput from '../components/NoteInput';
 
 export default function NotesPage() {
     const { label } = useParams();
-    const { notes, isLoading, searchQuery, fetchNotes } = useNotesStore();
+    const { notes, isLoading, isLoadingMore, hasMore, searchQuery, fetchNotes, fetchMoreNotes } = useNotesStore();
+    const sentinelRef = useRef(null);
 
     useEffect(() => {
         fetchNotes({ label, search: searchQuery });
     }, [fetchNotes, label, searchQuery]);
+
+    // Infinite scroll observer
+    const handleObserver = useCallback((entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && hasMore && !isLoading && !isLoadingMore) {
+            fetchMoreNotes();
+        }
+    }, [hasMore, isLoading, isLoadingMore, fetchMoreNotes]);
+
+    useEffect(() => {
+        const sentinel = sentinelRef.current;
+        if (!sentinel) return;
+
+        const observer = new IntersectionObserver(handleObserver, {
+            root: null,
+            rootMargin: '200px',
+            threshold: 0
+        });
+
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [handleObserver]);
 
     return (
         <Box>
@@ -33,7 +56,18 @@ export default function NotesPage() {
                     </Stack>
                 </Center>
             ) : (
-                <NoteGrid notes={notes} />
+                <>
+                    <NoteGrid notes={notes} />
+
+                    {/* Sentinel element for infinite scroll */}
+                    <div ref={sentinelRef} style={{ height: 1 }} />
+
+                    {isLoadingMore && (
+                        <Center py="md">
+                            <Loader size="sm" />
+                        </Center>
+                    )}
+                </>
             )}
         </Box>
     );

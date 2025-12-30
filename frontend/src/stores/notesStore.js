@@ -4,6 +4,7 @@ import { useAuthStore } from './authStore';
 import { useEncryptionStore } from './encryptionStore';
 
 const API_URL = '/api';
+const PAGE_SIZE = 50;
 
 // Helper to get authFetch from authStore
 const getAuthFetch = () => useAuthStore.getState().authFetch;
@@ -26,9 +27,12 @@ export const useNotesStore = create((set, get) => {
     return {
         notes: [],
         isLoading: false,
+        isLoadingMore: false,
         error: null,
         searchQuery: '',
         viewMode: getDefaultViewMode(),
+        hasMore: true,
+        currentPage: 1,
 
         // Sync state
         isSyncing: false,
@@ -63,11 +67,11 @@ export const useNotesStore = create((set, get) => {
         },
 
         fetchNotes: async (options = {}, silent = false) => {
-            // Save options for polling
+            // Save options for polling (always page 1 for polling)
             set({ lastFetchOptions: options });
 
             if (!silent) {
-                set({ isLoading: true, error: null });
+                set({ isLoading: true, error: null, currentPage: 1, hasMore: true });
             }
 
             try {
@@ -76,6 +80,8 @@ export const useNotesStore = create((set, get) => {
                 if (options.trashed) params.append('trashed', 'true');
                 if (options.label) params.append('label', options.label);
                 if (options.search) params.append('search', options.search);
+                params.append('limit', PAGE_SIZE.toString());
+                params.append('offset', '0');
 
                 const authFetch = getAuthFetch();
                 const res = await authFetch(`${API_URL}/notes?${params}`);
@@ -90,13 +96,63 @@ export const useNotesStore = create((set, get) => {
                     notes = await Promise.all(notes.map(note => decryptNote(note)));
                 }
 
-                set({ notes, isLoading: false });
+                set({
+                    notes,
+                    isLoading: false,
+                    hasMore: notes.length === PAGE_SIZE,
+                    currentPage: 1
+                });
             } catch (error) {
                 if (!silent) {
                     set({ error: error.message, isLoading: false });
                 } else {
                     console.error('Polling failed:', error);
                 }
+            }
+        },
+
+        fetchMoreNotes: async () => {
+            const { isLoadingMore, hasMore, currentPage, notes, lastFetchOptions } = get();
+            if (isLoadingMore || !hasMore) return;
+
+            set({ isLoadingMore: true });
+
+            try {
+                const options = lastFetchOptions || {};
+                const params = new URLSearchParams();
+                if (options.archived) params.append('archived', 'true');
+                if (options.trashed) params.append('trashed', 'true');
+                if (options.label) params.append('label', options.label);
+                if (options.search) params.append('search', options.search);
+                params.append('limit', PAGE_SIZE.toString());
+                params.append('offset', (currentPage * PAGE_SIZE).toString());
+
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes?${params}`);
+
+                if (!res.ok) throw new Error('Failed to fetch more notes');
+
+                let newNotes = await res.json();
+
+                // Decrypt notes if encryption is unlocked
+                const { isUnlocked, decryptNote } = getEncryption();
+                if (isUnlocked) {
+                    newNotes = await Promise.all(newNotes.map(note => decryptNote(note)));
+                }
+
+                // Filter out duplicates by ID
+                const existingIds = new Set(notes.map(n => n.id));
+                const uniqueNewNotes = newNotes.filter(n => !existingIds.has(n.id));
+
+                set({
+                    notes: [...notes, ...uniqueNewNotes],
+                    isLoadingMore: false,
+                    hasMore: newNotes.length === PAGE_SIZE,
+                    currentPage: currentPage + 1
+                });
+            } catch (error) {
+                console.error('Failed to fetch more notes:', error);
+                set({ isLoadingMore: false });
             }
         },
 
