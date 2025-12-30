@@ -129,14 +129,29 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             )}
 
             {note.labels && note.labels.length > 0 && (
-                <Group gap="xs" mt="sm">
+                <Group
+                    gap="xs"
+                    mt={note.type === 'picture' ? 0 : "sm"}
+                    style={note.type === 'picture' ? {
+                        position: 'absolute',
+                        top: 8,
+                        left: 8,
+                        zIndex: 10,
+                        marginTop: 0
+                    } : {}}
+                >
                     {note.labels.map((label, idx) => (
                         <Badge
                             key={idx}
                             size="md"
-                            variant="outline"
+                            variant={note.type === 'picture' ? "filled" : "outline"}
                             tt="none"
-                            style={{
+                            style={note.type === 'picture' ? {
+                                backgroundColor: 'rgba(0,0,0,0.6)',
+                                color: '#fff',
+                                backdropFilter: 'blur(4px)',
+                                borderWidth: 0
+                            } : {
                                 color: textColor,
                                 borderColor: textColor,
                                 opacity: 0.8
