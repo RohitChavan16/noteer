@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { Center, Paper, TextInput, PasswordInput, Button, Title, Text, Anchor, Stack, Box, Alert, Group } from '@mantine/core';
+import { Center, Paper, TextInput, PasswordInput, Button, Title, Text, Anchor, Stack, Box, Alert, Group, Image } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 
 export default function RegisterPage() {
@@ -33,18 +33,7 @@ export default function RegisterPage() {
         <Center mih="100vh" p="md">
             <Box w="100%" maw={400}>
                 <Stack align="center" mb="xl">
-                    <Box
-                        component="svg"
-                        viewBox="0 0 100 100"
-                        w={64}
-                        h={64}
-                        c="blue"
-                    >
-                        <rect x="15" y="10" width="70" height="80" rx="8" fill="currentColor" />
-                        <line x1="28" y1="30" x2="72" y2="30" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                        <line x1="28" y1="45" x2="65" y2="45" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                        <line x1="28" y1="60" x2="58" y2="60" stroke="white" strokeWidth="4" strokeLinecap="round" />
-                    </Box>
+                    <Image src="/logo.png" w={64} h={64} fit="contain" alt="Noteer Logo" />
                     <Title order={1} c="blue">Noteer</Title>
                 </Stack>
 

@@ -192,7 +192,7 @@ export default function SettingsPage() {
                 <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">About</Text>
 
                 <Group gap="lg" align="flex-start">
-                    <Image src="/logo.svg" w={56} h={56} fit="contain" alt="Noteer Logo" />
+                    <Image src="/logo.png" w={56} h={56} fit="contain" alt="Noteer Logo" />
                     <Box>
                         <Title order={2} c="blue" mb={4}>Noteer</Title>
                         <Text size="sm" c="dimmed">Version 0.1.0</Text>
