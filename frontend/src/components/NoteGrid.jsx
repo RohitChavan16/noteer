@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Box, Text, Stack, Center } from '@mantine/core';
 import { IconNote } from '@tabler/icons-react';
 import NoteCard from './NoteCard';
@@ -26,17 +26,17 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
     // Find shareNote from current notes array by ID
     const shareNote = shareNoteId ? notes.find(n => n.id === shareNoteId) : null;
 
-    const handleNoteClick = (note) => {
+    const handleNoteClick = useCallback((note) => {
         if (!showDelete) {
             setSelectedNote(note);
         }
-    };
+    }, [showDelete]);
 
-    const handleModalClose = () => {
+    const handleModalClose = useCallback(() => {
         setSelectedNote(null);
-    };
+    }, []);
 
-    const handleItemToggle = async (noteId, itemIndex) => {
+    const handleItemToggle = useCallback(async (noteId, itemIndex) => {
         const note = notes.find(n => n.id === noteId);
         if (!note || !note.items) return;
 
@@ -44,11 +44,15 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
             idx === itemIndex ? { ...item, is_checked: !item.is_checked } : item
         );
         await updateNote(noteId, { items: updatedItems });
-    };
+    }, [notes, updateNote]);
 
-    const handleShare = (note) => {
+    const handleLabelsChange = useCallback((noteId, labels) => {
+        updateNote(noteId, { labels });
+    }, [updateNote]);
+
+    const handleShare = useCallback((note) => {
         setShareNoteId(note.id);
-    };
+    }, []);
 
     // Force list view on touch devices (phones and tablets)
     const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -79,7 +83,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                         onDelete={isTrash ? deleteNote : undefined}
                         onItemToggle={!isTrash ? handleItemToggle : undefined}
                         onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
-                        onLabelsChange={!isTrash ? (noteId, labels) => updateNote(noteId, { labels }) : undefined}
+                        onLabelsChange={!isTrash ? handleLabelsChange : undefined}
                         onShare={!isTrash ? handleShare : undefined}
                     />
                 ))}

@@ -8,7 +8,7 @@ import NoteInput from '../components/NoteInput';
 
 export default function NotesPage() {
     const { label } = useParams();
-    const { notes, isLoading, isLoadingMore, hasMore, searchQuery, fetchNotes, fetchMoreNotes } = useNotesStore();
+    const { notes, isLoading, isLoadingMore, hasMore, searchQuery, fetchNotes, fetchMoreNotes, fetchErrorCooldown } = useNotesStore();
     const sentinelRef = useRef(null);
 
     useEffect(() => {
@@ -65,6 +65,12 @@ export default function NotesPage() {
                     {isLoadingMore && (
                         <Center py="md">
                             <Loader size="sm" />
+                        </Center>
+                    )}
+
+                    {fetchErrorCooldown && (
+                        <Center py="md">
+                            <Text c="orange" size="sm">Waiting for API limit...</Text>
                         </Center>
                     )}
                 </>

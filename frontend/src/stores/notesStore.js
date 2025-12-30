@@ -28,6 +28,7 @@ export const useNotesStore = create((set, get) => {
         notes: [],
         isLoading: false,
         isLoadingMore: false,
+        fetchErrorCooldown: false,
         error: null,
         searchQuery: '',
         viewMode: getDefaultViewMode(),
@@ -96,12 +97,29 @@ export const useNotesStore = create((set, get) => {
                     notes = await Promise.all(notes.map(note => decryptNote(note)));
                 }
 
-                set({
-                    notes,
-                    isLoading: false,
-                    hasMore: notes.length === PAGE_SIZE,
-                    currentPage: 1
-                });
+                if (silent) {
+                    set(state => {
+                        // HEAD: The freshly fetched page 1
+                        const head = notes;
+
+                        // TAIL: The rest of the existing list (pages 2, 3...)
+                        // We filter out any notes that are already in the new HEAD to avoid duplicates
+                        const headIds = new Set(head.map(n => n.id));
+                        const tail = state.notes.slice(PAGE_SIZE).filter(n => !headIds.has(n.id));
+
+                        return {
+                            notes: [...head, ...tail],
+                            isLoading: false
+                        };
+                    });
+                } else {
+                    set({
+                        notes,
+                        isLoading: false,
+                        hasMore: notes.length === PAGE_SIZE,
+                        currentPage: 1
+                    });
+                }
             } catch (error) {
                 if (!silent) {
                     set({ error: error.message, isLoading: false });
@@ -112,8 +130,8 @@ export const useNotesStore = create((set, get) => {
         },
 
         fetchMoreNotes: async () => {
-            const { isLoadingMore, hasMore, currentPage, notes, lastFetchOptions } = get();
-            if (isLoadingMore || !hasMore) return;
+            const { isLoadingMore, hasMore, currentPage, notes, lastFetchOptions, fetchErrorCooldown } = get();
+            if (isLoadingMore || !hasMore || fetchErrorCooldown) return;
 
             set({ isLoadingMore: true });
 
@@ -152,7 +170,12 @@ export const useNotesStore = create((set, get) => {
                 });
             } catch (error) {
                 console.error('Failed to fetch more notes:', error);
-                set({ isLoadingMore: false });
+
+                // Set cooldown to prevent infinite retry loops on error (e.g., 429)
+                set({ isLoadingMore: false, fetchErrorCooldown: true });
+                setTimeout(() => {
+                    set({ fetchErrorCooldown: false });
+                }, 5000);
             }
         },
 

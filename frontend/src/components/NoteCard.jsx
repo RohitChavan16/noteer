@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import DOMPurify from 'dompurify';
 import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
@@ -10,7 +10,7 @@ import LabelPicker from './LabelPicker';
 
 import EncryptedImage from './EncryptedImage';
 
-export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
+const NoteCard = memo(function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
     const [isHovered, setIsHovered] = useState(false);
@@ -322,4 +322,6 @@ export default function NoteCard({ note, onClick, onPin, onArchive, onUnarchive,
             </Group>
         </Card>
     );
-}
+});
+
+export default NoteCard;

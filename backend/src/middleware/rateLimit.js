@@ -121,7 +121,7 @@ export const authLimiter = rateLimit({
 
 export const apiLimiter = rateLimit({
     windowMs: 60000,    // 1 minute  
-    max: 200,           // 200 requests per minute
+    max: 500,           // 500 requests per minute
 });
 
 export const uploadLimiter = rateLimit({
