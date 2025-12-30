@@ -75,8 +75,18 @@ process.env.JWT_SECRET = getOrGenerateJwtSecret();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Trust proxy (required for correct protocol detection behind reverse proxies like Traefik/Nginx)
-app.set('trust proxy', 1);
+// Trust proxy (required for correct protocol and IP detection behind reverse proxies)
+// TRUST_PROXY env var: number (hops) or string (e.g., 'loopback, linklocal, 10.0.0.0/8')
+const trustProxyEnv = process.env.TRUST_PROXY;
+let trustProxyConfig;
+if (!trustProxyEnv) {
+  trustProxyConfig = 1; // Default: trust first proxy hop
+} else if (!isNaN(trustProxyEnv)) {
+  trustProxyConfig = parseInt(trustProxyEnv, 10);
+} else {
+  trustProxyConfig = trustProxyEnv; // String (CIDR, loopback, etc.)
+}
+app.set('trust proxy', trustProxyConfig);
 
 // Security middleware
 app.use(helmet({

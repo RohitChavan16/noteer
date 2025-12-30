@@ -83,6 +83,7 @@ volumes:
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
 | `NOTE_VERSION_LIMIT` | `10` | Max stored versions per note (FIFO) |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
+| `TRUST_PROXY` | `1` | Proxy trust config: number (hops) or string (`loopback`, CIDR) |
 | `SSL_ENABLED` | `false` | Enable direct HTTPS |
 | `SSL_CERT_PATH` | - | Path to SSL certificate |
 | `SSL_KEY_PATH` | - | Path to SSL key |

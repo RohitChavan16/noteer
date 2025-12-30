@@ -1,7 +1,8 @@
 /**
  * Rate Limiting Middleware
  * 
- * Simple in-memory rate limiter for API protection.
+ * Smart in-memory rate limiter for API protection.
+ * Uses User ID (from JWT) when available, falls back to IP address.
  * For production with multiple instances, use Redis-backed solution.
  */
 
@@ -19,12 +20,34 @@ setInterval(() => {
 }, 300000);
 
 /**
+ * Extract user ID from JWT token (optimistic decode, no verification)
+ * Verification happens later in auth middleware - this is just for rate limit key
+ */
+function extractUserIdFromToken(req) {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return null;
+        }
+        const token = authHeader.slice(7);
+        // Decode payload without verification (base64 decode middle part)
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+        return payload.userId || payload.sub || payload.id || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Create rate limiter middleware
  * @param {object} options
  * @param {number} options.windowMs - Time window in milliseconds (default: 60000 = 1 minute)
  * @param {number} options.max - Max requests per window (default: 100)
  * @param {string} options.message - Error message (default: 'Too many requests')
  * @param {boolean} options.skipSuccessfulRequests - Don't count successful responses
+ * @param {function} options.keyGenerator - Custom key generator function (receives req)
  */
 export function rateLimit(options = {}) {
     const {
@@ -32,11 +55,27 @@ export function rateLimit(options = {}) {
         max = 100,
         message = 'Too many requests, please try again later.',
         skipSuccessfulRequests = false,
+        keyGenerator = null,
     } = options;
 
+    // Default smart key generator: User ID (from token) -> IP address
+    const getKey = keyGenerator || ((req) => {
+        // Try to get user ID from existing req.user (if auth ran first)
+        if (req.user && req.user.id) {
+            return `user:${req.user.id}`;
+        }
+        // Try optimistic JWT decode (for when limiter runs before auth)
+        const userId = extractUserIdFromToken(req);
+        if (userId) {
+            return `user:${userId}`;
+        }
+        // Fallback to IP address
+        return `ip:${req.ip}`;
+    });
+
     return (req, res, next) => {
-        // Use IP + route as key
-        const key = `${req.ip}:${req.path}`;
+        // Use smart key generator
+        const key = `${getKey(req)}:${req.path}`;
         const now = Date.now();
 
         let data = requestCounts.get(key);
@@ -87,5 +126,5 @@ export const apiLimiter = rateLimit({
 
 export const uploadLimiter = rateLimit({
     windowMs: 60000,    // 1 minute
-    max: 1000,           // 100 uploads per minute
+    max: 100,          // 100 uploads per minute
 });
