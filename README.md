@@ -49,8 +49,6 @@ Open [http://localhost:3000](http://localhost:3000) and login with your admin cr
 ### Docker Compose
 
 ```yaml
-version: "3.8"
-
 services:
   noteer:
     image: ghcr.io/bigtcze/noteer:latest
