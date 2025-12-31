@@ -10,6 +10,8 @@ export function useLabels() {
 
             // Sort by name case-insensitive
             return labels.sort((a, b) => a.name.localeCompare(b.name));
-        }
+        },
+        [], // Dependencies
+        []  // Default value
     );
 }

@@ -32,15 +32,9 @@ export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuer
             // We need to reverse order.
             // is_pinned 0 -> 1. Reverse -> 1 -> 0. Correct.
             // updated_at old -> new. Reverse -> new -> old. Correct.
+            // Effective strategy:
+            // 1. Get collection by index
             return await db.notes
-                .where('is_archived').equals('false') // Dexie stores boolean as string in index? No, typically 0/1 or actual bool. 
-                // Actually, simple .filter is safer for Archive check combined with Limit, 
-                // BUT filter applies AFTER DB fetch in some cases. 
-                // Best Dexie practice: Compound index [is_archived+is_trashed+is_pinned+updated_at] is overkill.
-                // Let's stick to the main sorts.
-
-                // Effective strategy:
-                // 1. Get collection by index
                 .orderBy('[is_pinned+updated_at]')
                 .reverse()
                 // 2. Filter logic (applied during scan, efficiently stops after limit reached)

@@ -102,7 +102,7 @@ router.get('/', async (req, res, next) => {
                     FALSE as is_owner,
                     ns.is_pinned as is_pinned,      -- Shared user uses share's is_pinned
                     ns.is_archived as is_archived,  -- Shared user uses share's is_archived
-                    ns.encrypted_key as shared_note_key,
+                    nk.encrypted_key as shared_note_key,
                     
                     ${subqueries.labels} as labels,
                     ${subqueries.items} as items,
@@ -110,6 +110,7 @@ router.get('/', async (req, res, next) => {
                     ${subqueries.collaborators} as collaborators
                 FROM notes n
                 JOIN note_shares ns ON ns.note_id = n.id AND ns.shared_with_id = $1
+                LEFT JOIN note_keys nk ON nk.note_id = n.id AND nk.user_id = $1
             )
             SELECT * FROM combined_notes
         `;
