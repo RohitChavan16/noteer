@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Modal, TextInput, Button, Group, Stack, Text, Avatar, ActionIcon, Loader, Box } from '@mantine/core';
-import { IconSearch, IconX, IconUserPlus } from '@tabler/icons-react';
+import { Modal, TextInput, Button, Group, Stack, Text, Avatar, ActionIcon, Loader, Box, Tooltip } from '@mantine/core';
+import { useNetwork } from '@mantine/hooks';
+import { IconSearch, IconX, IconUserPlus, IconWifiOff } from '@tabler/icons-react';
 import { useAuthStore } from '../stores/authStore';
 import { useEncryptionStore } from '../stores/encryptionStore';
+import { db } from '../db/db';
 
 const API_URL = '/api';
 
@@ -15,38 +17,28 @@ function getInitials(givenName, familyName) {
 
 export default function ShareModal({ opened, onClose, note, onShareChange }) {
     const { authFetch } = useAuthStore();
+    const network = useNetwork();
+    const isOffline = !network.online;
+
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [collaborators, setCollaborators] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // Load current collaborators when modal opens
+    // Initialize collaborators from note prop (sync data)
     useEffect(() => {
-        const loadCollaborators = async () => {
-            if (!note?.id) return;
-            setIsLoading(true);
-            try {
-                const res = await authFetch(`${API_URL}/notes/${note.id}/shares`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setCollaborators(data);
-                }
-            } catch (err) {
-                console.error('Failed to load collaborators:', err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        if (opened && note?.id) {
-            loadCollaborators();
+        if (note?.collaborators) {
+            setCollaborators(note.collaborators);
+        } else {
+            setCollaborators([]);
         }
-    }, [opened, note?.id, authFetch]);
+    }, [note, opened]);
 
-    // Search users as user types
+    // Search users as user types (Only when online)
     useEffect(() => {
+        if (isOffline) return;
+
         const searchUsers = async () => {
             if (searchQuery.length < 2) {
                 setSearchResults([]);
@@ -73,9 +65,11 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
 
         const debounce = setTimeout(searchUsers, 300);
         return () => clearTimeout(debounce);
-    }, [searchQuery, collaborators, authFetch]);
+    }, [searchQuery, collaborators, authFetch, isOffline]);
 
     const handleShare = async (userId) => {
+        if (isOffline) return;
+
         setError(null);
         try {
             let encryptedKey = null;
@@ -120,10 +114,16 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
 
             if (res.ok) {
                 const data = await res.json();
-                const newCollabs = [...collaborators, data.user];
+                const newCollab = { ...data.user, is_owner: false }; // Assuming response structure
+                const newCollabs = [...collaborators, newCollab];
+
                 setCollaborators(newCollabs);
                 setSearchResults(prev => prev.filter(u => u.id !== userId));
                 setSearchQuery('');
+
+                // Update local note
+                await db.notes.update(note.id, { collaborators: newCollabs });
+
                 onShareChange?.(newCollabs.length);
             } else {
                 const errData = await res.json();
@@ -136,18 +136,38 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
 
     const handleUnshare = async (userId) => {
         setError(null);
-        try {
-            const res = await authFetch(`${API_URL}/notes/${note.id}/share/${userId}`, {
-                method: 'DELETE',
-            });
 
-            if (res.ok || res.status === 204) {
-                const newCollabs = collaborators.filter(c => c.id !== userId);
+        const newCollabs = collaborators.filter(c => c.id !== userId);
+
+        try {
+            if (isOffline) {
+                // Offline: Queue the action and update optimized UI
+                await db.offline_queue.add({
+                    type: 'UNSHARE_NOTE',
+                    payload: { noteId: note.id, userId },
+                    created_at: new Date().toISOString()
+                });
+
+                // Update local note immediately so UI is consistent if closed/reopened
+                await db.notes.update(note.id, { collaborators: newCollabs });
+
                 setCollaborators(newCollabs);
                 onShareChange?.(newCollabs.length);
             } else {
-                const errData = await res.json();
-                setError(errData.error || 'Failed to unshare');
+                // Online: Direct API call
+                const res = await authFetch(`${API_URL}/notes/${note.id}/share/${userId}`, {
+                    method: 'DELETE',
+                });
+
+                if (res.ok || res.status === 204) {
+                    setCollaborators(newCollabs);
+                    // Update local note
+                    await db.notes.update(note.id, { collaborators: newCollabs });
+                    onShareChange?.(newCollabs.length);
+                } else {
+                    const errData = await res.json();
+                    setError(errData.error || 'Failed to unshare');
+                }
             }
         } catch (err) {
             setError(err.message);
@@ -165,14 +185,27 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
             zIndex={1000}
         >
             <Stack gap="md">
+                {/* Offline Warning */}
+                {isOffline && (
+                    <Group gap="xs" c="dimmed" bg="var(--mantine-color-dark-6)" p="xs" style={{ borderRadius: 8 }}>
+                        <IconWifiOff size={16} />
+                        <Text size="xs">You depend on local data. Adding collaborators is disabled while offline.</Text>
+                    </Group>
+                )}
+
                 {/* Search Input */}
-                <TextInput
-                    placeholder="Search users by email or name..."
-                    leftSection={<IconSearch size={16} />}
-                    rightSection={isSearching ? <Loader size="xs" /> : null}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
+                <Tooltip label="Go online to add collaborators" disabled={!isOffline}>
+                    <Box>
+                        <TextInput
+                            placeholder={isOffline ? "Offline - Adding disabled" : "Search users by email or name..."}
+                            leftSection={<IconSearch size={16} />}
+                            rightSection={isSearching ? <Loader size="xs" /> : null}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            disabled={isOffline}
+                        />
+                    </Box>
+                </Tooltip>
 
                 {/* Search Results */}
                 {searchResults.length > 0 && (
@@ -217,9 +250,7 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
                 {/* Current Collaborators */}
                 <div>
                     <Text size="sm" fw={500} mb="xs">Shared with:</Text>
-                    {isLoading ? (
-                        <Loader size="sm" />
-                    ) : collaborators.length === 0 ? (
+                    {collaborators.length === 0 ? (
                         <Text size="sm" c="dimmed">Not shared with anyone yet</Text>
                     ) : (
                         <Stack gap="xs">
@@ -230,18 +261,20 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
                                             {getInitials(user.given_name, user.family_name)}
                                         </Avatar>
                                         <div>
-                                            <Text size="sm" fw={500}>{user.name}</Text>
+                                            <Text size="sm" fw={500}>{user.name} {user.is_owner && '(Owner)'}</Text>
                                             <Text size="xs" c="dimmed">{user.email}</Text>
                                         </div>
                                     </Group>
-                                    <ActionIcon
-                                        variant="light"
-                                        color="red"
-                                        onClick={() => handleUnshare(user.id)}
-                                        title="Remove access"
-                                    >
-                                        <IconX size={16} />
-                                    </ActionIcon>
+                                    {!user.is_owner && (
+                                        <ActionIcon
+                                            variant="light"
+                                            color="red"
+                                            onClick={() => handleUnshare(user.id)}
+                                            title="Remove access"
+                                        >
+                                            <IconX size={16} />
+                                        </ActionIcon>
+                                    )}
                                 </Group>
                             ))}
                         </Stack>

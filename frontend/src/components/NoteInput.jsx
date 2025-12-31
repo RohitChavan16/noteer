@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
-import { Paper, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge, SimpleGrid, Image, LoadingOverlay, Overlay } from '@mantine/core';
+import { Paper, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge, SimpleGrid, LoadingOverlay, Overlay } from '@mantine/core';
 import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconPhoto, IconTrash, IconUpload, IconTypography } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import { notifications } from '@mantine/notifications';
 import LabelPicker from './LabelPicker';
 import NoteRichTextEditor from './NoteRichTextEditor';
+import EncryptedImage from './EncryptedImage';
 
 import {
     DndContext,
@@ -372,9 +373,8 @@ export default function NoteInput({ currentLabel }) {
                                 <SimpleGrid cols={images.length === 1 ? 1 : 2} spacing="xs">
                                     {images.map((img, index) => (
                                         <Box key={index} style={{ position: 'relative', height: 100, overflow: 'hidden' }}>
-                                            <Image
+                                            <EncryptedImage
                                                 src={img.thumb_medium || img.url}
-                                                radius="sm"
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
                                             />
                                             <ActionIcon

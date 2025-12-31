@@ -54,6 +54,7 @@ export async function initializeDatabase() {
       oidc_subject VARCHAR(255),
       oidc_issuer VARCHAR(255),
       public_key TEXT,
+      encrypted_private_key TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -73,6 +74,10 @@ export async function initializeDatabase() {
       trashed_at TIMESTAMP,
       deleted_at TIMESTAMP,
       reminder_at TIMESTAMP,
+      encrypted BOOLEAN DEFAULT FALSE,
+      encrypted_note_key TEXT,
+      encryption_version INTEGER DEFAULT 1,
+      version INTEGER DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -127,6 +132,7 @@ export async function initializeDatabase() {
       note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
       shared_with_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       is_archived BOOLEAN DEFAULT FALSE,
+      is_pinned BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(note_id, shared_with_id)
     );
@@ -198,113 +204,7 @@ export async function initializeDatabase() {
       FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   `);
 
-  // Migrations
-  await query(`
-    DO $$
-    BEGIN
-      -- Migration: drop deprecated note_labels table
-      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'note_labels') THEN
-        -- Migrate existing data to user_note_labels first
-        INSERT INTO user_note_labels (user_id, note_id, label_id)
-        SELECT l.user_id, nl.note_id, nl.label_id
-        FROM note_labels nl
-        JOIN labels l ON nl.label_id = l.id
-        ON CONFLICT DO NOTHING;
-        
-        DROP TABLE note_labels;
-        RAISE NOTICE 'Migrated note_labels to user_note_labels and dropped table';
-      END IF;
-
-      -- Migration: drop redundant owner_id from note_shares
-      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'note_shares' AND column_name = 'owner_id') THEN
-        ALTER TABLE note_shares DROP COLUMN owner_id;
-        RAISE NOTICE 'Dropped redundant owner_id from note_shares';
-      END IF;
-
-      -- Migration: add deleted_at column for proper soft delete
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'deleted_at') THEN
-        ALTER TABLE notes ADD COLUMN deleted_at TIMESTAMP;
-        RAISE NOTICE 'Added deleted_at column to notes';
-      END IF;
-
-      -- Migration: add updated_at index for sync API performance
-      IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_notes_updated_at') THEN
-        CREATE INDEX idx_notes_updated_at ON notes(updated_at);
-        RAISE NOTICE 'Added index on notes.updated_at';
-      END IF;
-
-      -- Migration: change note_images.id from UUID to SERIAL (if UUID)
-      -- Note: This is non-trivial migration, skip for now if data exists
-      
-      -- Migration: Split name into given_name and family_name (legacy)
-      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'name') THEN
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'given_name') THEN
-          ALTER TABLE users ADD COLUMN given_name VARCHAR(255);
-        END IF;
-        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'family_name') THEN
-          ALTER TABLE users ADD COLUMN family_name VARCHAR(255);
-        END IF;
-        UPDATE users SET 
-          given_name = split_part(name, ' ', 1),
-          family_name = NULLIF(substring(name from length(split_part(name, ' ', 1)) + 2), '')
-        WHERE name IS NOT NULL AND given_name IS NULL;
-        ALTER TABLE users DROP COLUMN name;
-      END IF;
-
-      -- Migration: ensure avatar_url exists
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'avatar_url') THEN
-        ALTER TABLE users ADD COLUMN avatar_url VARCHAR(500);
-      END IF;
-
-      -- Migration: ensure type column exists on notes
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'type') THEN
-        ALTER TABLE notes ADD COLUMN type VARCHAR(50) DEFAULT 'note';
-        UPDATE notes SET type = 'checklist' WHERE id IN (SELECT DISTINCT note_id FROM note_items);
-      END IF;
-
-      -- Migration: add public_key column to users for E2E encryption
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'public_key') THEN
-        ALTER TABLE users ADD COLUMN public_key TEXT;
-        RAISE NOTICE 'Added public_key column to users';
-      END IF;
-
-      -- Migration: add encrypted_private_key column to users (for persistent digital identity)
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'encrypted_private_key') THEN
-        ALTER TABLE users ADD COLUMN encrypted_private_key TEXT;
-        RAISE NOTICE 'Added encrypted_private_key column to users';
-      END IF;
-
-      -- Migration: add encryption_iv column to note_images for encrypted images
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'note_images' AND column_name = 'encryption_iv') THEN
-        ALTER TABLE note_images ADD COLUMN encryption_iv TEXT;
-        RAISE NOTICE 'Added encryption_iv column to note_images';
-      END IF;
-
-      -- Migration: add encryption_version column to notes for future cipher upgrades
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'encryption_version') THEN
-        ALTER TABLE notes ADD COLUMN encryption_version INTEGER DEFAULT 1;
-        RAISE NOTICE 'Added encryption_version column to notes';
-      END IF;
-
-      -- Migration: add encrypted column to notes
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'encrypted') THEN
-        ALTER TABLE notes ADD COLUMN encrypted BOOLEAN DEFAULT FALSE;
-        RAISE NOTICE 'Added encrypted column to notes';
-      END IF;
-
-      -- Migration: add encrypted_note_key column to notes (for owner)
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'notes' AND column_name = 'encrypted_note_key') THEN
-        ALTER TABLE notes ADD COLUMN encrypted_note_key TEXT;
-        RAISE NOTICE 'Added encrypted_note_key column to notes';
-      END IF;
-
-      -- Migration: add is_pinned column to note_shares (for per-user pin on shared notes)
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'note_shares' AND column_name = 'is_pinned') THEN
-        ALTER TABLE note_shares ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE;
-        RAISE NOTICE 'Added is_pinned column to note_shares';
-      END IF;
-    END $$;
-  `);
+  // Data migration logic removed - using fresh V1 schema only.
 
   // Create admin user if not exists
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';

@@ -9,6 +9,39 @@ const router = Router();
 // All routes require authentication
 router.use(authenticateToken);
 
+// POST /api/notes/versions/sync - Batch fetch versions
+router.post('/sync', async (req, res, next) => {
+    try {
+        const { noteIds } = req.body;
+        const userId = req.user.id;
+
+        if (!Array.isArray(noteIds) || noteIds.length === 0) {
+            return res.json([]);
+        }
+
+        // Limit batch size to prevent query overload (e.g., 50 notes max)
+        const BATCH_LIMIT = 50;
+        const idsToFetch = noteIds.slice(0, BATCH_LIMIT);
+
+        // Fetch versions for requested notes
+        // Enforce ownership/access via JOIN with notes/shares
+        const result = await query(
+            `SELECT nv.note_id, nv.id, nv.created_at, nv.data
+             FROM note_versions nv
+             JOIN notes n ON n.id = nv.note_id
+             LEFT JOIN note_shares ns ON ns.note_id = n.id AND ns.shared_with_id = $2
+             WHERE nv.note_id = ANY($1) 
+             AND (n.user_id = $2 OR ns.shared_with_id = $2)
+             ORDER BY nv.created_at DESC`,
+            [idsToFetch, userId]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        next(error);
+    }
+});
+
 // GET /api/notes/:id/versions - List versions
 router.get('/:id/versions', param('id').isInt(), async (req, res, next) => {
     try {
@@ -53,7 +86,7 @@ router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('ver
         const versionData = versionResult.rows[0].data;
 
         // Save current state first (as a new version)
-        const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
+        const MAX_VERSIONS = 10;
         const currentState = await query(
             `SELECT n.*, 
                     COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
@@ -72,13 +105,13 @@ router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('ver
             // Get versions that will be deleted (for image cleanup)
             const versionsToDelete = await query(
                 `SELECT data FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
-                [id, versionLimit]
+                [id, MAX_VERSIONS]
             );
 
             // Delete old versions
             await query(
                 `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
-                [id, versionLimit]
+                [id, MAX_VERSIONS]
             );
 
             // Cleanup orphan images from deleted versions

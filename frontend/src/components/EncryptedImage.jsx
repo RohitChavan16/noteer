@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Image, Loader, Center, Text } from '@mantine/core';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { IconLock } from '@tabler/icons-react';
+import { db, LOCAL_IMAGE_PREFIX } from '../db/db';
 
 export default function EncryptedImage({ src, noteId, alt, iv, originalName, encryptionIv, ...props }) {
     const [decryptedSrc, setDecryptedSrc] = useState(null);
@@ -17,6 +18,27 @@ export default function EncryptedImage({ src, noteId, alt, iv, originalName, enc
         let objectUrl = null;
 
         const loadDecryptedImage = async () => {
+            // Handle local offline images
+            if (src && src.startsWith(LOCAL_IMAGE_PREFIX)) {
+                const imageId = src.replace(LOCAL_IMAGE_PREFIX, '');
+                try {
+                    setLoading(true);
+                    const offlineImage = await db.offline_images.get(imageId);
+                    if (offlineImage && offlineImage.blob && isMounted) {
+                        objectUrl = URL.createObjectURL(offlineImage.blob);
+                        setDecryptedSrc(objectUrl);
+                    } else if (isMounted) {
+                        setError('Image not found');
+                    }
+                } catch (err) {
+                    console.error('Failed to load offline image:', err);
+                    if (isMounted) setError('Failed to load image');
+                } finally {
+                    if (isMounted) setLoading(false);
+                }
+                return;
+            }
+
             // If normal image (not encrypted extension), just use src
             if (!src || (!src.endsWith('.enc') && !effectiveIv)) {
                 setDecryptedSrc(src);

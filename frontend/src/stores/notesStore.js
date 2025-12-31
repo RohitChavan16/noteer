@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import _ from 'lodash';
+import { v4 as uuidv4 } from 'uuid';
+import { db, SYNC_STATUS } from '../db/db';
 import { useAuthStore } from './authStore';
 import { useEncryptionStore } from './encryptionStore';
 
 const API_URL = '/api';
-const PAGE_SIZE = 50;
 
 // Helper to get authFetch from authStore
 const getAuthFetch = () => useAuthStore.getState().authFetch;
@@ -20,410 +20,244 @@ const getDefaultViewMode = () => {
     return 'grid';
 };
 
-export const useNotesStore = create((set, get) => {
-    // Keep track of debounced save functions per note ID
-    const saveHandlers = new Map();
+/**
+ * Notes Store - Refactored for Local-First Architecture
+ * 
+ * IMPORTANT CHANGES:
+ * - `notes` array REMOVED - use useNotes() hook with useLiveQuery instead
+ * - `fetchNotes` / `fetchMoreNotes` REMOVED - sync engine handles data fetching
+ * - CRUD operations now write to local Dexie DB first, then sync handles server push
+ * - All operations are optimistic (instant UI feedback)
+ */
+export const useNotesStore = create((set, get) => ({
+    // UI State only (no longer stores notes array)
+    isLoading: false,
+    error: null,
+    searchQuery: '',
+    viewMode: getDefaultViewMode(),
+    sortBy: 'updated_at',  // 'updated_at' | 'title'
+    sortOrder: 'desc',     // 'asc' | 'desc'
 
-    return {
-        notes: [],
-        isLoading: false,
-        isLoadingMore: false,
-        fetchErrorCooldown: false,
-        error: null,
-        searchQuery: '',
-        viewMode: getDefaultViewMode(),
-        hasMore: true,
-        currentPage: 1,
+    // Sync state (for UI indicators)
+    isSyncing: false,
+    pendingChanges: false,
+    lastSyncedAt: null,
 
-        // Sync state
-        isSyncing: false,
-        pendingChanges: false,
-        lastSyncedAt: null,
+    // UI State setters
+    setSearchQuery: (query) => set({ searchQuery: query }),
+    setViewMode: (mode) => set({ viewMode: mode }),
+    setSortBy: (sortBy) => set({ sortBy }),
+    setSortOrder: (sortOrder) => set({ sortOrder }),
 
-        // Polling state
-        lastFetchOptions: null,
-        pollingInterval: null,
-
-        setSearchQuery: (query) => set({ searchQuery: query }),
-        setViewMode: (mode) => set({ viewMode: mode }),
-
-        startPolling: () => {
-            if (get().pollingInterval) return;
-            const interval = setInterval(() => {
-                const { fetchNotes, lastFetchOptions, pendingChanges, isSyncing } = get();
-                // Do not poll if changes are pending
-                if (pendingChanges || isSyncing) return;
-                // Only poll if we have options (meaning a page has loaded)
-                if (lastFetchOptions) {
-                    fetchNotes(lastFetchOptions, true);
-                }
-            }, 5000); // Poll every 5 seconds
-            set({ pollingInterval: interval });
-        },
-
-        stopPolling: () => {
-            const { pollingInterval } = get();
-            if (pollingInterval) clearInterval(pollingInterval);
-            set({ pollingInterval: null });
-        },
-
-        fetchNotes: async (options = {}, silent = false) => {
-            // Save options for polling (always page 1 for polling)
-            set({ lastFetchOptions: options });
-
-            if (!silent) {
-                set({ isLoading: true, error: null, currentPage: 1, hasMore: true });
+    /**
+     * Create a new note - writes to local DB immediately
+     * Sync engine will push to server in background
+     */
+    createNote: async (noteData) => {
+        try {
+            // Input validation
+            if (!noteData || typeof noteData !== 'object') {
+                throw new Error('Invalid note data');
             }
 
-            try {
-                const params = new URLSearchParams();
-                if (options.archived) params.append('archived', 'true');
-                if (options.trashed) params.append('trashed', 'true');
-                if (options.label) params.append('label', options.label);
-                if (options.search) params.append('search', options.search);
-                params.append('limit', PAGE_SIZE.toString());
-                params.append('offset', '0');
+            // Generate a temporary UUID for the new note
+            const tempId = uuidv4();
+            const now = new Date().toISOString();
 
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes?${params}`);
-
-                if (!res.ok) throw new Error('Failed to fetch notes');
-
-                let notes = await res.json();
-
-                // Decrypt notes if encryption is unlocked
-                const { isUnlocked, decryptNote } = getEncryption();
-                if (isUnlocked) {
-                    notes = await Promise.all(notes.map(note => decryptNote(note)));
-                }
-
-                if (silent) {
-                    set(state => {
-                        // HEAD: The freshly fetched page 1
-                        const head = notes;
-
-                        // TAIL: The rest of the existing list (pages 2, 3...)
-                        // We filter out any notes that are already in the new HEAD to avoid duplicates
-                        const headIds = new Set(head.map(n => n.id));
-                        const tail = state.notes.slice(PAGE_SIZE).filter(n => !headIds.has(n.id));
-
-                        return {
-                            notes: [...head, ...tail],
-                            isLoading: false
-                        };
-                    });
-                } else {
-                    set({
-                        notes,
-                        isLoading: false,
-                        hasMore: notes.length === PAGE_SIZE,
-                        currentPage: 1
-                    });
-                }
-            } catch (error) {
-                if (!silent) {
-                    set({ error: error.message, isLoading: false });
-                } else {
-                    console.error('Polling failed:', error);
-                }
-            }
-        },
-
-        fetchMoreNotes: async () => {
-            const { isLoadingMore, hasMore, currentPage, notes, lastFetchOptions, fetchErrorCooldown } = get();
-            if (isLoadingMore || !hasMore || fetchErrorCooldown) return;
-
-            set({ isLoadingMore: true });
-
-            try {
-                const options = lastFetchOptions || {};
-                const params = new URLSearchParams();
-                if (options.archived) params.append('archived', 'true');
-                if (options.trashed) params.append('trashed', 'true');
-                if (options.label) params.append('label', options.label);
-                if (options.search) params.append('search', options.search);
-                params.append('limit', PAGE_SIZE.toString());
-                params.append('offset', (currentPage * PAGE_SIZE).toString());
-
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes?${params}`);
-
-                if (!res.ok) throw new Error('Failed to fetch more notes');
-
-                let newNotes = await res.json();
-
-                // Decrypt notes if encryption is unlocked
-                const { isUnlocked, decryptNote } = getEncryption();
-                if (isUnlocked) {
-                    newNotes = await Promise.all(newNotes.map(note => decryptNote(note)));
-                }
-
-                // Filter out duplicates by ID
-                const existingIds = new Set(notes.map(n => n.id));
-                const uniqueNewNotes = newNotes.filter(n => !existingIds.has(n.id));
-
-                set({
-                    notes: [...notes, ...uniqueNewNotes],
-                    isLoadingMore: false,
-                    hasMore: newNotes.length === PAGE_SIZE,
-                    currentPage: currentPage + 1
-                });
-            } catch (error) {
-                console.error('Failed to fetch more notes:', error);
-
-                // Set cooldown to prevent infinite retry loops on error (e.g., 429)
-                set({ isLoadingMore: false, fetchErrorCooldown: true });
-                setTimeout(() => {
-                    set({ fetchErrorCooldown: false });
-                }, 5000);
-            }
-        },
-
-        createNote: async (noteData) => {
-            try {
-                // Encrypt note before sending to server
-                const { isUnlocked, encryptNote } = getEncryption();
-                let dataToSend = noteData;
-                if (isUnlocked) {
-                    dataToSend = await encryptNote(noteData);
-                }
-
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(dataToSend),
-                });
-
-                if (!res.ok) throw new Error('Failed to create note');
-
-                const serverNote = await res.json();
-
-                // Decrypt the response to ensure the new Note Key is cached
-                // This is critical for subsequent operations like image upload which require the key
-                if (isUnlocked && serverNote.encrypted && serverNote.encrypted_note_key) {
-                    await getEncryption().decryptNote(serverNote);
-                }
-
-                // Keep the original unencrypted data for local state
-                const note = {
-                    ...serverNote,
-                    title: noteData.title,
-                    content: noteData.content
-                };
-
-                set((state) => ({ notes: [note, ...state.notes] }));
-                return note;
-            } catch (error) {
-                set({ error: error.message });
-                return null;
-            }
-        },
-
-        // Optimistic update with debounced backend sync
-        updateNote: async (id, noteData) => {
-            // 1. Optimistic update
-            set((state) => ({
-                notes: state.notes.map((n) => (n.id === id ? { ...n, ...noteData } : n)),
-                pendingChanges: true
-            }));
-
-            // 2. define save function
-            const saveToBackend = async (dataToSave) => {
-                set({ isSyncing: true });
-                try {
-                    // Encrypt before sending - ONLY if sensitive fields are changing
-                    const { isUnlocked, encryptNote } = getEncryption();
-                    let encryptedData = dataToSave;
-
-                    const sensitiveFields = ['title', 'content'];
-                    const hasSensitiveChange = sensitiveFields.some(f => dataToSave[f] !== undefined);
-
-                    if (isUnlocked && hasSensitiveChange) {
-                        // To encrypt correctly, we need the FULL note content (even if only title changed, 
-                        // we need content to re-encrypt both with the same key/IV handling if needed, 
-                        // or just to avoid sending empty string for the missing field)
-                        const currentNote = get().notes.find(n => n.id === id);
-
-                        // Safety check
-                        if (currentNote) {
-                            const merged = { ...currentNote, ...dataToSave };
-                            const encryptedResult = await encryptNote(merged);
-
-                            encryptedData = {
-                                ...dataToSave,
-                                title: encryptedResult.title,
-                                content: encryptedResult.content,
-                                encrypted: true,
-                            };
-
-                            // CRITICAL: Only owners should update encrypted_note_key
-                            // Recipients don't have the owner's master key, so their
-                            // re-encrypted key would be unreadable by the owner
-                            if (currentNote.is_owner !== false) {
-                                encryptedData.encrypted_note_key = encryptedResult.encrypted_note_key;
-                            }
-                        }
-                    }
-
-                    const authFetch = getAuthFetch();
-                    const res = await authFetch(`${API_URL}/notes/${id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(encryptedData),
-                    });
-
-                    if (!res.ok) throw new Error('Failed to update note');
-
-                    let updatedNote = await res.json();
-
-                    // Decrypt the response from backend before updating state
-                    // This prevents ciphertext flash when backend returns encrypted data
-                    if (getEncryption().isUnlocked && updatedNote.encrypted) {
-                        updatedNote = await getEncryption().decryptNote(updatedNote);
-                    }
-
-                    // Update state with confirmed data from backend (e.g. updated_at)
-                    set((state) => ({
-                        notes: state.notes.map((n) => (n.id === id ? { ...n, ...updatedNote } : n)),
-                        isSyncing: false,
-                        pendingChanges: false,
-                        lastSyncedAt: new Date()
-                    }));
-                } catch (error) {
-                    console.error('Sync failed:', error);
-                    set({ error: error.message, isSyncing: false });
-                }
+            // Sanitize and validate input fields
+            const newNote = {
+                id: tempId,
+                title: typeof noteData.title === 'string' ? noteData.title.slice(0, 200) : '',
+                content: typeof noteData.content === 'string' ? noteData.content.slice(0, 60000) : '',
+                type: ['text', 'checklist', 'picture'].includes(noteData.type) ? noteData.type : 'text',
+                color: typeof noteData.color === 'string' ? noteData.color : null,
+                is_pinned: Boolean(noteData.is_pinned),
+                is_archived: false,
+                is_trashed: false,
+                items: Array.isArray(noteData.items) ? noteData.items : null,
+                labels: Array.isArray(noteData.labels) ? noteData.labels : [],
+                images: Array.isArray(noteData.images) ? noteData.images : [],
+                created_at: now,
+                updated_at: now,
+                sync_status: SYNC_STATUS.NEW // Mark for sync
             };
 
-            // 3. Get or create debounced handler
-            if (!saveHandlers.has(id)) {
-                // Debounce for 2 seconds (as per user request: "not immediately")
-                saveHandlers.set(id, _.debounce(saveToBackend, 2000));
+            // Write to local Dexie DB
+            await db.notes.add(newNote);
+
+            set({ pendingChanges: true });
+            return newNote;
+        } catch (error) {
+            console.error('Failed to create note:', error);
+            set({ error: error.message });
+            return null;
+        }
+    },
+
+    /**
+     * Update a note - writes to local DB immediately
+     * Sync engine will push to server in background
+     */
+    updateNote: async (id, noteData) => {
+        try {
+            const now = new Date().toISOString();
+
+            // Get current note to merge data
+            const currentNote = await db.notes.get(id);
+            if (!currentNote) {
+                throw new Error('Note not found');
             }
 
-            // 4. Trigger debounced save
-            const handler = saveHandlers.get(id);
-            handler(noteData);
+            // Determine new sync status
+            // If note is NEW (not yet on server), keep it NEW
+            // Otherwise mark as PENDING
+            const newSyncStatus = currentNote.sync_status === SYNC_STATUS.NEW
+                ? SYNC_STATUS.NEW
+                : SYNC_STATUS.PENDING;
 
-            return true; // Return immediately for optimistic UI
-        },
+            // Sanitize and whitelist update fields
+            const updates = {};
+            if (noteData.title !== undefined) updates.title = typeof noteData.title === 'string' ? noteData.title.slice(0, 200) : '';
+            if (noteData.content !== undefined) updates.content = typeof noteData.content === 'string' ? noteData.content.slice(0, 60000) : '';
+            if (noteData.type !== undefined) updates.type = ['text', 'checklist', 'picture'].includes(noteData.type) ? noteData.type : 'text';
+            if (noteData.color !== undefined) updates.color = typeof noteData.color === 'string' ? noteData.color : null;
+            if (noteData.is_pinned !== undefined) updates.is_pinned = Boolean(noteData.is_pinned);
+            if (noteData.is_archived !== undefined) updates.is_archived = Boolean(noteData.is_archived);
+            if (noteData.is_trashed !== undefined) updates.is_trashed = Boolean(noteData.is_trashed);
+            if (noteData.items !== undefined) updates.items = Array.isArray(noteData.items) ? noteData.items : null;
+            if (noteData.labels !== undefined) updates.labels = Array.isArray(noteData.labels) ? noteData.labels : [];
+            if (noteData.images !== undefined) updates.images = Array.isArray(noteData.images) ? noteData.images : [];
 
-        // Immediate save (e.g. for creating copies or critical updates)
-        forceSyncNote: async (id, noteData) => {
-            // Cancel any pending debounced save for this note
-            if (saveHandlers.has(id)) {
-                saveHandlers.get(id).cancel();
+            // Always update metadata
+            updates.updated_at = now;
+            updates.sync_status = newSyncStatus;
+
+            // Update in Dexie
+            await db.notes.update(id, updates);
+
+            set({ pendingChanges: true });
+            return true;
+        } catch (error) {
+            console.error('Failed to update note:', error);
+            set({ error: error.message });
+            return false;
+        }
+    },
+
+    /**
+     * Trash a note (soft delete)
+     */
+    trashNote: async (id) => {
+        return get().updateNote(id, { is_trashed: true });
+    },
+
+    /**
+     * Restore a note from trash
+     */
+    restoreNote: async (id) => {
+        return get().updateNote(id, { is_trashed: false });
+    },
+
+    /**
+     * Permanently delete a note
+     */
+    deleteNote: async (id) => {
+        try {
+            const note = await db.notes.get(id);
+            if (!note) return true;
+
+            if (note.sync_status === SYNC_STATUS.NEW) {
+                // Note was never synced to server, just delete locally
+                await db.notes.delete(id);
+            } else {
+                // Mark for deletion, sync engine will delete on server
+                await db.notes.update(id, { sync_status: SYNC_STATUS.DELETED });
             }
 
-            set({ isSyncing: true });
-            try {
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(noteData),
-                });
+            set({ pendingChanges: true });
+            return true;
+        } catch (error) {
+            console.error('Failed to delete note:', error);
+            set({ error: error.message });
+            return false;
+        }
+    },
 
-                if (!res.ok) throw new Error('Failed to update note');
-                let updatedNote = await res.json();
+    /**
+     * Pin/Unpin a note
+     */
+    pinNote: async (id, isPinned) => {
+        return get().updateNote(id, { is_pinned: isPinned });
+    },
 
-                // Decrypt the response from backend before updating state
-                if (getEncryption().isUnlocked && updatedNote.encrypted) {
-                    updatedNote = await getEncryption().decryptNote(updatedNote);
-                }
+    /**
+     * Archive a note
+     */
+    archiveNote: async (id) => {
+        return get().updateNote(id, { is_archived: true });
+    },
 
-                set((state) => ({
-                    notes: state.notes.map((n) => (n.id === id ? { ...n, ...updatedNote } : n)),
-                    isSyncing: false,
-                    pendingChanges: false,
-                    lastSyncedAt: new Date()
-                }));
-                return updatedNote;
-            } catch (error) {
-                set({ error: error.message, isSyncing: false });
-                return null;
-            }
-        },
+    /**
+     * Unarchive a note
+     */
+    unarchiveNote: async (id) => {
+        return get().updateNote(id, { is_archived: false });
+    },
 
-        trashNote: async (id) => {
-            try {
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes/${id}/trash`, { method: 'POST' });
-                if (!res.ok) throw new Error('Failed to trash note');
-                set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-                return true;
-            } catch (error) {
-                set({ error: error.message });
-                return false;
-            }
-        },
+    /**
+     * Get note versions (still uses API - versions are server-side only)
+     */
+    getNoteVersions: async (id) => {
+        try {
+            const authFetch = getAuthFetch();
+            const res = await authFetch(`${API_URL}/notes/${id}/versions`);
+            if (!res.ok) throw new Error('Failed to fetch versions');
+            return await res.json();
+        } catch (error) {
+            console.error(error);
+            return [];
+        }
+    },
 
-        restoreNote: async (id) => {
-            try {
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes/${id}/restore`, { method: 'POST' });
-                if (!res.ok) throw new Error('Failed to restore note');
-                set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-                return true;
-            } catch (error) {
-                set({ error: error.message });
-                return false;
-            }
-        },
-
-        deleteNote: async (id) => {
-            try {
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes/${id}`, { method: 'DELETE' });
-                if (!res.ok) throw new Error('Failed to delete note');
-                set((state) => ({ notes: state.notes.filter((n) => n.id !== id) }));
-                return true;
-            } catch (error) {
-                set({ error: error.message });
-                return false;
-            }
-        },
-
-        pinNote: async (id, isPinned) => {
-            return get().forceSyncNote(id, { is_pinned: isPinned });
-        },
-
-        archiveNote: async (id) => {
-            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })); // Optimistic remove
-            const result = await get().forceSyncNote(id, { is_archived: true });
-            return result;
-        },
-
-        unarchiveNote: async (id) => {
-            set((state) => ({ notes: state.notes.filter((n) => n.id !== id) })); // Optimistic remove
-            const result = await get().forceSyncNote(id, { is_archived: false });
-            return result;
-        },
-
-        getNoteVersions: async (id) => {
-            try {
-                const authFetch = getAuthFetch();
-                const res = await authFetch(`${API_URL}/notes/${id}/versions`);
-                if (!res.ok) throw new Error('Failed to fetch versions');
-                return await res.json();
-            } catch (error) {
-                console.error(error);
-                return [];
-            }
-        },
-
-        restoreNoteVersion: async (id, versionId) => {
+    /**
+     * Restore a note version (still uses API - versions are server-side only)
+     */
+    restoreNoteVersion: async (id, versionId) => {
+        try {
             const authFetch = getAuthFetch();
             const res = await authFetch(`${API_URL}/notes/${id}/versions/${versionId}/restore`, {
                 method: 'POST'
             });
             if (!res.ok) throw new Error('Failed to restore version');
-            return await res.json();
-        },
+            const restoredNote = await res.json();
 
-        uploadImage: async (file) => {
-            try {
+            // Update local DB with restored content
+            const { isUnlocked, decryptNote } = getEncryption();
+            let noteToStore = restoredNote;
+            if (isUnlocked && restoredNote.encrypted) {
+                noteToStore = await decryptNote(restoredNote);
+            }
+
+            await db.notes.put({
+                ...noteToStore,
+                sync_status: SYNC_STATUS.SYNCED
+            });
+
+            return restoredNote;
+        } catch (error) {
+            console.error(error);
+            throw error;
+        }
+    },
+
+    /**
+     * Upload image - stores locally when offline, uploads when online
+     */
+    uploadImage: async (file) => {
+        try {
+            // Check if online
+            if (navigator.onLine) {
+                // Online: upload to server
                 const formData = new FormData();
                 formData.append('images', file);
 
@@ -436,24 +270,37 @@ export const useNotesStore = create((set, get) => {
                 if (!res.ok) throw new Error('Failed to upload image');
                 const uploadedFiles = await res.json();
                 return uploadedFiles[0];
-            } catch (error) {
-                console.error(error);
-                set({ error: error.message });
-                return null;
-            }
-        },
+            } else {
+                // Offline: store blob locally
+                const { v4: uuidv4 } = await import('uuid');
+                const { LOCAL_IMAGE_PREFIX } = await import('../db/db');
 
-        flushPendingUpdates: async () => {
-            const promises = [];
-            for (const handler of saveHandlers.values()) {
-                const result = handler.flush();
-                if (result instanceof Promise) {
-                    promises.push(result);
-                }
+                const imageId = uuidv4();
+                const now = new Date().toISOString();
+
+                // Store blob in offline_images table
+                // NOTE: Stored as plaintext locally. Encryption happens on server upload.
+                // This is acceptable in our Local-First Zero-Knowledge model as we trust the local device.
+                await db.offline_images.add({
+                    id: imageId,
+                    blob: file,
+                    mime_type: file.type,
+                    created_at: now
+                });
+
+                // Return a placeholder that will be resolved by useLocalImage hook
+                const localUrl = `${LOCAL_IMAGE_PREFIX}${imageId}`;
+                return {
+                    url: localUrl,
+                    thumb_small: localUrl,
+                    thumb_medium: localUrl,
+                    _isOffline: true
+                };
             }
-            if (promises.length > 0) {
-                await Promise.all(promises);
-            }
-        },
-    };
-});
+        } catch (error) {
+            console.error(error);
+            set({ error: error.message });
+            return null;
+        }
+    },
+}));

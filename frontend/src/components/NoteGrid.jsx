@@ -8,7 +8,7 @@ import ShareModal from './ShareModal';
 import { useNotesStore } from '../stores/notesStore';
 
 export default function NoteGrid({ notes, showRestore, showDelete }) {
-    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote, fetchNotes } = useNotesStore();
+    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote } = useNotesStore();
     const [selectedNote, setSelectedNote] = useState(null);
     const [versionHistoryNoteId, setVersionHistoryNoteId] = useState(null);
     const [shareNoteId, setShareNoteId] = useState(null);
@@ -91,6 +91,31 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         </>
     );
 
+    // Intersection Observer for Infinite Scroll
+    const handleObserver = useCallback((entries) => {
+        const target = entries[0];
+        if (target.isIntersecting) {
+            const { displayLimit, loadMore } = useNotesStore.getState();
+            // Only load more if we have notes equal to the limit (meaning there might be more)
+            // Or simpler: just try to load more. The hook will handle the limit.
+            if (notes.length >= displayLimit) {
+                loadMore();
+            }
+        }
+    }, [notes.length]);
+
+    // Use a Ref for the sentinel
+    const observerRef = useCallback(node => {
+        if (!node) return;
+        const observer = new IntersectionObserver(handleObserver, {
+            root: null,
+            rootMargin: "200px", // Preload before reaching exactly bottom
+            threshold: 0.1
+        });
+        observer.observe(node);
+        return () => observer.disconnect();
+    }, [handleObserver]);
+
     if (notes.length === 0) {
         return (
             <Center py="xl">
@@ -110,6 +135,11 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
             <Box w="100%">
                 {pinnedNotes.length > 0 && !showDelete && renderNotes(pinnedNotes, 'Pinned')}
                 {renderNotes(otherNotes, pinnedNotes.length > 0 && !showDelete ? 'Others' : null)}
+
+                {/* Sentinel for Infinite Scroll */}
+                {!showDelete && (
+                    <Box ref={observerRef} h={20} w="100%" /> // Invisible 20px trigger area
+                )}
             </Box>
 
             {activeNote && (
@@ -124,11 +154,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
 
             <ShareModal
                 opened={!!shareNote}
-                onClose={() => {
-                    setShareNoteId(null);
-                    // Refresh notes when share modal closes to reflect changes
-                    fetchNotes();
-                }}
+                onClose={() => setShareNoteId(null)}
                 note={shareNote}
             />
 

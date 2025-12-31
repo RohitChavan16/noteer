@@ -639,8 +639,7 @@ export default function NoteModal({ note, onClose }) {
                                                 console.error('Failed to unshare:', e);
                                             }
                                             onClose();
-                                            // Refresh notes
-                                            useNotesStore.getState().fetchNotes();
+                                            // Note: useLiveQuery automatically updates UI when data changes
                                         }}
                                         title="Remove from my notes"
                                     >

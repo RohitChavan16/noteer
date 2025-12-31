@@ -311,6 +311,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         }
 
         updates.push(`updated_at = CURRENT_TIMESTAMP`);
+        updates.push(`version = version + 1`);
 
         // Save version before ANY changes (including items, labels, images)
         if (hasAnyChanges && isOwner) {
