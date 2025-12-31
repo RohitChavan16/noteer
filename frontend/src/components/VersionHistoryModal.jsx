@@ -119,8 +119,8 @@ export default function VersionHistoryModal({ opened, onClose, noteId }) {
             size="lg"
             zIndex={1100} // Ensure it's above other layers
         >
-            {!versions ? (
-                <Center py="xl"><Text>Loading...</Text></Center>
+            {fetching || !versions ? (
+                <Center py="xl"><Loader size="sm" /><Text ml="sm">Loading versions...</Text></Center>
             ) : versions.length === 0 ? (
                 <Text c="dimmed" ta="center" py="xl">No history available offline.</Text>
             ) : (

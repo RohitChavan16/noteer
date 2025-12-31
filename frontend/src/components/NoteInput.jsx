@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useMantineColorScheme } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
-import { Paper, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge, SimpleGrid, Image, LoadingOverlay, Overlay } from '@mantine/core';
+import { Paper, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Box, Center, Button, Text, Badge, SimpleGrid, LoadingOverlay, Overlay } from '@mantine/core';
 import { IconPlus, IconPalette, IconCheckbox, IconNotes, IconPhoto, IconTrash, IconUpload, IconTypography } from '@tabler/icons-react';
 
 import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteColors';

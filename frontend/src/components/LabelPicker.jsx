@@ -25,7 +25,9 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
             setSearch('');
             setNewLabelName('');
         }
-    }, [opened, selectedLabels]);
+        // ESLint might warn about missing dependency 'selectedLabels', but we intentionaly only want to run this when 'opened' changes to true
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [opened]);
 
     const handleToggleLabel = (labelName) => {
         if (localLabels.includes(labelName)) {

@@ -112,6 +112,9 @@ export function useSync() {
                 page++;
             }
 
+            // Decrypt and upsert notes
+            const notesToFetchVersions = [];
+
             await db.transaction('rw', db.notes, db.syncState, db.note_versions, async () => {
                 for (const encryptedNote of allNotes) {
                     // Check if we have a pending local change
@@ -179,7 +182,7 @@ export function useSync() {
         } catch (error) {
             console.error('Pull sync failed:', error);
         }
-    }, [authFetch, isSyncing]); // Added isSyncing to dependencies
+    }, [authFetch]);
 
     // Upload offline images and replace local URLs with server URLs
     const uploadOfflineImages = useCallback(async () => {
@@ -286,8 +289,58 @@ export function useSync() {
 
     // Push local label changes to server
     const pushLabels = useCallback(async () => {
-        // ... existing implementation ...
-    }, [authFetch]); // Abbreviated for brevity in this tool call, assume it matches existing
+        if (!authFetch) return;
+
+        try {
+            const pendingLabels = await db.labels
+                .where('sync_status')
+                .anyOf([SYNC_STATUS.NEW, SYNC_STATUS.PENDING, SYNC_STATUS.DELETED])
+                .toArray();
+
+            if (pendingLabels.length === 0) return;
+
+            for (const label of pendingLabels) {
+                try {
+                    let res;
+                    if (label.sync_status === SYNC_STATUS.NEW) {
+                        res = await authFetch(`${API_URL}/labels`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: label.name, color: label.color })
+                        });
+                    } else if (label.sync_status === SYNC_STATUS.PENDING) {
+                        res = await authFetch(`${API_URL}/labels/${label.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name: label.name, color: label.color })
+                        });
+                    } else if (label.sync_status === SYNC_STATUS.DELETED) {
+                        res = await authFetch(`${API_URL}/labels/${label.id}`, {
+                            method: 'DELETE'
+                        });
+                    }
+
+                    if (res && (res.ok || (label.sync_status === SYNC_STATUS.DELETED && res.status === 404))) {
+                        if (label.sync_status === SYNC_STATUS.DELETED) {
+                            await db.labels.delete(label.id);
+                        } else if (label.sync_status === SYNC_STATUS.NEW) {
+                            const serverLabel = await res.json();
+                            // Delete temporary ID and insert server ID
+                            await db.labels.delete(label.id);
+                            await db.labels.put({ ...serverLabel, sync_status: SYNC_STATUS.SYNCED });
+                        } else {
+                            // Update existing
+                            await db.labels.update(label.id, { sync_status: SYNC_STATUS.SYNCED });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to push label:', label.id, e);
+                }
+            }
+        } catch (error) {
+            console.error('Push labels failed:', error);
+        }
+    }, [authFetch]);
 
     // Process generic offline action queue (e.g. unsharing)
     const processOfflineQueue = useCallback(async () => {

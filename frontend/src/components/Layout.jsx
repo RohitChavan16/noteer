@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AppShell, Box } from '@mantine/core';
 import Header from './Header';
 import Sidebar from './Sidebar';

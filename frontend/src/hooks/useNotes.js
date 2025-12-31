@@ -24,8 +24,6 @@ const EMPTY_ARRAY = [];
 export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuery = '', label = '', limit = 20 } = {}) {
     return useLiveQuery(async () => {
         // Base query collection
-        let collection;
-
         // Optimization: For default sort (pinned + time), use the compound index directly
         // This is the "Happy Path" for Infinite Scroll
         if (sortBy === 'updated_at' && sortOrder === 'desc' && !searchQuery && !label) {

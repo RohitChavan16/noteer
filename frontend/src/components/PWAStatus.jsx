@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Notification, Group, Text, Button } from '@mantine/core';
-import { IconWifi, IconWifiOff, IconRefresh, IconDownload, IconX } from '@tabler/icons-react';
+import { IconWifiOff, IconRefresh, IconDownload } from '@tabler/icons-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 
 /**
@@ -47,17 +47,18 @@ export default function PWAStatus() {
         const handleBeforeInstallPrompt = (e) => {
             // Prevent the mini-infobar from appearing on mobile
             e.preventDefault();
+
+            // Check if app is already installed/standalone
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                return;
+            }
+
             // Save the event for later
             setDeferredPrompt(e);
             setShowInstallPrompt(true);
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-        // Check if app is already installed
-        if (window.matchMedia('(display-mode: standalone)').matches) {
-            setShowInstallPrompt(false);
-        }
 
         return () => {
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
