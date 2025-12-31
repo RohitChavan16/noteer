@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { NavLink as RouterNavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useNotesStore } from '../stores/notesStore';
-import { useLabelsStore } from '../stores/labelsStore';
+import { useLabels } from '../hooks/useLabels';
 import { Stack, NavLink, Avatar, Group, Text, ActionIcon, Divider, Box, Title, ScrollArea, Image } from '@mantine/core';
 import { IconNote, IconArchive, IconTrash, IconSettings, IconLogout, IconShieldCog, IconTag, IconPencil } from '@tabler/icons-react';
 import EditLabelsModal from './EditLabelsModal';
@@ -10,13 +10,9 @@ import EditLabelsModal from './EditLabelsModal';
 export default function Sidebar({ onClose }) {
     const { user, logout } = useAuthStore();
     const { pendingChanges } = useNotesStore();
-    const { labels, fetchLabels } = useLabelsStore();
+    const labels = useLabels();
     const navigate = useNavigate();
     const [editLabelsOpen, setEditLabelsOpen] = useState(false);
-
-    useEffect(() => {
-        fetchLabels();
-    }, [fetchLabels]);
 
     const handleLogout = () => {
         if (pendingChanges) {

@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useLabelsStore } from '../stores/labelsStore';
+import { useLabels } from '../hooks/useLabels';
 import {
     Modal, Stack, Group, TextInput, Checkbox, Text, ActionIcon, ScrollArea, Button, Badge
 } from '@mantine/core';
 import { IconTag, IconPlus, IconX } from '@tabler/icons-react';
 
 export default function LabelPicker({ selectedLabels = [], onChange, triggerStyle = {}, onOpenChange, iconSize = 16, buttonSize = "sm" }) {
-    const { labels, fetchLabels, getOrCreateLabel, isLoading } = useLabelsStore();
+    const { getOrCreateLabel, isLoading } = useLabelsStore();
+    const labels = useLabels();
     const [opened, setOpened] = useState(false);
     const [newLabelName, setNewLabelName] = useState('');
     const [search, setSearch] = useState('');
@@ -19,13 +21,11 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
 
     useEffect(() => {
         if (opened) {
-            fetchLabels();
             setLocalLabels(selectedLabels);
             setSearch('');
             setNewLabelName('');
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [opened, fetchLabels]);
+    }, [opened, selectedLabels]);
 
     const handleToggleLabel = (labelName) => {
         if (localLabels.includes(labelName)) {

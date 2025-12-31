@@ -3,16 +3,13 @@ import { useState, useEffect } from 'react';
 import { AppShell, Box } from '@mantine/core';
 import Header from './Header';
 import Sidebar from './Sidebar';
-import { useNotesStore } from '../stores/notesStore';
+import { useSync } from '../hooks/useSync';
 
 export default function Layout() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const { startPolling, stopPolling } = useNotesStore();
 
-    useEffect(() => {
-        startPolling();
-        return () => stopPolling();
-    }, [startPolling, stopPolling]);
+    // Initialize sync engine - handles background sync automatically
+    useSync();
 
     const handleMenuToggle = () => {
         setIsMenuOpen(!isMenuOpen);

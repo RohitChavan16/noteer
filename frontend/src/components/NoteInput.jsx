@@ -9,6 +9,7 @@ import { NOTE_COLORS, getNoteColor, getNoteTextColor } from '../constants/noteCo
 import { notifications } from '@mantine/notifications';
 import LabelPicker from './LabelPicker';
 import NoteRichTextEditor from './NoteRichTextEditor';
+import EncryptedImage from './EncryptedImage';
 
 import {
     DndContext,
@@ -372,9 +373,8 @@ export default function NoteInput({ currentLabel }) {
                                 <SimpleGrid cols={images.length === 1 ? 1 : 2} spacing="xs">
                                     {images.map((img, index) => (
                                         <Box key={index} style={{ position: 'relative', height: 100, overflow: 'hidden' }}>
-                                            <Image
+                                            <EncryptedImage
                                                 src={img.thumb_medium || img.url}
-                                                radius="sm"
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
                                             />
                                             <ActionIcon

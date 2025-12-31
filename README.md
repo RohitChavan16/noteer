@@ -81,7 +81,6 @@ volumes:
 | `PORT` | `3000` | Application port |
 | `ADMIN_EMAIL` | `admin@example.com` | Admin user email |
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
-| `NOTE_VERSION_LIMIT` | `10` | Max stored versions per note (FIFO) |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
 | `TRUST_PROXY` | `1` | Proxy trust config: number (hops) or string (`loopback`, CIDR) |
 | `SSL_ENABLED` | `false` | Enable direct HTTPS |

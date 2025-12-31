@@ -10,6 +10,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { MnemonicSetupModal } from './MnemonicSetupModal';
 import { MnemonicUnlockModal } from './MnemonicUnlockModal';
+import { SyncProvider } from './SyncProvider';
 
 export function EncryptionGate({ children }) {
     const { user, setUser } = useAuthStore();
@@ -75,8 +76,13 @@ export function EncryptionGate({ children }) {
                 onUnlock={handleUnlockComplete}
             />
 
-            {/* Only render children if encryption is unlocked */}
-            {isUnlocked && children}
+            {/* Only render children if encryption is unlocked, wrapped in SyncProvider */}
+            {isUnlocked && (
+                <SyncProvider>
+                    {children}
+                </SyncProvider>
+            )}
         </>
     );
 }
+

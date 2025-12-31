@@ -12,6 +12,7 @@ import ArchivePage from './pages/ArchivePage';
 import TrashPage from './pages/TrashPage';
 import SettingsPage from './pages/SettingsPage';
 import AdminPage from './pages/AdminPage';
+import PWAStatus from './components/PWAStatus';
 
 function ProtectedRoute({ children }) {
     const { isAuthenticated } = useAuthStore();
@@ -79,18 +80,21 @@ export default function App() {
     }
 
     return (
-        <Routes>
-            <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-            <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <>
+            <PWAStatus />
+            <Routes>
+                <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+                <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
 
-            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                <Route index element={<NotesPage />} />
-                <Route path="archive" element={<ArchivePage />} />
-                <Route path="trash" element={<TrashPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="admin" element={<AdminPage />} />
-                <Route path="label/:label" element={<NotesPage />} />
-            </Route>
-        </Routes>
+                <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                    <Route index element={<NotesPage />} />
+                    <Route path="archive" element={<ArchivePage />} />
+                    <Route path="trash" element={<TrashPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="admin" element={<AdminPage />} />
+                    <Route path="label/:label" element={<NotesPage />} />
+                </Route>
+            </Routes>
+        </>
     );
 }

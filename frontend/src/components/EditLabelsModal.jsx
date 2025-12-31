@@ -1,27 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLabelsStore } from '../stores/labelsStore';
-import { useNotesStore } from '../stores/notesStore';
+import { useLabels } from '../hooks/useLabels';
 import {
     Modal, Stack, Group, TextInput, Button, Text, ActionIcon, Paper, Badge, Box
 } from '@mantine/core';
 import { IconTag, IconPlus, IconX } from '@tabler/icons-react';
 
 export default function EditLabelsModal({ opened, onClose }) {
-    const { labels, createLabel, deleteLabel, fetchLabels, isLoading } = useLabelsStore();
-    const { fetchNotes, flushPendingUpdates } = useNotesStore();
+    const { createLabel, deleteLabel, isLoading } = useLabelsStore();
+    const labels = useLabels();
     const [newLabelName, setNewLabelName] = useState('');
     const [error, setError] = useState('');
-
-    // Refetch labels when modal opens
-    useEffect(() => {
-        if (opened) {
-            const syncAndFetch = async () => {
-                if (flushPendingUpdates) await flushPendingUpdates();
-                fetchLabels();
-            };
-            syncAndFetch();
-        }
-    }, [opened, fetchLabels, flushPendingUpdates]);
 
     const handleClose = () => {
         setError('');
@@ -50,8 +39,8 @@ export default function EditLabelsModal({ opened, onClose }) {
 
     const handleDelete = async (id) => {
         await deleteLabel(id);
-        // Refetch notes to remove deleted label from note cards
-        fetchNotes();
+        // Note: useLiveQuery automatically updates notes display
+        // Labels in local DB will be refreshed on next sync
     };
 
     return (

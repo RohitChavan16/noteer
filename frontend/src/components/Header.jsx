@@ -1,22 +1,19 @@
 import { useState } from 'react';
 import { useMantineColorScheme } from '@mantine/core';
-import { Group, TextInput, ActionIcon, Burger, SegmentedControl } from '@mantine/core';
+import { Group, TextInput, ActionIcon, Burger, SegmentedControl, Menu, Tooltip } from '@mantine/core';
 import { useNotesStore } from '../stores/notesStore';
-import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList } from '@tabler/icons-react';
+import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList, IconSortAscending, IconSortDescending, IconCalendar, IconSortAZ } from '@tabler/icons-react';
 import { SyncStatus } from './SyncStatus';
 
 export default function Header({ onMenuToggle, isMenuOpen }) {
-    const { colorScheme, setColorScheme } = useMantineColorScheme();
-    const { searchQuery, setSearchQuery, viewMode, setViewMode } = useNotesStore();
+    const { colorScheme, toggleColorScheme } = useMantineColorScheme();
+    const { searchQuery, setSearchQuery, viewMode, setViewMode, sortBy, sortOrder, setSortBy, setSortOrder } = useNotesStore();
     const [localSearch, setLocalSearch] = useState(searchQuery);
 
     const handleSearch = (e) => {
         const value = e.target.value;
         setLocalSearch(value);
-        clearTimeout(window.searchTimeout);
-        window.searchTimeout = setTimeout(() => {
-            setSearchQuery(value);
-        }, 300);
+        setSearchQuery(value);
     };
 
     const clearSearch = () => {
@@ -24,60 +21,122 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
         setSearchQuery('');
     };
 
-    const toggleColorScheme = () => {
-        setColorScheme(colorScheme === 'dark' ? 'light' : 'dark');
+    const handleSortChange = (newSortBy) => {
+        if (newSortBy === sortBy) {
+            // Toggle order if same sort field
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(newSortBy);
+            // Default order: desc for date, asc for title
+            setSortOrder(newSortBy === 'title' ? 'asc' : 'desc');
+        }
+    };
+
+    const getSortIcon = () => {
+        if (sortBy === 'title') {
+            return <IconSortAZ size={18} />;
+        }
+        return sortOrder === 'desc' ? <IconSortDescending size={18} /> : <IconSortAscending size={18} />;
+    };
+
+    const getSortLabel = () => {
+        if (sortBy === 'title') {
+            return sortOrder === 'asc' ? 'A → Z' : 'Z → A';
+        }
+        return sortOrder === 'desc' ? 'Newest first' : 'Oldest first';
     };
 
     return (
-        <Group h="100%" px="md" justify="space-between" wrap="nowrap">
-            <Group gap="xs" wrap="nowrap">
-                <Burger
-                    opened={isMenuOpen}
-                    onClick={onMenuToggle}
-                    hiddenFrom="sm"
-                    size="sm"
-                />
-                <TextInput
-                    placeholder="Search notes..."
-                    leftSection={<IconSearch size={16} />}
-                    rightSection={
-                        localSearch ? (
-                            <ActionIcon variant="subtle" size="sm" onClick={clearSearch}>
-                                <IconX size={14} />
-                            </ActionIcon>
-                        ) : null
-                    }
-                    value={localSearch}
-                    onChange={handleSearch}
-                    w={{ base: 140, xs: 180, sm: 300, md: 400 }}
-                    size="sm"
-                    maxLength={200}
-                />
-            </Group>
+        <header style={{
+            height: '60px',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 16px',
+            borderBottom: '1px solid var(--mantine-color-default-border)',
+            backgroundColor: 'var(--mantine-color-body)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 100
+        }}>
+            <Group w="100%" justify="space-between">
+                <Group>
+                    <Burger opened={isMenuOpen} onClick={onMenuToggle} hiddenFrom="sm" size="sm" />
+                    <div style={{ fontWeight: 700, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Noteer
+                    </div>
+                </Group>
 
-            <Group gap={4} wrap="nowrap">
-                {/* Hide toggle on touch devices - always use list view there */}
-                {(typeof window === 'undefined' || (!('ontouchstart' in window) && navigator.maxTouchPoints === 0)) && (
-                    <SegmentedControl
-                        value={viewMode}
-                        onChange={setViewMode}
-                        data={[
-                            { value: 'grid', label: <IconLayoutGrid size={16} /> },
-                            { value: 'list', label: <IconList size={16} /> },
-                        ]}
-                        size="xs"
+                <Group flex={1} maw={600} mx="md">
+                    <TextInput
+                        placeholder="Search"
+                        value={localSearch}
+                        onChange={handleSearch}
+                        leftSection={<IconSearch size={16} />}
+                        rightSection={
+                            localSearch && (
+                                <ActionIcon size="sm" variant="transparent" c="dimmed" onClick={clearSearch}>
+                                    <IconX size={14} />
+                                </ActionIcon>
+                            )
+                        }
+                        style={{ flex: 1 }}
                     />
-                )}
-                <ActionIcon
-                    variant="subtle"
-                    size="md"
-                    onClick={toggleColorScheme}
-                    title={`Switch to ${colorScheme === 'dark' ? 'light' : 'dark'} mode`}
-                >
-                    {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
-                </ActionIcon>
-                <SyncStatus />
+                </Group>
+
+                <Group gap={4} wrap="nowrap">
+                    {/* Sorting dropdown */}
+                    <Menu shadow="md" width={180} position="bottom-end">
+                        <Menu.Target>
+                            <Tooltip label={getSortLabel()}>
+                                <ActionIcon variant="subtle" size="md">
+                                    {getSortIcon()}
+                                </ActionIcon>
+                            </Tooltip>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                            <Menu.Label>Sort by</Menu.Label>
+                            <Menu.Item
+                                leftSection={<IconCalendar size={14} />}
+                                rightSection={sortBy === 'updated_at' ? (sortOrder === 'desc' ? '↓' : '↑') : null}
+                                onClick={() => handleSortChange('updated_at')}
+                                style={{ fontWeight: sortBy === 'updated_at' ? 600 : 400 }}
+                            >
+                                Updated date
+                            </Menu.Item>
+                            <Menu.Item
+                                leftSection={<IconSortAZ size={14} />}
+                                rightSection={sortBy === 'title' ? (sortOrder === 'asc' ? 'A→Z' : 'Z→A') : null}
+                                onClick={() => handleSortChange('title')}
+                                style={{ fontWeight: sortBy === 'title' ? 600 : 400 }}
+                            >
+                                Alphabetical
+                            </Menu.Item>
+                        </Menu.Dropdown>
+                    </Menu>
+
+                    {/* Hide toggle on touch devices - always use list view there */}
+                    {(typeof window === 'undefined' || (!('ontouchstart' in window) && navigator.maxTouchPoints === 0)) && (
+                        <SegmentedControl
+                            value={viewMode}
+                            onChange={setViewMode}
+                            data={[
+                                { value: 'grid', label: <IconLayoutGrid size={16} /> },
+                                { value: 'list', label: <IconList size={16} /> },
+                            ]}
+                            size="xs"
+                        />
+                    )}
+                    <ActionIcon
+                        variant="subtle"
+                        size="md"
+                        onClick={toggleColorScheme}
+                        title={`Switch to ${colorScheme === 'dark' ? 'light' : 'dark'} mode`}
+                    >
+                        {colorScheme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
+                    </ActionIcon>
+                    <SyncStatus />
+                </Group>
             </Group>
-        </Group>
+        </header>
     );
 }
