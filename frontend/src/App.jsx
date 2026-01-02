@@ -92,7 +92,7 @@ export default function App() {
                     <Route path="trash" element={<TrashPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                     <Route path="admin" element={<AdminPage />} />
-                    <Route path="label/:label" element={<NotesPage />} />
+                    <Route path="label/:labelId" element={<NotesPage />} />
                 </Route>
             </Routes>
         </>

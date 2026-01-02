@@ -21,19 +21,27 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
 
     useEffect(() => {
         if (opened) {
-            setLocalLabels(selectedLabels);
+            // Normalize selectedLabels to IDs
+            // If we have legacy labels (strings), try to find their ID
+            const nameToId = new Map(labels.map(l => [l.name, l.id]));
+            const normalized = selectedLabels.map(l => {
+                if (typeof l === 'number') return l;
+                if (typeof l === 'string') return nameToId.get(l);
+                return null;
+            }).filter(Boolean); // Remove nulls/undefined
+
+            setLocalLabels(normalized);
             setSearch('');
             setNewLabelName('');
         }
-        // ESLint might warn about missing dependency 'selectedLabels', but we intentionaly only want to run this when 'opened' changes to true
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [opened]);
+    }, [opened, labels]); // Added labels dependency to ensure mapping is fresh
 
-    const handleToggleLabel = (labelName) => {
-        if (localLabels.includes(labelName)) {
-            setLocalLabels(localLabels.filter((l) => l !== labelName));
+    const handleToggleLabel = (labelId) => {
+        if (localLabels.includes(labelId)) {
+            setLocalLabels(localLabels.filter((id) => id !== labelId));
         } else {
-            setLocalLabels([...localLabels, labelName]);
+            setLocalLabels([...localLabels, labelId]);
         }
     };
 
@@ -42,12 +50,18 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
 
         const result = await getOrCreateLabel(newLabelName.trim());
         if (result.success) {
-            if (!localLabels.includes(result.label.name)) {
-                setLocalLabels([...localLabels, result.label.name]);
+            if (!localLabels.includes(result.label.id)) {
+                setLocalLabels([...localLabels, result.label.id]);
             }
             setNewLabelName('');
             setSearch('');
         }
+    };
+
+    // Helper to get name from ID
+    const getLabelName = (id) => {
+        const label = labels.find(l => l.id === id);
+        return label ? label.name : ''; // Fallback for unknown IDs
     };
 
     const handleKeyDown = (e) => {
@@ -132,9 +146,9 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
                     {/* Selected labels */}
                     {localLabels.length > 0 && (
                         <Group gap="xs">
-                            {localLabels.map((label) => (
+                            {localLabels.map((id) => (
                                 <Badge
-                                    key={label}
+                                    key={id}
                                     size="md"
                                     variant="filled"
                                     tt="none"
@@ -143,13 +157,13 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
                                             size="xs"
                                             variant="transparent"
                                             color="white"
-                                            onClick={() => handleToggleLabel(label)}
+                                            onClick={() => handleToggleLabel(id)}
                                         >
                                             <IconX size={12} />
                                         </ActionIcon>
                                     }
                                 >
-                                    {label}
+                                    {getLabelName(id)}
                                 </Badge>
                             ))}
                         </Group>
@@ -169,8 +183,8 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
                                     <Checkbox
                                         key={label.id}
                                         label={label.name}
-                                        checked={localLabels.includes(label.name)}
-                                        onChange={() => handleToggleLabel(label.name)}
+                                        checked={localLabels.includes(label.id)}
+                                        onChange={() => handleToggleLabel(label.id)}
                                         size="md"
                                     />
                                 ))

@@ -7,17 +7,19 @@ import { useNotesStore } from '../stores/notesStore';
 
 // Constants
 const API_URL = '/api';
-const SYNC_INTERVAL_MS = 30000; // 30 seconds
+const SYNC_INTERVAL_MS = 4000; // 4 seconds
 const SYNC_PAGE_SIZE = 1000;
 const MAX_RETRY_ATTEMPTS = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
+
+// Global sync lock - prevents duplicate syncs from multiple hook instances (React StrictMode)
+let globalSyncLock = false;
 
 /**
  * Sync Engine Hook - The "Sync Edge"
  */
 export function useSync() {
     const authFetch = useAuthStore.getState().authFetch;
-    const syncInProgress = useRef(false);
     const isSyncing = useNotesStore(state => state.isSyncing); // Subscribe to syncing state
 
     // Lazy Version Sync Queue
@@ -68,9 +70,11 @@ export function useSync() {
 
     // Pull changes from server (with decryption)
     const pullChanges = useCallback(async () => {
+
         if (!authFetch) return;
 
         const encryptionStore = useEncryptionStore.getState();
+
         if (!encryptionStore.isUnlocked) {
             console.warn('Sync: Encryption not unlocked, skipping pull');
             return;
@@ -80,6 +84,7 @@ export function useSync() {
             // Get last sync time
             const syncState = await db.syncState.get('lastSyncTime');
             const since = syncState?.value || null;
+
 
             // If no lastSyncTime, this is initial sync - need to fetch ALL notes
             // Backend may paginate, so we loop until we get all
@@ -112,16 +117,36 @@ export function useSync() {
                 page++;
             }
 
+
+
             // Decrypt and upsert notes
             const notesToFetchVersions = [];
 
             await db.transaction('rw', db.notes, db.syncState, db.note_versions, async () => {
                 for (const encryptedNote of allNotes) {
                     // Check if we have a pending local change
-                    const local = await db.notes.get(encryptedNote.id);
+                    let local = await db.notes.get(encryptedNote.id);
+
+                    // Fallback to number lookup if string fails (legacy IDs)
+                    if (!local && !isNaN(Number(encryptedNote.id))) {
+                        local = await db.notes.get(Number(encryptedNote.id));
+                    }
+
+                    console.log('[pullChanges] Checking collision for:', encryptedNote.id,
+                        'RemoteType:', typeof encryptedNote.id,
+                        'LocalFound:', !!local,
+                        'LocalStatus:', local ? local.sync_status : 'N/A');
 
                     if (local && local.sync_status !== SYNC_STATUS.SYNCED) {
                         // Conflict: Local has pending changes
+
+                        // CRITICAL: If locally deleted, ALWAYS keep local deletion (ignore server update)
+                        // The deletion will be pushed in the next cycle
+                        if (local.sync_status === SYNC_STATUS.DELETED) {
+                            console.log('[pullChanges] Validating: Skipping update for locally DELETED note', encryptedNote.id);
+                            continue;
+                        }
+
                         // Resolution: Preserve local if it's newer, otherwise server wins
                         const localTime = new Date(local.updated_at).getTime();
                         const serverNoteTime = new Date(encryptedNote.updated_at).getTime();
@@ -134,9 +159,11 @@ export function useSync() {
                     }
 
                     // Decrypt the note
+
                     let decryptedNote;
                     try {
                         decryptedNote = await encryptionStore.decryptNote(encryptedNote);
+
                     } catch (e) {
                         console.error('Failed to decrypt note:', encryptedNote.id, e);
                         // Store with decryption error marker
@@ -149,6 +176,16 @@ export function useSync() {
                     }
 
                     // Store decrypted note in local DB
+                    if (decryptedNote.is_trashed) {
+                        console.log('[pullChanges] Validating trashed note before save:', decryptedNote.id, 'is_trashed:', decryptedNote.is_trashed);
+                    }
+
+                    // Map server label_ids to local labels property
+                    // This ensures frontend components (which use note.labels) work with IDs
+                    if (encryptedNote.label_ids) {
+                        decryptedNote.labels = encryptedNote.label_ids;
+                    }
+
                     await db.notes.put({
                         ...decryptedNote,
                         sync_status: SYNC_STATUS.SYNCED
@@ -393,6 +430,7 @@ export function useSync() {
 
             if (pendingNotes.length === 0) return;
 
+
             // Build batch operations with encryption
             const operations = [];
             for (const note of pendingNotes) {
@@ -417,6 +455,8 @@ export function useSync() {
                             color: encryptedNote.color,
                             is_pinned: encryptedNote.is_pinned,
                             items: encryptedNote.items,
+                            label_ids: note.labels || [],
+                            labels: [], // Legacy compat
                             encrypted: encryptedNote.encrypted,
                             encrypted_note_key: encryptedNote.encrypted_note_key
                         }
@@ -433,6 +473,7 @@ export function useSync() {
                         color: note.color,
                         is_pinned: note.is_pinned,
                         is_archived: note.is_archived,
+                        is_trashed: note.is_trashed,
                         items: note.items,
                         encrypted_note_key: note.encrypted_note_key // Pass existing key
                     });
@@ -446,7 +487,10 @@ export function useSync() {
                             color: encryptedNote.color,
                             is_pinned: encryptedNote.is_pinned,
                             is_archived: encryptedNote.is_archived,
+                            is_trashed: encryptedNote.is_trashed,
                             items: encryptedNote.items,
+                            label_ids: note.labels || [],
+                            labels: [], // Legacy compat
                             encrypted: encryptedNote.encrypted,
                             encrypted_note_key: encryptedNote.encrypted_note_key
                         },
@@ -455,7 +499,8 @@ export function useSync() {
                 }
             }
 
-            const res = await authFetch(`${API_URL}/notes/batch`, {
+
+            const res = await authFetch(`${API_URL}/notes/sync/batch`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ operations })
@@ -464,6 +509,7 @@ export function useSync() {
             if (!res.ok) throw new Error('Sync push failed');
 
             const { results } = await res.json();
+
 
             // Process results
             await db.transaction('rw', db.notes, async () => {
@@ -543,25 +589,32 @@ export function useSync() {
 
     // Full sync with retry logic
     const sync = useCallback(async (retryCount = 0) => {
-        if (syncInProgress.current) return;
-        syncInProgress.current = true;
+
+        if (globalSyncLock) return;
+        globalSyncLock = true;
 
         // Update sync status in store atomically
         useNotesStore.setState({ isSyncing: true });
 
         try {
             // First upload any offline images and update note references
+
             await uploadOfflineImages();
 
             // Sync labels
+
             await pushLabels();
+
             await pullLabels();
 
             // Process offline queue (unshares etc.)
+
             await processOfflineQueue();
 
             // Sync notes
+
             await pushChanges();
+
             await pullChanges();
 
             // Atomic state update to prevent race conditions
@@ -585,17 +638,22 @@ export function useSync() {
             if (navigator.onLine && retryCount < MAX_RETRY_ATTEMPTS) {
                 const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount);
                 console.log(`Sync retry ${retryCount + 1}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
-                syncInProgress.current = false; // Allow retry
+                globalSyncLock = false; // Allow retry
                 setTimeout(() => sync(retryCount + 1), delay);
                 return; // Don't reset syncInProgress yet
             }
         } finally {
-            syncInProgress.current = false;
+            globalSyncLock = false;
         }
     }, [uploadOfflineImages, pushLabels, pullLabels, pushChanges, pullChanges, processOfflineQueue]);
 
     // Auto-sync on mount and periodically
     useEffect(() => {
+
+        // Register sync function in store for manual trigger
+        useNotesStore.getState().setTriggerSync(sync);
+
+
         // Initial sync
         sync();
 

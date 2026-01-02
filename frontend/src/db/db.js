@@ -2,9 +2,8 @@ import Dexie from 'dexie';
 
 export const db = new Dexie('noteer');
 
-// Version 1: Initial consistent schema
-// Includes labels, offline_images, and versioning for OCC
-db.version(1).stores({
+// Version 2: Added compound indexes for sorting
+db.version(2).stores({
     notes: 'id, user_id, updated_at, title, is_pinned, is_archived, is_trashed, sync_status, version, [is_pinned+updated_at], [is_pinned+title]',
     syncState: 'key',
     offline_images: 'id, created_at',

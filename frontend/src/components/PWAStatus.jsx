@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Notification, Group, Text, Button } from '@mantine/core';
-import { IconWifiOff, IconRefresh, IconDownload } from '@tabler/icons-react';
+import { IconWifiOff, IconRefresh, IconDownload, IconSettings } from '@tabler/icons-react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { notifications } from '@mantine/notifications';
+import { usePWAStore } from '../stores/pwaStore';
 
 /**
  * PWA Status Component
@@ -13,7 +15,9 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 export default function PWAStatus() {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-    const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+    // Use global store for PWA state
+    const { deferredPrompt, setDeferredPrompt, isInstalled, setIsInstalled } = usePWAStore();
 
     // PWA update handling
     const {
@@ -42,6 +46,16 @@ export default function PWAStatus() {
         };
     }, []);
 
+    // Check for standalone mode (isInstalled)
+    useEffect(() => {
+        const mq = window.matchMedia('(display-mode: standalone)');
+        setIsInstalled(mq.matches);
+
+        const handler = (e) => setIsInstalled(e.matches);
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, [setIsInstalled]);
+
     // PWA Install prompt handling
     useEffect(() => {
         const handleBeforeInstallPrompt = (e) => {
@@ -50,6 +64,13 @@ export default function PWAStatus() {
 
             // Check if app is already installed/standalone
             if (window.matchMedia('(display-mode: standalone)').matches) {
+                return;
+            }
+
+            // Check if user previously dismissed the prompt
+            if (localStorage.getItem('pwa-install-dismissed') === 'true') {
+                // Still save the event so it can be triggered from Settings
+                setDeferredPrompt(e);
                 return;
             }
 
@@ -75,6 +96,19 @@ export default function PWAStatus() {
             setShowInstallPrompt(false);
         }
         setDeferredPrompt(null);
+    };
+
+    const handleDismiss = () => {
+        setShowInstallPrompt(false);
+        localStorage.setItem('pwa-install-dismissed', 'true');
+
+        notifications.show({
+            title: 'Installation available',
+            message: 'You can install Noteer anytime from Settings',
+            icon: <IconSettings size={18} />,
+            color: 'blue',
+            autoClose: 4000
+        });
     };
 
     const handleUpdate = () => {
@@ -108,8 +142,8 @@ export default function PWAStatus() {
                 </Notification>
             )}
 
-            {/* Update Available Banner */}
-            {needRefresh && (
+            {/* Update Available Banner (only in standalone mode) */}
+            {needRefresh && isInstalled && (
                 <Notification
                     icon={<IconRefresh size={18} />}
                     color="blue"
@@ -143,7 +177,7 @@ export default function PWAStatus() {
                     icon={<IconDownload size={18} />}
                     color="green"
                     title="Install Noteer"
-                    onClose={() => setShowInstallPrompt(false)}
+                    onClose={handleDismiss}
                     style={{
                         position: 'fixed',
                         bottom: (!isOnline ? 120 : 20) + (needRefresh ? 100 : 0),
@@ -159,7 +193,7 @@ export default function PWAStatus() {
                         <Button size="xs" onClick={handleInstall} leftSection={<IconDownload size={14} />}>
                             Install
                         </Button>
-                        <Button size="xs" variant="subtle" onClick={() => setShowInstallPrompt(false)}>
+                        <Button size="xs" variant="subtle" onClick={handleDismiss}>
                             Not now
                         </Button>
                     </Group>

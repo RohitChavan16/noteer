@@ -10,7 +10,7 @@ const router = Router();
 router.use(authenticateToken);
 
 // POST /api/notes/versions/sync - Batch fetch versions
-router.post('/sync', async (req, res, next) => {
+router.post('/versions/sync', async (req, res, next) => {
     try {
         const { noteIds } = req.body;
         const userId = req.user.id;

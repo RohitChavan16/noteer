@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMantineColorScheme } from '@mantine/core';
 import { Group, TextInput, ActionIcon, Burger, SegmentedControl, Menu, Tooltip } from '@mantine/core';
 import { useNotesStore } from '../stores/notesStore';
-import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList, IconSortAscending, IconSortDescending, IconCalendar, IconSortAZ } from '@tabler/icons-react';
+import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList, IconSortAscending, IconSortDescending, IconSortAZ } from '@tabler/icons-react';
 import { SyncStatus } from './SyncStatus';
 
 export default function Header({ onMenuToggle, isMenuOpen }) {
@@ -96,20 +96,32 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                         <Menu.Dropdown>
                             <Menu.Label>Sort by</Menu.Label>
                             <Menu.Item
-                                leftSection={<IconCalendar size={14} />}
-                                rightSection={sortBy === 'updated_at' ? (sortOrder === 'desc' ? '↓' : '↑') : null}
-                                onClick={() => handleSortChange('updated_at')}
-                                style={{ fontWeight: sortBy === 'updated_at' ? 600 : 400 }}
+                                leftSection={<IconSortDescending size={14} />}
+                                onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}
+                                style={{ fontWeight: sortBy === 'updated_at' && sortOrder === 'desc' ? 600 : 400 }}
                             >
-                                Updated date
+                                Newest first
+                            </Menu.Item>
+                            <Menu.Item
+                                leftSection={<IconSortAscending size={14} />}
+                                onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}
+                                style={{ fontWeight: sortBy === 'updated_at' && sortOrder === 'asc' ? 600 : 400 }}
+                            >
+                                Oldest first
                             </Menu.Item>
                             <Menu.Item
                                 leftSection={<IconSortAZ size={14} />}
-                                rightSection={sortBy === 'title' ? (sortOrder === 'asc' ? 'A→Z' : 'Z→A') : null}
-                                onClick={() => handleSortChange('title')}
-                                style={{ fontWeight: sortBy === 'title' ? 600 : 400 }}
+                                onClick={() => { setSortBy('title'); setSortOrder('asc'); }}
+                                style={{ fontWeight: sortBy === 'title' && sortOrder === 'asc' ? 600 : 400 }}
                             >
-                                Alphabetical
+                                Alphabetical (A→Z)
+                            </Menu.Item>
+                            <Menu.Item
+                                leftSection={<IconSortAZ size={14} style={{ transform: 'scaleX(-1)' }} />}
+                                onClick={() => { setSortBy('title'); setSortOrder('desc'); }}
+                                style={{ fontWeight: sortBy === 'title' && sortOrder === 'desc' ? 600 : 400 }}
+                            >
+                                Alphabetical (Z→A)
                             </Menu.Item>
                         </Menu.Dropdown>
                     </Menu>

@@ -12,7 +12,7 @@
 import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
-import { bulkInsertItems, bulkInsertImages, setNoteLabels, cleanupOrphanImages } from '../db/helpers.js';
+import { bulkInsertItems, bulkInsertImages, setNoteLabels, setNoteLabelIds, cleanupOrphanImages } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { PAGINATION } from '../config/constants.js';
 
@@ -32,11 +32,13 @@ const validateNote = [
     body('reminder_at').optional().isISO8601(),
     body('encrypted').optional().isBoolean(),
     body('encrypted_note_key').optional().isString(),
+    body('label_ids').optional().isArray(),
+    body('label_ids.*').isInt(),
 ];
 
 // SQL Subqueries construction
 const getCommonSubqueries = (userIdParamIdx) => ({
-    labels: `(SELECT array_agg(DISTINCT l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $${userIdParamIdx} AND l.name IS NOT NULL)`,
+    labels: `(SELECT array_agg(DISTINCT l.id) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $${userIdParamIdx})`,
     items: `COALESCE((
         SELECT json_agg(json_build_object('content', ni.content, 'is_checked', ni.is_checked, 'position', ni.position) ORDER BY ni.position)
         FROM note_items ni WHERE ni.note_id = n.id
@@ -182,6 +184,8 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
         const result = await query(
             `SELECT n.*, array_agg(l.name) FILTER (WHERE l.name IS NOT NULL) as labels
              FROM notes n
+             LEFT JOIN user_note_labels unl ON n.id = unl.note_id
+             LEFT JOIN labels l ON unl.label_id = l.id
              WHERE n.id = $1 AND n.user_id = $2
              GROUP BY n.id`,
             [id, userId]
@@ -208,7 +212,7 @@ router.post('/', validateNote, async (req, res, next) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { title, content, type, color, is_pinned, reminder_at, items, labels, images, encrypted, encrypted_note_key } = req.body;
+        const { title, content, type, color, is_pinned, reminder_at, items, labels, label_ids, images, encrypted, encrypted_note_key } = req.body;
         const userId = req.user.id;
 
         const result = await query(
@@ -232,11 +236,18 @@ router.post('/', validateNote, async (req, res, next) => {
 
         // Bulk insert related data (single query each instead of N+1)
         await bulkInsertItems(note.id, items);
-        await setNoteLabels(userId, note.id, labels);
+
+        if (label_ids && Array.isArray(label_ids)) {
+            await setNoteLabelIds(userId, note.id, label_ids);
+        } else {
+            await setNoteLabels(userId, note.id, labels);
+        }
+
         await bulkInsertImages(note.id, userId, images);
 
         note.items = items || [];
         note.labels = labels || [];
+        note.label_ids = label_ids || [];
         note.images = images || [];
 
         res.status(201).json(note);
@@ -255,7 +266,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         const { id } = req.params;
         const userId = req.user.id;
-        const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels, images, encrypted, encrypted_note_key } = req.body;
+        const { title, content, type, color, is_pinned, is_archived, reminder_at, items, labels, label_ids, images, encrypted, encrypted_note_key } = req.body;
 
         // Check if user owns the note or has shared access
         const noteCheck = await query(
@@ -304,9 +315,9 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         let result;
         const hasShareUpdates = !isOwner && (is_pinned !== undefined || is_archived !== undefined);
-        const hasAnyChanges = updates.length > 0 || items || labels || images;
+        const hasAnyChanges = updates.length > 0 || items || labels || label_ids || images;
 
-        if (updates.length === 0 && !items && !labels && !images && !hasShareUpdates) {
+        if (updates.length === 0 && !items && !labels && !label_ids && !images && !hasShareUpdates) {
             return res.json({ success: true });
         }
 
@@ -367,7 +378,9 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
         }
 
         // Update labels (bulk)
-        if (labels && Array.isArray(labels)) {
+        if (label_ids && Array.isArray(label_ids)) {
+            await setNoteLabelIds(userId, id, label_ids);
+        } else if (labels && Array.isArray(labels)) {
             await setNoteLabels(userId, id, labels);
         }
 

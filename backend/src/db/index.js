@@ -98,12 +98,13 @@ export async function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_note_items_note_id ON note_items(note_id);
 
     -- Labels (per-user)
+    -- Modified for E2E Encryption: name is TEXT (encrypted blob), removed UNIQUE constraint
+    DROP TABLE IF EXISTS labels CASCADE;
     CREATE TABLE IF NOT EXISTS labels (
       id SERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      name VARCHAR(100) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(user_id, name)
+      name TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 
     -- User-Note-Labels junction (each user has their own labels on notes)

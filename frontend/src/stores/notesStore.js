@@ -20,6 +20,17 @@ const getDefaultViewMode = () => {
     return 'grid';
 };
 
+// Load persisted UI preferences from localStorage
+const loadPersistedPrefs = () => {
+    try {
+        const stored = localStorage.getItem('noteer-ui-prefs');
+        if (stored) return JSON.parse(stored);
+    } catch (e) { /* ignore */ }
+    return {};
+};
+
+const persistedPrefs = loadPersistedPrefs();
+
 /**
  * Notes Store - Refactored for Local-First Architecture
  * 
@@ -34,20 +45,41 @@ export const useNotesStore = create((set, get) => ({
     isLoading: false,
     error: null,
     searchQuery: '',
-    viewMode: getDefaultViewMode(),
-    sortBy: 'updated_at',  // 'updated_at' | 'title'
-    sortOrder: 'desc',     // 'asc' | 'desc'
+    viewMode: persistedPrefs.viewMode || getDefaultViewMode(),
+    sortBy: persistedPrefs.sortBy || 'updated_at',  // 'updated_at' | 'title'
+    sortOrder: persistedPrefs.sortOrder || 'desc',  // 'asc' | 'desc'
 
     // Sync state (for UI indicators)
     isSyncing: false,
     pendingChanges: false,
     lastSyncedAt: null,
+    triggerSync: null, // Will be set by useSync hook
 
-    // UI State setters
+    // UI State setters (with persistence)
     setSearchQuery: (query) => set({ searchQuery: query }),
-    setViewMode: (mode) => set({ viewMode: mode }),
-    setSortBy: (sortBy) => set({ sortBy }),
-    setSortOrder: (sortOrder) => set({ sortOrder }),
+    setViewMode: (mode) => {
+        set({ viewMode: mode });
+        try {
+            const prefs = loadPersistedPrefs();
+            localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, viewMode: mode }));
+        } catch (e) { /* ignore */ }
+    },
+    setSortBy: (sortBy) => {
+        set({ sortBy });
+        try {
+            const prefs = loadPersistedPrefs();
+            localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortBy }));
+        } catch (e) { /* ignore */ }
+    },
+    setSortOrder: (sortOrder) => {
+        set({ sortOrder });
+        try {
+            const prefs = loadPersistedPrefs();
+            localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortOrder }));
+        } catch (e) { /* ignore */ }
+    },
+
+    setTriggerSync: (fn) => set({ triggerSync: fn }),
 
     /**
      * Create a new note - writes to local DB immediately
@@ -82,8 +114,17 @@ export const useNotesStore = create((set, get) => ({
                 sync_status: SYNC_STATUS.NEW // Mark for sync
             };
 
+            // NOTE: Do NOT encrypt here! Notes are stored PLAINTEXT in local Dexie DB.
+            // Encryption happens at the "sync edge" in useSync.js pushChanges().
+            // This enables local search/sort and keeps the architecture clean.
+
             // Write to local Dexie DB
-            await db.notes.add(newNote);
+            try {
+                await db.notes.add(newNote);
+            } catch (dbError) {
+                console.error('[createNote] Dexie write failed:', dbError);
+                throw dbError;
+            }
 
             set({ pendingChanges: true });
             return newNote;
@@ -166,11 +207,15 @@ export const useNotesStore = create((set, get) => ({
             const note = await db.notes.get(id);
             if (!note) return true;
 
+            console.log('[deleteNote] Deleting note:', id, 'status:', note.sync_status);
+
             if (note.sync_status === SYNC_STATUS.NEW) {
                 // Note was never synced to server, just delete locally
+                console.log('[deleteNote] Physical delete (NEW)');
                 await db.notes.delete(id);
             } else {
                 // Mark for deletion, sync engine will delete on server
+                console.log('[deleteNote] Soft delete (marking DELETED)');
                 await db.notes.update(id, { sync_status: SYNC_STATUS.DELETED });
             }
 

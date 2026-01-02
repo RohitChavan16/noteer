@@ -397,10 +397,43 @@ export function serializeEncryptedData(encryptedData) {
 }
 
 /**
- * Deserialize encryption data from storage
- * @param {string} serialized - JSON string
  * @returns {object}
  */
 export function deserializeEncryptedData(serialized) {
     return JSON.parse(serialized);
+}
+
+// ============================================
+// Label Encryption (Master Key)
+// ============================================
+
+/**
+ * Encrypt label name with Master Key
+ * @param {string} name - Label name
+ * @param {Uint8Array} masterKey - User's Master Key
+ * @returns {Promise<string>} serialized encrypted blob
+ */
+export async function encryptLabel(name, masterKey) {
+    const { ciphertext, iv } = await encryptContent(name, masterKey);
+    return JSON.stringify({ ciphertext, iv });
+}
+
+/**
+ * Decrypt label name with Master Key
+ * @param {string} encryptedBlob - serialized encrypted blob
+ * @param {Uint8Array} masterKey - User's Master Key
+ * @returns {Promise<string>} Decrypted label name
+ */
+export async function decryptLabel(encryptedBlob, masterKey) {
+    try {
+        // Handle case where label might be plaintext (legacy/migration)
+        if (!encryptedBlob.includes('ciphertext')) {
+            return encryptedBlob;
+        }
+        const { ciphertext, iv } = JSON.parse(encryptedBlob);
+        return await decryptContent(ciphertext, iv, masterKey);
+    } catch (e) {
+        console.error('Label decryption failed:', e);
+        return '[Encrypted Label]';
+    }
 }

@@ -102,22 +102,11 @@ app.use(cookieParser());
 // Request ID for correlation
 app.use(requestId);
 
-// Debug logging middleware (development only)
-if (process.env.NODE_ENV !== 'production') {
-  app.use((req, res, next) => {
-    console.log(`[${req.requestId}] ${req.method} ${req.url}`);
-    next();
-  });
-}
-
-// Serve uploads from persistent storage
-const UPLOADS_PATH = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
-app.use('/uploads', express.static(UPLOADS_PATH));
-
-// Serve static frontend in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(join(__dirname, '../../frontend/dist')));
-}
+// Debug logging middleware - ALWAYS log in this debugging session
+app.use((req, res, next) => {
+  console.log(`[${req.requestId}] ${req.method} ${req.url}`);
+  next();
+});
 
 // API Routes with rate limiting
 app.use('/api/auth', authLimiter, authRoutes);
@@ -139,15 +128,22 @@ app.get('/api/health', (req, res) => {
 // 404 handler for undefined API routes
 app.use('/api', notFoundHandler);
 
-// Error handler
-app.use(errorHandler);
+// Serve uploads from persistent storage
+const UPLOADS_PATH = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
+app.use('/uploads', express.static(UPLOADS_PATH));
 
-// SPA fallback for production (Express 5.x syntax)
+// Serve static frontend in production - AFTER API routes
 if (process.env.NODE_ENV === 'production') {
-  app.get('/{*path}', (req, res) => {
+  app.use(express.static(join(__dirname, '../../frontend/dist')));
+
+  // SPA fallback
+  app.get(/(.*)/, (req, res) => {
     res.sendFile(join(__dirname, '../../frontend/dist/index.html'));
   });
 }
+
+// Error handler
+app.use(errorHandler);
 
 // Start server
 async function start() {

@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useAuthStore } from '../stores/authStore';
 import { useEncryptionStore } from '../stores/encryptionStore';
+import { useLabelsMap } from '../hooks/useLabels';
 import { useMantineColorScheme } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { Modal, TextInput, Group, ActionIcon, Popover, ColorSwatch, Stack, Button, Text, Badge, Menu, Avatar, Tooltip, Collapse, Box, Divider, SimpleGrid, LoadingOverlay, Overlay, Center } from '@mantine/core';
@@ -58,6 +59,7 @@ export default function NoteModal({ note, onClose }) {
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [isShared, setIsShared] = useState(note?.is_shared || false);
     const { authFetch, user } = useAuthStore();
+    const labelsMap = useLabelsMap();
 
     const [completedExpanded, setCompletedExpanded] = useState(() => {
         if (typeof window === 'undefined') return true;
@@ -466,7 +468,7 @@ export default function NoteModal({ note, onClose }) {
                                         tt="none"
                                         style={{ color: textColor, borderColor: textColor, opacity: 0.8 }}
                                     >
-                                        {label}
+                                        {labelsMap?.get(label) || label}
                                     </Badge>
                                 ))}
                             </Group>

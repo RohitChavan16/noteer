@@ -20,6 +20,8 @@ import {
     decryptNoteKeyWithPrivateKey,
     encryptImage,
     decryptImage,
+    encryptLabel,
+    decryptLabel,
     bytesToHex,
     hexToBytes
 } from '../utils/crypto';
@@ -317,7 +319,13 @@ export const useEncryptionStore = create((set, get) => ({
      * @returns {object} Decrypted note
      */
     decryptNote: async (note) => {
-        if (!note.encrypted) return note;
+        // Check if note is actually encrypted - either by flag or by content pattern
+        // This handles legacy data where encrypted flag might be incorrect
+        const hasEncryptedContent = note.title &&
+            typeof note.title === 'string' &&
+            note.title.includes('"ciphertext"');
+
+        if (!note.encrypted && !hasEncryptedContent) return note;
 
         const { masterKey, privateKey, noteKeysCache } = get();
         if (!masterKey || !privateKey) throw new Error('Encryption not unlocked');
@@ -431,5 +439,23 @@ export const useEncryptionStore = create((set, get) => ({
     /**
      * Clear error
      */
-    clearError: () => set({ error: null })
+    clearError: () => set({ error: null }),
+
+    /**
+     * Encrypt label name using Master Key
+     */
+    encryptLabel: async (name) => {
+        const { masterKey } = get();
+        if (!masterKey) throw new Error('Encryption not unlocked');
+        return await encryptLabel(name, masterKey);
+    },
+
+    /**
+     * Decrypt label name using Master Key
+     */
+    decryptLabel: async (encryptedName) => {
+        const { masterKey } = get();
+        if (!masterKey) return encryptedName; // Fallback if locked
+        return await decryptLabel(encryptedName, masterKey);
+    }
 }));

@@ -6,12 +6,14 @@ import NoteModal from './NoteModal';
 import VersionHistoryModal from './VersionHistoryModal';
 import ShareModal from './ShareModal';
 import { useNotesStore } from '../stores/notesStore';
+import { useLabelsMap } from '../hooks/useLabels';
 
 export default function NoteGrid({ notes, showRestore, showDelete }) {
     const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote } = useNotesStore();
     const [selectedNote, setSelectedNote] = useState(null);
     const [versionHistoryNoteId, setVersionHistoryNoteId] = useState(null);
     const [shareNoteId, setShareNoteId] = useState(null);
+    const labelsMap = useLabelsMap();
 
     const isTrash = showDelete;
     const isArchive = showRestore && !showDelete;
@@ -74,6 +76,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                     <NoteCard
                         key={note.id}
                         note={note}
+                        labelsMap={labelsMap}
                         onClick={handleNoteClick}
                         onPin={!isTrash ? pinNote : undefined}
                         onArchive={!isTrash && !isArchive ? archiveNote : undefined}

@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useMantineColorScheme } from '@mantine/core';
 import {
     Box, Title, Text, Paper, TextInput, PasswordInput, Button, Stack,
     Alert, Group, SegmentedControl, Badge, Divider, Image
 } from '@mantine/core';
-import { IconAlertCircle, IconCheck, IconInfoCircle } from '@tabler/icons-react';
+import { IconAlertCircle, IconCheck, IconInfoCircle, IconDownload } from '@tabler/icons-react';
+import { usePWAStore } from '../stores/pwaStore';
 
 export default function SettingsPage() {
     const { user, updateProfile, isLoading } = useAuthStore();
@@ -18,7 +19,23 @@ export default function SettingsPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [message, setMessage] = useState({ type: '', text: '' });
 
+    // PWA Install state from store
+    const { deferredPrompt, isInstalled, setDeferredPrompt, setIsInstalled } = usePWAStore();
+
     const isOidc = user?.isOidc || false;
+
+    // NOTE: Install prompt listener is handled globally in PWAStatus/pwaStore
+    // We just consume the state here.
+
+    const handleInstall = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setIsInstalled(true);
+        }
+        setDeferredPrompt(null);
+    };
 
     const handleSaveProfile = async (e) => {
         e.preventDefault();
@@ -167,6 +184,30 @@ export default function SettingsPage() {
                             { value: 'light', label: 'Light' },
                         ]}
                     />
+                </Group>
+            </Paper>
+
+            {/* PWA Install Section */}
+            <Paper shadow="xs" radius="md" p="lg" withBorder mb="md">
+                <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb="md">Install App</Text>
+
+                <Group justify="space-between" align="center">
+                    <Box>
+                        <Text fw={500}>Install Noteer</Text>
+                        <Text size="sm" c="dimmed">Install for quick access and offline use</Text>
+                    </Box>
+                    {isInstalled ? (
+                        <Badge color="green" variant="light" size="lg">Installed</Badge>
+                    ) : deferredPrompt ? (
+                        <Button
+                            leftSection={<IconDownload size={16} />}
+                            onClick={handleInstall}
+                        >
+                            Install
+                        </Button>
+                    ) : (
+                        <Text size="sm" c="dimmed">Not available</Text>
+                    )}
                 </Group>
             </Paper>
 

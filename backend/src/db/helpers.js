@@ -54,15 +54,18 @@ export async function bulkInsertImages(noteId, userId, images) {
  * @param {number} userId 
  * @param {number} noteId 
  * @param {string[]} labelNames 
+ * @param {object} [dbClient] - Optional database client for transactions
  */
-export async function setNoteLabels(userId, noteId, labelNames) {
+export async function setNoteLabels(userId, noteId, labelNames, dbClient = null) {
+    const executeQuery = (text, params) => dbClient ? dbClient.query(text, params) : query(text, params);
+
     if (!labelNames || labelNames.length === 0) {
-        await query('DELETE FROM user_note_labels WHERE user_id = $1 AND note_id = $2', [userId, noteId]);
+        await executeQuery('DELETE FROM user_note_labels WHERE user_id = $1 AND note_id = $2', [userId, noteId]);
         return;
     }
 
     // Ensure all labels exist (single query with upsert)
-    await query(
+    await executeQuery(
         `INSERT INTO labels (user_id, name)
          SELECT $1, unnest($2::text[])
          ON CONFLICT (user_id, name) DO NOTHING`,
@@ -70,7 +73,7 @@ export async function setNoteLabels(userId, noteId, labelNames) {
     );
 
     // Get all label IDs
-    const labelResult = await query(
+    const labelResult = await executeQuery(
         `SELECT id, name FROM labels WHERE user_id = $1 AND name = ANY($2)`,
         [userId, labelNames]
     );
@@ -78,14 +81,46 @@ export async function setNoteLabels(userId, noteId, labelNames) {
     const labelIds = labelResult.rows.map(r => r.id);
 
     // Delete existing and insert new (2 queries total instead of 2N+1)
-    await query('DELETE FROM user_note_labels WHERE user_id = $1 AND note_id = $2', [userId, noteId]);
+    await executeQuery('DELETE FROM user_note_labels WHERE user_id = $1 AND note_id = $2', [userId, noteId]);
 
     if (labelIds.length > 0) {
-        await query(
+        await executeQuery(
             `INSERT INTO user_note_labels (user_id, note_id, label_id)
              SELECT $1, $2, unnest($3::int[])
              ON CONFLICT DO NOTHING`,
             [userId, noteId, labelIds]
+        );
+    }
+}
+
+/**
+ * Set labels for a note using IDs directly (E2E Encrypted flow)
+ * @param {number} userId 
+ * @param {number} noteId 
+ * @param {number[]} labelIds 
+ * @param {object} [dbClient] - Optional database client for transactions
+ */
+export async function setNoteLabelIds(userId, noteId, labelIds, dbClient = null) {
+    const executeQuery = (text, params) => dbClient ? dbClient.query(text, params) : query(text, params);
+
+    // Delete existing links
+    await executeQuery('DELETE FROM user_note_labels WHERE user_id = $1 AND note_id = $2', [userId, noteId]);
+
+    if (!labelIds || labelIds.length === 0) return;
+
+    // Verify ownership of all labels before inserting
+    const validLabels = await executeQuery(
+        'SELECT id FROM labels WHERE user_id = $1 AND id = ANY($2)',
+        [userId, labelIds]
+    );
+    const validIds = validLabels.rows.map(r => r.id);
+
+    if (validIds.length > 0) {
+        await executeQuery(
+            `INSERT INTO user_note_labels (user_id, note_id, label_id)
+             SELECT $1, $2, unnest($3::int[])
+             ON CONFLICT DO NOTHING`,
+            [userId, noteId, validIds]
         );
     }
 }

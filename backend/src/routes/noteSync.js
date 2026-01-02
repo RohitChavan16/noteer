@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query, getPool } from '../db/index.js';
+import { setNoteLabelIds, setNoteLabels } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
@@ -33,7 +34,7 @@ router.get('/', async (req, res, next) => {
         // Note: These must use 'note_table_alias.id' to reference the outer query
         const subqueries = {
             labels: `(
-                SELECT array_agg(DISTINCT l.name)
+                SELECT array_agg(DISTINCT l.id)
                 FROM user_note_labels unl
                 JOIN labels l ON unl.label_id = l.id
                 WHERE unl.note_id = n.id AND unl.user_id = $1
@@ -86,7 +87,7 @@ router.get('/', async (req, res, next) => {
                     ${subqueries.images} as images,
                     ${subqueries.collaborators} as collaborators
                 FROM notes n
-                WHERE n.user_id = $1
+                WHERE n.user_id = $1 AND n.deleted_at IS NULL
 
                 UNION ALL
 
@@ -111,6 +112,7 @@ router.get('/', async (req, res, next) => {
                 FROM notes n
                 JOIN note_shares ns ON ns.note_id = n.id AND ns.shared_with_id = $1
                 LEFT JOIN note_keys nk ON nk.note_id = n.id AND nk.user_id = $1
+                WHERE n.deleted_at IS NULL
             )
             SELECT * FROM combined_notes
         `;
@@ -126,15 +128,16 @@ router.get('/', async (req, res, next) => {
         sql += ` ORDER BY updated_at DESC`;
 
         const result = await query(sql, params);
+        console.log(`[SYNC DEBUG] User ${userId} sync since ${sinceDate}: Found ${result.rows.length} notes`);
 
         // Get deleted note IDs since timestamp
         // Must check both owned notes AND shares that were removed
         let deleted = [];
         if (sinceDate) {
-            // 1. Trashed/Deleted owned notes
+            // 1. Trashed/Deleted owned notes (and confirmed deleted)
             const deletedOwned = await query(
                 `SELECT id FROM notes 
-                 WHERE user_id = $1 AND (is_trashed = true OR deleted_at IS NOT NULL) AND updated_at > $2`,
+                 WHERE user_id = $1 AND deleted_at IS NOT NULL AND updated_at > $2`,
                 [userId, sinceDate]
             );
 
@@ -181,12 +184,12 @@ router.post('/batch', async (req, res, next) => {
         for (const op of operations) {
             switch (op.op) {
                 case 'create': {
-                    const { title, content, type, color, is_pinned, items } = op.data || {};
+                    const { title, content, type, color, is_pinned, items, labels, label_ids, encrypted, encrypted_note_key } = op.data || {};
                     const result = await client.query(
-                        `INSERT INTO notes (user_id, title, content, type, color, is_pinned)
-                             VALUES ($1, $2, $3, $4, $5, $6)
+                        `INSERT INTO notes (user_id, title, content, type, color, is_pinned, encrypted, encrypted_note_key)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                              RETURNING *`,
-                        [userId, title || '', content || '', type || 'note', color || 'default', is_pinned || false]
+                        [userId, title || '', content || '', type || 'note', color || 'default', is_pinned || false, encrypted || false, encrypted_note_key || null]
                     );
                     const note = result.rows[0];
 
@@ -195,6 +198,34 @@ router.post('/batch', async (req, res, next) => {
                             await client.query(
                                 'INSERT INTO note_items (note_id, content, is_checked, position) VALUES ($1, $2, $3, $4)',
                                 [note.id, items[i].content, items[i].is_checked || false, i]
+                            );
+                        }
+                    }
+
+                    // Handle labels
+                    if (label_ids && Array.isArray(label_ids)) {
+                        await setNoteLabelIds(userId, note.id, label_ids, client);
+                    } else if (labels && Array.isArray(labels)) {
+                        for (const labelName of labels) {
+                            // Get or create label
+                            let labelResult = await client.query(
+                                'SELECT id FROM labels WHERE user_id = $1 AND name = $2',
+                                [userId, labelName]
+                            );
+                            let labelId;
+                            if (labelResult.rows.length === 0) {
+                                const insertLabel = await client.query(
+                                    'INSERT INTO labels (user_id, name) VALUES ($1, $2) RETURNING id',
+                                    [userId, labelName]
+                                );
+                                labelId = insertLabel.rows[0].id;
+                            } else {
+                                labelId = labelResult.rows[0].id;
+                            }
+                            // Link label to note
+                            await client.query(
+                                'INSERT INTO user_note_labels (user_id, note_id, label_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+                                [userId, note.id, labelId]
                             );
                         }
                     }
@@ -210,7 +241,7 @@ router.post('/batch', async (req, res, next) => {
                         break;
                     }
 
-                    const { title, content, color, is_pinned, is_archived, items } = data || {};
+                    const { title, content, color, is_pinned, is_archived, is_trashed, items, labels, label_ids } = data || {};
                     const updates = [];
                     const params = [];
                     let paramIndex = 1;
@@ -220,6 +251,7 @@ router.post('/batch', async (req, res, next) => {
                     if (color !== undefined) { updates.push(`color = $${paramIndex++}`); params.push(color); }
                     if (is_pinned !== undefined) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
                     if (is_archived !== undefined) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
+                    if (is_trashed !== undefined) { updates.push(`is_trashed = $${paramIndex++}`); params.push(is_trashed); }
 
                     // Increment version explicitly
                     updates.push(`version = version + 1`);
@@ -271,6 +303,14 @@ router.post('/batch', async (req, res, next) => {
                                 );
                             }
                         }
+
+                        if (label_ids && Array.isArray(label_ids)) {
+                            await setNoteLabelIds(userId, id, label_ids, client);
+                        } else if (labels && Array.isArray(labels)) {
+                            // Legacy support for names (optional, can be removed if strictly E2E)
+                            await setNoteLabels(userId, id, labels, client);
+                        }
+
                         results.push({
                             success: true,
                             op: 'update',
@@ -289,8 +329,9 @@ router.post('/batch', async (req, res, next) => {
                         break;
                     }
 
+                    // FIXED: Set deleted_at timestamp for permanent deletion tombstone
                     const result = await client.query(
-                        `UPDATE notes SET is_trashed = true, trashed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                        `UPDATE notes SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                              WHERE id = $1 AND user_id = $2
                              RETURNING id`,
                         [id, userId]

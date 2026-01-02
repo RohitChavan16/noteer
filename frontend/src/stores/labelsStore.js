@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { db, SYNC_STATUS } from '../db/db';
 import { v4 as uuidv4 } from 'uuid';
+import { useEncryptionStore } from './encryptionStore';
 
 export const useLabelsStore = create((set, get) => ({
     // State is now managed by useLabels hook via Dexie, this store handles actions
@@ -10,19 +11,27 @@ export const useLabelsStore = create((set, get) => ({
     createLabel: async (name) => {
         set({ isLoading: true, error: null });
         try {
-            // Check for duplicates (case-insensitive) considering only non-deleted labels
-            const existing = await db.labels
-                .filter(l => l.name.toLowerCase() === name.toLowerCase() && l.sync_status !== SYNC_STATUS.DELETED)
-                .first();
+            const { encryptLabel, decryptLabel } = useEncryptionStore.getState();
 
-            if (existing) {
-                set({ isLoading: false });
-                return { success: true, label: existing };
+            // Check for duplicates by fetching all and decrypting (since we can't query encrypted names)
+            const allLabels = await db.labels.toArray();
+
+            // Filter out deleted and check names
+            for (const label of allLabels) {
+                if (label.sync_status === SYNC_STATUS.DELETED) continue;
+
+                const decryptedName = await decryptLabel(label.name);
+                if (decryptedName.toLowerCase() === name.trim().toLowerCase()) {
+                    set({ isLoading: false });
+                    return { success: true, label };
+                }
             }
+
+            const encryptedName = await encryptLabel(name.trim());
 
             const newLabel = {
                 id: uuidv4(),
-                name: name.trim(),
+                name: encryptedName,
                 sync_status: SYNC_STATUS.NEW
             };
 

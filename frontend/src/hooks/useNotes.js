@@ -21,39 +21,15 @@ const EMPTY_ARRAY = [];
  * @param {string} options.label - Optional label filter
  * @returns {Array|undefined} Array of notes or undefined while loading
  */
-export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuery = '', label = '', limit = 20 } = {}) {
+export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuery = '', labelId = null, limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Base query collection
-        // Optimization: For default sort (pinned + time), use the compound index directly
-        // This is the "Happy Path" for Infinite Scroll
-        if (sortBy === 'updated_at' && sortOrder === 'desc' && !searchQuery && !label) {
-            // Use [is_pinned+updated_at] index
-            // Since we want pinned (1) first, then unpinned (0), and then new dates first:
-            // We need to reverse order.
-            // is_pinned 0 -> 1. Reverse -> 1 -> 0. Correct.
-            // updated_at old -> new. Reverse -> new -> old. Correct.
-            // Effective strategy:
-            // 1. Get collection by index
-            return await db.notes
-                .orderBy('[is_pinned+updated_at]')
-                .reverse()
-                // 2. Filter logic (applied during scan, efficiently stops after limit reached)
-                .filter(n => n.is_archived !== true && n.is_trashed !== true)
-                .limit(limit)
-                .toArray();
-        }
-
-        // Fallback for custom search/labels (Full Query + InMemory Filter for now, or simple scan)
-        // With search, we can't easily use limit at DB level reliably without Full Text Search index.
-        // So we load all (matches), filter, then slice.
-
         let notes = await db.notes
             .filter(n => n.is_archived !== true && n.is_trashed !== true)
             .toArray();
 
         // Filter by label
-        if (label) {
-            notes = notes.filter(n => n.labels && n.labels.some(l => l.name === label));
+        if (labelId) {
+            notes = notes.filter(n => n.labels && n.labels.some(l => l == labelId));
         }
 
         // Filter by search query
@@ -66,21 +42,22 @@ export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuer
         }
 
         // Sort (In-Memory)
-        // Note: For search results, we usually have fewer items, so in-memory is acceptable.
+        const stripHtml = (html) => {
+            if (!html) return '';
+            return html.replace(/<[^>]*>/g, '').trim();
+        };
+
         if (sortBy === 'title') {
             notes.sort((a, b) => {
-                // Pin logic already handled by backend "effective" field? 
-                // Yes, n.is_pinned is now user-specific.
                 if (a.is_pinned && !b.is_pinned) return -1;
                 if (!a.is_pinned && b.is_pinned) return 1;
 
-                const aTitle = (a.title || a.content || '').toLowerCase();
-                const bTitle = (b.title || b.content || '').toLowerCase();
-                const cmp = aTitle.localeCompare(bTitle);
+                const aText = (a.title && a.title.trim() ? a.title : stripHtml(a.content)).toLowerCase();
+                const bText = (b.title && b.title.trim() ? b.title : stripHtml(b.content)).toLowerCase();
+                const cmp = aText.localeCompare(bText);
                 return sortOrder === 'asc' ? cmp : -cmp;
             });
         } else {
-            // Default sort (updated_at)
             notes.sort((a, b) => {
                 if (a.is_pinned && !b.is_pinned) return -1;
                 if (!a.is_pinned && b.is_pinned) return 1;
@@ -91,10 +68,9 @@ export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuer
             });
         }
 
-        // Apply Limit (In-Memory slice)
         return notes.slice(0, limit);
 
-    }, [sortBy, sortOrder, searchQuery, label, limit], EMPTY_ARRAY);
+    }, [sortBy, sortOrder, searchQuery, labelId, limit], EMPTY_ARRAY);
 }
 
 /**
@@ -137,8 +113,10 @@ export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc' } =
 export function useTrashedNotes() {
     return useLiveQuery(async () => {
         const notes = await db.notes
-            .filter(n => n.is_trashed === true)
+            .filter(n => n.is_trashed === true && n.sync_status !== 'deleted')
             .toArray();
+
+        console.log('[useTrashedNotes] Found', notes.length, 'trashed notes');
 
         // Sort by updated_at desc
         notes.sort((a, b) => {

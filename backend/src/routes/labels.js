@@ -32,8 +32,9 @@ router.get('/', async (req, res, next) => {
 });
 
 // POST /api/labels - Create a new label
+// Modified for E2E: accepts encrypted blob as name, no unique check
 router.post('/', [
-    body('name').trim().isLength({ min: 1, max: 100 }).withMessage('Label name must be 1-100 characters'),
+    body('name').trim().isLength({ min: 1, max: 5000 }).withMessage('Label name must be 1-5000 characters'),
 ], async (req, res, next) => {
     try {
         const errors = validationResult(req);
@@ -43,15 +44,6 @@ router.post('/', [
 
         const userId = req.user.id;
         const { name } = req.body;
-
-        // Check if label already exists for this user
-        const existing = await query(
-            'SELECT id FROM labels WHERE user_id = $1 AND name = $2',
-            [userId, name]
-        );
-        if (existing.rows.length > 0) {
-            return res.status(409).json({ error: 'Label already exists' });
-        }
 
         const result = await query(
             'INSERT INTO labels (user_id, name) VALUES ($1, $2) RETURNING id, name, created_at',

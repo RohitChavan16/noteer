@@ -105,7 +105,7 @@ export default function Sidebar({ onClose }) {
                                     <NavLink
                                         key={label.id}
                                         component={RouterNavLink}
-                                        to={`/label/${encodeURIComponent(label.name)}`}
+                                        to={`/label/${label.id}`}
                                         label={label.name}
                                         leftSection={<IconTag size={16} stroke={1.5} />}
                                         onClick={handleLinkClick}

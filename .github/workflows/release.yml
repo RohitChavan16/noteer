@@ -94,11 +94,12 @@ jobs:
             
             ```bash
             docker run -d \
+              --name noteer \
               -p 3000:3000 \
-              -v noteer-data:/var/lib/postgresql/data \
-              -e JWT_SECRET=your-secret-key \
+              -v noteer-db:/var/lib/postgresql/data \
+              -v noteer-data:/var/lib/noteer \
               -e ADMIN_EMAIL=admin@example.com \
-              -e ADMIN_PASSWORD=your-admin-password \
+              -e ADMIN_PASSWORD=your-secure-password \
               ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             ```
             

@@ -1,21 +1,26 @@
 import { useParams } from 'react-router-dom';
 import { useNotesStore } from '../stores/notesStore';
 import { useNotes } from '../hooks/useNotes';
+import { useLabelsMap } from '../hooks/useLabels';
 import { Box, Center, Loader, Text, Stack, Group, Title } from '@mantine/core';
 import { IconTag } from '@tabler/icons-react';
 import NoteGrid from '../components/NoteGrid';
 import NoteInput from '../components/NoteInput';
 
 export default function NotesPage() {
-    const { label } = useParams();
+    const { labelId } = useParams();
     const { searchQuery, sortBy, sortOrder } = useNotesStore();
+    const labelsMap = useLabelsMap();
+
+    // Resolve label name
+    const labelName = labelId && labelsMap ? (labelsMap.get(Number(labelId)) || labelsMap.get(labelId)) : '';
 
     // Use reactive Dexie query for notes
     const notes = useNotes({
         sortBy,
         sortOrder,
         searchQuery,
-        label: label ? decodeURIComponent(label) : ''
+        labelId: labelId ? (Number(labelId) || labelId) : null
     });
 
     // Notes is undefined while loading
@@ -23,14 +28,14 @@ export default function NotesPage() {
 
     return (
         <Box>
-            {label && (
+            {labelId && (
                 <Group gap="xs" mb="md">
                     <IconTag size={20} />
-                    <Title order={4}>{decodeURIComponent(label)}</Title>
+                    <Title order={4}>{labelName || 'Unknown Label'}</Title>
                 </Group>
             )}
 
-            <NoteInput key={label || 'all'} currentLabel={label ? decodeURIComponent(label) : null} />
+            <NoteInput key={labelId || 'all'} currentLabel={labelId} />
 
             {isLoading ? (
                 <Center py="xl">

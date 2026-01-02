@@ -7,14 +7,21 @@ export function SyncStatus() {
     const isSyncing = useNotesStore((state) => state.isSyncing);
     const lastSyncedAt = useNotesStore((state) => state.lastSyncedAt);
     const pendingChanges = useNotesStore((state) => state.pendingChanges);
+    const triggerSync = useNotesStore((state) => state.triggerSync);
 
     const getTooltipLabel = () => {
         if (isSyncing) return 'Syncing...';
-        if (pendingChanges) return 'Saving changes...';
+        if (pendingChanges) return 'Saving changes... (click to sync now)';
         if (lastSyncedAt) {
-            return `Last synced: ${formatDistanceToNow(lastSyncedAt, { addSuffix: true })}`;
+            return `Last synced: ${formatDistanceToNow(lastSyncedAt, { addSuffix: true })} (click to sync)`;
         }
-        return 'All changes saved';
+        return 'All changes saved (click to sync)';
+    };
+
+    const handleClick = () => {
+        if (triggerSync && !isSyncing) {
+            triggerSync();
+        }
     };
 
     return (
@@ -23,6 +30,8 @@ export function SyncStatus() {
                 variant="subtle"
                 color={isSyncing || pendingChanges ? "blue" : "green"}
                 size="lg"
+                onClick={handleClick}
+                style={{ cursor: isSyncing ? 'wait' : 'pointer' }}
             >
                 {isSyncing ? (
                     <Loader size="xs" color="blue" />

@@ -10,7 +10,7 @@ import LabelPicker from './LabelPicker';
 
 import EncryptedImage from './EncryptedImage';
 
-const NoteCard = memo(function NoteCard({ note, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
+const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
     const [isHovered, setIsHovered] = useState(false);
@@ -157,7 +157,7 @@ const NoteCard = memo(function NoteCard({ note, onClick, onPin, onArchive, onUna
                                 opacity: 0.8
                             }}
                         >
-                            {label}
+                            {labelsMap?.get(label) || label}
                         </Badge>
                     ))}
                 </Group>
