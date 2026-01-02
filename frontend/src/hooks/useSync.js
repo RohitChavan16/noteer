@@ -555,7 +555,6 @@ export function useSync() {
                             is_archived: encryptedNote.is_archived,
                             is_trashed: encryptedNote.is_trashed,
                             items: encryptedNote.items,
-                            items: encryptedNote.items,
                             label_ids: note.labels || [],
                             labels: [], // Legacy compat
                             images: note.images || [], // FIX: Sync images metadata
