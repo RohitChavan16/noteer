@@ -84,7 +84,7 @@ export default function PWAStatus() {
         return () => {
             window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         };
-    }, []);
+    }, [setDeferredPrompt]);
 
     const handleInstall = async () => {
         if (!deferredPrompt) return;

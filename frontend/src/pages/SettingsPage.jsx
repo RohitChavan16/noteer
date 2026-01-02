@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useMantineColorScheme } from '@mantine/core';
 import {

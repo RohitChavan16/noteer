@@ -25,7 +25,7 @@ const loadPersistedPrefs = () => {
     try {
         const stored = localStorage.getItem('noteer-ui-prefs');
         if (stored) return JSON.parse(stored);
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
     return {};
 };
 
@@ -62,21 +62,21 @@ export const useNotesStore = create((set, get) => ({
         try {
             const prefs = loadPersistedPrefs();
             localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, viewMode: mode }));
-        } catch (e) { /* ignore */ }
+        } catch (_e) { /* ignore */ }
     },
     setSortBy: (sortBy) => {
         set({ sortBy });
         try {
             const prefs = loadPersistedPrefs();
             localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortBy }));
-        } catch (e) { /* ignore */ }
+        } catch (_e) { /* ignore */ }
     },
     setSortOrder: (sortOrder) => {
         set({ sortOrder });
         try {
             const prefs = loadPersistedPrefs();
             localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortOrder }));
-        } catch (e) { /* ignore */ }
+        } catch (_e) { /* ignore */ }
     },
 
     setTriggerSync: (fn) => set({ triggerSync: fn }),

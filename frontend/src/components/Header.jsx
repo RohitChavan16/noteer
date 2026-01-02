@@ -21,16 +21,7 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
         setSearchQuery('');
     };
 
-    const handleSortChange = (newSortBy) => {
-        if (newSortBy === sortBy) {
-            // Toggle order if same sort field
-            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-        } else {
-            setSortBy(newSortBy);
-            // Default order: desc for date, asc for title
-            setSortOrder(newSortBy === 'title' ? 'asc' : 'desc');
-        }
-    };
+
 
     const getSortIcon = () => {
         if (sortBy === 'title') {
