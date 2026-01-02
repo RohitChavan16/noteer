@@ -31,9 +31,12 @@ export async function bulkInsertItems(noteId, items) {
  * @param {number} noteId 
  * @param {number} userId 
  * @param {Array<{url: string, original_name: string, mime_type: string, size: number}>} images 
+ * @param {object} [dbClient] - Optional database client for transactions
  */
-export async function bulkInsertImages(noteId, userId, images) {
+export async function bulkInsertImages(noteId, userId, images, dbClient = null) {
     if (!images || images.length === 0) return;
+
+    const executeQuery = (text, params) => dbClient ? dbClient.query(text, params) : query(text, params);
 
     const urls = images.map(i => i.url);
     const names = images.map(i => i.original_name || null);
@@ -41,7 +44,7 @@ export async function bulkInsertImages(noteId, userId, images) {
     const sizes = images.map(i => i.size || null);
     const ivs = images.map(i => i.encryption_iv || null);
 
-    await query(
+    await executeQuery(
         `INSERT INTO note_images (note_id, user_id, url, original_name, mime_type, size, encryption_iv)
          SELECT $1, $2, unnest($3::text[]), unnest($4::text[]), unnest($5::text[]), unnest($6::bigint[]), unnest($7::text[])`,
         [noteId, userId, urls, names, mimes, sizes, ivs]
@@ -106,7 +109,9 @@ export async function setNoteLabelIds(userId, noteId, labelIds, dbClient = null)
     // Delete existing links
     await executeQuery('DELETE FROM user_note_labels WHERE user_id = $1 AND note_id = $2', [userId, noteId]);
 
-    if (!labelIds || labelIds.length === 0) return;
+    if (!labelIds || labelIds.length === 0) {
+        return;
+    }
 
     // Verify ownership of all labels before inserting
     const validLabels = await executeQuery(

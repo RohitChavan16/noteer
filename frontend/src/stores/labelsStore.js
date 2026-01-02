@@ -47,8 +47,27 @@ export const useLabelsStore = create((set, get) => ({
 
     deleteLabel: async (id) => {
         try {
-            // Soft delete
+            // Soft delete the label
             await db.labels.update(id, { sync_status: SYNC_STATUS.DELETED });
+
+            // FIX: Immediately remove this label from all local notes to update UI
+            await db.transaction('rw', db.notes, async () => {
+                const affectedNotes = await db.notes
+                    .filter(n => Array.isArray(n.labels) && n.labels.includes(id))
+                    .toArray();
+
+                for (const note of affectedNotes) {
+                    const newLabels = note.labels.filter(lid => lid !== id);
+
+                    // We only update the local state for UI purposes.
+                    // The backend will handle the relationship deletion via CASCADE when the label deletion is synced.
+                    await db.notes.update(note.id, {
+                        labels: newLabels,
+                        updated_at: new Date().toISOString() // Update timestamp to trigger UI refresh
+                    });
+                }
+            });
+
             return { success: true };
         } catch (error) {
             console.error('Failed to delete label:', error);

@@ -35,7 +35,7 @@ export default function LabelPicker({ selectedLabels = [], onChange, triggerStyl
             setNewLabelName('');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [opened, labels]); // Added labels dependency to ensure mapping is fresh
+    }, [opened]); // FIX: Removed labels dependency to prevent resetting selection during sync
 
     const handleToggleLabel = (labelId) => {
         if (localLabels.includes(labelId)) {

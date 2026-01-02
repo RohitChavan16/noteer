@@ -56,6 +56,7 @@ export function useSync() {
                             }
                         });
                         console.log(`[LazySync] Fetched ${versions.length} versions for ${idsToFetch.length} notes`);
+
                     }
                 }
             } catch (error) {
@@ -132,10 +133,7 @@ export function useSync() {
                         local = await db.notes.get(Number(encryptedNote.id));
                     }
 
-                    console.log('[pullChanges] Checking collision for:', encryptedNote.id,
-                        'RemoteType:', typeof encryptedNote.id,
-                        'LocalFound:', !!local,
-                        'LocalStatus:', local ? local.sync_status : 'N/A');
+
 
                     if (local && local.sync_status !== SYNC_STATUS.SYNCED) {
                         // Conflict: Local has pending changes
@@ -303,7 +301,7 @@ export function useSync() {
             if (!res.ok) throw new Error('Failed to fetch labels');
             const serverLabels = await res.json();
 
-            await db.transaction('rw', db.labels, async () => {
+            await db.transaction('rw', db.labels, db.notes, async () => {
                 for (const label of serverLabels) {
                     // Check if we have a pending local change
                     const local = await db.labels.get(label.id);
@@ -317,6 +315,37 @@ export function useSync() {
                         ...label,
                         sync_status: SYNC_STATUS.SYNCED
                     });
+                }
+
+                // FIX: Delete local SYNCED labels that are missing from server (State Reconciliation)
+                // This handles cases where backend DB was reset or label was deleted on another device
+                const serverIds = new Set(serverLabels.map(l => l.id));
+                const localSynced = await db.labels
+                    .where('sync_status')
+                    .equals(SYNC_STATUS.SYNCED)
+                    .toArray();
+
+                for (const local of localSynced) {
+                    if (!serverIds.has(local.id)) {
+                        console.log('[pullLabels] Removing ghost label:', local.id, local.name);
+
+                        // 1. Delete label
+                        await db.labels.delete(local.id);
+
+                        // 2. Remove reference from all notes
+                        const affectedNotes = await db.notes
+                            .filter(n => Array.isArray(n.labels) && n.labels.includes(local.id))
+                            .toArray();
+
+                        for (const note of affectedNotes) {
+                            const newLabels = note.labels.filter(lid => lid !== local.id);
+                            await db.notes.update(note.id, {
+                                labels: newLabels,
+                                updated_at: new Date().toISOString(), // Trigger UI update
+                                sync_status: note.sync_status === SYNC_STATUS.NEW ? SYNC_STATUS.NEW : SYNC_STATUS.PENDING
+                            });
+                        }
+                    }
                 }
             });
         } catch (error) {
@@ -362,9 +391,37 @@ export function useSync() {
                             await db.labels.delete(label.id);
                         } else if (label.sync_status === SYNC_STATUS.NEW) {
                             const serverLabel = await res.json();
-                            // Delete temporary ID and insert server ID
-                            await db.labels.delete(label.id);
-                            await db.labels.put({ ...serverLabel, sync_status: SYNC_STATUS.SYNCED });
+
+                            // FIX: Update all notes that reference this temporary label ID
+                            // We must do this in a transaction to ensure no state drift
+                            await db.transaction('rw', db.notes, db.labels, async () => {
+                                // Find notes with the temporary label ID
+                                const affectedNotes = await db.notes
+                                    .filter(n => Array.isArray(n.labels) && n.labels.includes(label.id))
+                                    .toArray();
+
+                                // Update references
+                                for (const note of affectedNotes) {
+                                    const newLabels = note.labels.map(lid => lid === label.id ? serverLabel.id : lid);
+
+                                    // Ensure note is marked for sync to push the new Label ID
+                                    // If it was NEW, keep NEW. If SYNCED/PENDING, mark PENDING.
+                                    const nextStatus = note.sync_status === SYNC_STATUS.NEW
+                                        ? SYNC_STATUS.NEW
+                                        : SYNC_STATUS.PENDING;
+
+                                    await db.notes.update(note.id, {
+                                        labels: newLabels,
+                                        sync_status: nextStatus,
+                                        updated_at: new Date().toISOString()
+                                    });
+                                }
+
+                                // Delete temporary ID and insert server ID
+                                await db.labels.delete(label.id);
+                                await db.labels.put({ ...serverLabel, sync_status: SYNC_STATUS.SYNCED });
+                            });
+
                         } else {
                             // Update existing
                             await db.labels.update(label.id, { sync_status: SYNC_STATUS.SYNCED });
@@ -434,6 +491,14 @@ export function useSync() {
             // Build batch operations with encryption
             const operations = [];
             for (const note of pendingNotes) {
+                // FIX: Skip notes with temporary label IDs (UUIDs)
+                // We must wait for pushLabels to resolve them to server IDs (integers)
+                // Otherwise we risk sending empty labels (if filtered) or crashing backend (if sent as UUID)
+                if (note.labels && note.labels.some(id => isNaN(Number(id)))) {
+                    console.log(`[pushChanges] Skipping note ${note.id} waiting for label resolution`);
+                    continue;
+                }
+
                 if (note.sync_status === SYNC_STATUS.NEW) {
                     // Encrypt the note before sending
                     const encryptedNote = await encryptionStore.encryptNote({
@@ -457,6 +522,7 @@ export function useSync() {
                             items: encryptedNote.items,
                             label_ids: note.labels || [],
                             labels: [], // Legacy compat
+                            images: note.images || [], // FIX: Sync images metadata
                             encrypted: encryptedNote.encrypted,
                             encrypted_note_key: encryptedNote.encrypted_note_key
                         }
@@ -489,8 +555,10 @@ export function useSync() {
                             is_archived: encryptedNote.is_archived,
                             is_trashed: encryptedNote.is_trashed,
                             items: encryptedNote.items,
+                            items: encryptedNote.items,
                             label_ids: note.labels || [],
                             labels: [], // Legacy compat
+                            images: note.images || [], // FIX: Sync images metadata
                             encrypted: encryptedNote.encrypted,
                             encrypted_note_key: encryptedNote.encrypted_note_key
                         },

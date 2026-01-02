@@ -99,7 +99,6 @@ export async function initializeDatabase() {
 
     -- Labels (per-user)
     -- Modified for E2E Encryption: name is TEXT (encrypted blob), removed UNIQUE constraint
-    DROP TABLE IF EXISTS labels CASCADE;
     CREATE TABLE IF NOT EXISTS labels (
       id SERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,

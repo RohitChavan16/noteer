@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, getPool } from '../db/index.js';
-import { setNoteLabelIds, setNoteLabels } from '../db/helpers.js';
+import { setNoteLabelIds, setNoteLabels, bulkInsertImages } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
@@ -184,7 +184,7 @@ router.post('/batch', async (req, res, next) => {
         for (const op of operations) {
             switch (op.op) {
                 case 'create': {
-                    const { title, content, type, color, is_pinned, items, labels, label_ids, encrypted, encrypted_note_key } = op.data || {};
+                    const { title, content, type, color, is_pinned, items, labels, label_ids, images, encrypted, encrypted_note_key } = op.data || {};
                     const result = await client.query(
                         `INSERT INTO notes (user_id, title, content, type, color, is_pinned, encrypted, encrypted_note_key)
                              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -230,6 +230,11 @@ router.post('/batch', async (req, res, next) => {
                         }
                     }
 
+                    // Handle images
+                    if (images && Array.isArray(images)) {
+                        await bulkInsertImages(note.id, userId, images, client);
+                    }
+
                     results.push({ success: true, op: 'create', id: note.id, updated_at: note.updated_at });
                     break;
                 }
@@ -241,7 +246,7 @@ router.post('/batch', async (req, res, next) => {
                         break;
                     }
 
-                    const { title, content, color, is_pinned, is_archived, is_trashed, items, labels, label_ids } = data || {};
+                    const { title, content, color, is_pinned, is_archived, is_trashed, items, labels, label_ids, images } = data || {};
                     const updates = [];
                     const params = [];
                     let paramIndex = 1;
@@ -309,6 +314,12 @@ router.post('/batch', async (req, res, next) => {
                         } else if (labels && Array.isArray(labels)) {
                             // Legacy support for names (optional, can be removed if strictly E2E)
                             await setNoteLabels(userId, id, labels, client);
+                        }
+
+                        if (images && Array.isArray(images)) {
+                            // Update images: Delete existing and insert new
+                            await client.query('DELETE FROM note_images WHERE note_id = $1', [id]);
+                            await bulkInsertImages(id, userId, images, client);
                         }
 
                         results.push({
