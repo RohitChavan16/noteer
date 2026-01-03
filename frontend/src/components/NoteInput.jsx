@@ -10,6 +10,7 @@ import { notifications } from '@mantine/notifications';
 import LabelPicker from './LabelPicker';
 import NoteRichTextEditor from './NoteRichTextEditor';
 import EncryptedImage from './EncryptedImage';
+import { logger } from '../utils/logger';
 
 import {
     DndContext,
@@ -220,7 +221,7 @@ export default function NoteInput({ currentLabel }) {
                 }
             }
         } catch (error) {
-            console.error(error);
+            logger.error('UI', 'Image upload failed', error);
             notifications.show({ title: 'Upload failed', message: 'Failed to upload image', color: 'red' });
         } finally {
             setIsUploading(false);

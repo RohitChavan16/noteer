@@ -3,6 +3,7 @@ import { param } from 'express-validator';
 import { query } from '../db/index.js';
 import { bulkInsertItems, bulkInsertImages, setNoteLabels, cleanupOrphanImages } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -142,6 +143,7 @@ router.post('/:id/versions/:versionId/restore', [param('id').isInt(), param('ver
             await bulkInsertImages(id, userId, versionData.images);
         }
 
+        logger.info('VERSIONS', `User ${userId} restored note ${id} to version ${versionId}`);
         res.json({ message: 'Restored successfully' });
     } catch (error) {
         next(error);

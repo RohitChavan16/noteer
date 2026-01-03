@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cookieParser from 'cookie-parser';
+import { logger } from './utils/logger.js';
 
 import authRoutes from './routes/auth.js';
 import notesRoutes from './routes/notes.js';
@@ -40,7 +41,7 @@ function getOrGenerateJwtSecret() {
     if (fs.existsSync(JWT_SECRET_FILE)) {
       const secret = fs.readFileSync(JWT_SECRET_FILE, 'utf8').trim();
       if (secret.length >= 32) {
-        console.log('🔑 Loaded JWT secret from file');
+        logger.info('STARTUP', 'Loaded JWT secret from file');
         return secret;
       }
     }
@@ -59,11 +60,12 @@ function getOrGenerateJwtSecret() {
     }
     // Ensure directory is writable
     fs.accessSync(dir, fs.constants.W_OK);
+    fs.accessSync(dir, fs.constants.W_OK);
     fs.writeFileSync(JWT_SECRET_FILE, newSecret, { mode: 0o600 });
-    console.log('🔑 Generated and saved new JWT secret');
+    logger.info('STARTUP', 'Generated and saved new JWT secret');
   } catch (err) {
-    console.error('⚠️ Could not save JWT secret to file:', err.message);
-    console.warn('   Sessions will not persist across container restarts');
+    logger.warn('STARTUP', 'Could not save JWT secret to file', err.message);
+    logger.warn('STARTUP', 'Sessions will not persist across container restarts');
   }
 
   return newSecret;
@@ -104,7 +106,7 @@ app.use(requestId);
 
 // Debug logging middleware - ALWAYS log in this debugging session
 app.use((req, res, next) => {
-  console.log(`[${req.requestId}] ${req.method} ${req.url}`);
+  logger.info('API', `${req.method} ${req.url}`, { requestId: req.requestId });
   next();
 });
 
@@ -119,6 +121,13 @@ app.use('/api/labels', apiLimiter, labelsRoutes);
 app.use('/api/upload', uploadLimiter, uploadRoutes);
 app.use('/api/admin/settings', apiLimiter, settingsRoutes);
 app.use('/api/encryption', apiLimiter, encryptionRoutes);
+
+// Public config for frontend (runtime, not build-time)
+app.get('/api/config', (req, res) => {
+  res.json({
+    logLevel: (process.env.LOG_LEVEL || 'warn').toUpperCase(),
+  });
+});
 
 // Health check (no rate limit)
 app.get('/api/health', (req, res) => {
@@ -156,15 +165,15 @@ async function start() {
         key: fs.readFileSync(process.env.SSL_KEY_PATH),
       };
       https.createServer(httpsOptions, app).listen(PORT, () => {
-        console.log(`🔒 Noteer backend running on https://localhost:${PORT}`);
+        logger.info('SERVER', `Noteer backend running on https://localhost:${PORT}`);
       });
     } else {
       app.listen(PORT, () => {
-        console.log(`📝 Noteer backend running on http://localhost:${PORT}`);
+        logger.info('SERVER', `Noteer backend running on http://localhost:${PORT}`);
       });
     }
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.fatal('SERVER', 'Failed to start server', error);
     process.exit(1);
   }
 }

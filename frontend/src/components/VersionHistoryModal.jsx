@@ -5,6 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { db, SYNC_STATUS } from '../db/db';
 import { useAuthStore } from '../stores/authStore';
+import { logger } from '../utils/logger';
 
 export default function VersionHistoryModal({ opened, onClose, noteId }) {
     const [restoring, setRestoring] = useState(false);
@@ -54,7 +55,7 @@ export default function VersionHistoryModal({ opened, onClose, noteId }) {
                     }
                 }
             } catch (error) {
-                console.error('Failed to fetch versions on-demand:', error);
+                logger.error('UI', 'Failed to fetch versions on-demand', error);
             } finally {
                 setFetching(false);
             }
@@ -104,7 +105,7 @@ export default function VersionHistoryModal({ opened, onClose, noteId }) {
 
             onClose();
         } catch (error) {
-            console.error('Failed to restore version:', error);
+            logger.error('UI', 'Failed to restore version', error);
             alert('Failed to restore version: ' + error.message);
         } finally {
             setRestoring(false);

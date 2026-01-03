@@ -14,6 +14,7 @@
 
 import pg from 'pg';
 import bcrypt from 'bcryptjs';
+import { logger } from '../utils/logger.js';
 
 const { Pool } = pg;
 
@@ -38,7 +39,7 @@ export async function query(text, params) {
 }
 
 export async function initializeDatabase() {
-  console.log('📦 Initializing database...');
+  logger.info('DB', '📦 Initializing database...');
 
   // Create tables
   await query(`
@@ -217,8 +218,8 @@ export async function initializeDatabase() {
       'INSERT INTO users (email, password_hash, given_name, family_name, role) VALUES ($1, $2, $3, $4, $5)',
       [adminEmail, passwordHash, 'Administrator', '', 'admin']
     );
-    console.log(`👤 Created admin user: ${adminEmail}`);
+    logger.info('AUTH', `👤 Created admin user: ${adminEmail}`);
   }
 
-  console.log('✅ Database initialized');
+  logger.info('DB', '✅ Database initialized');
 }

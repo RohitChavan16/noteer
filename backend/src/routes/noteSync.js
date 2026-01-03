@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query, getPool } from '../db/index.js';
+import { logger } from '../utils/logger.js';
 import { setNoteLabelIds, setNoteLabels, bulkInsertImages } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -128,7 +129,7 @@ router.get('/', async (req, res, next) => {
         sql += ` ORDER BY updated_at DESC`;
 
         const result = await query(sql, params);
-        console.log(`[SYNC DEBUG] User ${userId} sync since ${sinceDate}: Found ${result.rows.length} notes`);
+        logger.debug('SYNC', `User ${userId} sync since ${sinceDate}: Found ${result.rows.length} notes`);
 
         // Get deleted note IDs since timestamp
         // Must check both owned notes AND shares that were removed
@@ -161,6 +162,7 @@ router.get('/', async (req, res, next) => {
             serverTime: serverTime
         });
     } catch (error) {
+        logger.error('SYNC', 'Delta sync failed', error);
         next(error);
     }
 });
@@ -362,9 +364,11 @@ router.post('/batch', async (req, res, next) => {
         }
 
         await client.query('COMMIT');
+        logger.debug('SYNC', `User ${userId} batch sync: ${operations.length} ops, ${results.filter(r => r.success).length} succeeded`);
         res.json({ results });
     } catch (error) {
         await client.query('ROLLBACK');
+        logger.error('SYNC', 'Batch sync failed', error);
         next(error);
     } finally {
         client.release();

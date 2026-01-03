@@ -1,12 +1,13 @@
 import jwt from 'jsonwebtoken';
 import { query } from '../db/index.js';
+import { logger } from '../utils/logger.js';
 
 export function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
-        console.log('[Auth] No token provided');
+        logger.debug('AUTH', 'No token provided');
         return res.status(401).json({ error: 'Authentication required' });
     }
 
@@ -15,9 +16,9 @@ export function authenticateToken(req, res, next) {
         req.user = decoded;
         next();
     } catch (error) {
-        console.error('[Auth] Token verification failed:', error.message);
-        console.log('[Auth] Token was:', token);
-        console.log('[Auth] Secret starts with:', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 4) + '...' : 'UNDEFINED');
+        logger.warn('AUTH', 'Token verification failed', error.message);
+        logger.debug('AUTH', 'Token was', token);
+        logger.debug('AUTH', 'Secret starts with', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 4) + '...' : 'UNDEFINED');
         return res.status(403).json({ error: 'Invalid or expired token' });
     }
 }

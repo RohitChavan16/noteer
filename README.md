@@ -80,6 +80,7 @@ volumes:
 | `ADMIN_EMAIL` | `admin@example.com` | Admin user email |
 | `ADMIN_PASSWORD` | `changeme` | Admin user password |
 | `REGISTRATION_ENABLED` | `true` | Allow new user registration |
+| `LOG_LEVEL` | `warn` | Log level for backend and frontend: `error`, `warn`, `info`, `debug` |
 | `TRUST_PROXY` | `1` | Proxy trust config: number (hops) or string (`loopback`, CIDR) |
 | `SSL_ENABLED` | `false` | Enable direct HTTPS |
 | `SSL_CERT_PATH` | - | Path to SSL certificate |

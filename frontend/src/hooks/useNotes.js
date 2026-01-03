@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
+import { logger } from '../utils/logger';
 
 /**
  * Hook for reactive notes queries using Dexie's useLiveQuery.
@@ -116,7 +117,7 @@ export function useTrashedNotes() {
             .filter(n => n.is_trashed === true && n.sync_status !== 'deleted')
             .toArray();
 
-        console.log('[useTrashedNotes] Found', notes.length, 'trashed notes');
+        logger.debug('HOOKS', 'useTrashedNotes found items', notes.length);
 
         // Sort by updated_at desc
         notes.sort((a, b) => {

@@ -6,6 +6,8 @@
  * For production with multiple instances, use Redis-backed solution.
  */
 
+import { logger } from '../utils/logger.js';
+
 // In-memory store for request counts
 const requestCounts = new Map();
 
@@ -94,6 +96,7 @@ export function rateLimit(options = {}) {
         res.set('X-RateLimit-Reset', new Date(data.windowStart + windowMs).toISOString());
 
         if (data.count > max) {
+            logger.warn('RATELIMIT', `Rate limit exceeded: ${key} (${data.count}/${max})`);
             res.status(429).json({ error: message });
             return;
         }

@@ -10,6 +10,7 @@ import {
     IconAlertCircle, IconCheck, IconPlugConnected, IconSettings, IconChevronDown, IconChevronRight
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import { logger } from '../utils/logger';
 
 export default function AdminPage() {
     const { user, authFetch } = useAuthStore();
@@ -84,7 +85,7 @@ export default function AdminPage() {
                 setOidcConfigured(!!data.oidc?.issuerUrl);
             }
         } catch (err) {
-            console.error('Failed to fetch OIDC settings:', err);
+            logger.error('ADMIN', 'Failed to fetch OIDC settings', err);
         } finally {
             setOidcLoading(false);
         }

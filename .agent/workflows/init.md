@@ -20,26 +20,20 @@ git status
 git log -n 5 --oneline
 ```
 
-## 3. Check Latest Release
-// turbo
-```bash
-gh release list --limit 5
-```
-
-## 4. Check Open Issues/PRs
+## 3. Check Open Issues/PRs
 // turbo
 ```bash
 gh issue list --limit 10
 gh pr list --limit 5
 ```
 
-## 5. Check Docker Images
+## 4. Check Docker Images
 // turbo
 ```bash
 docker images | grep "noteer"
 ```
 
-## 6. Summarize Current State
+## 5. Summarize Current State
 After loading all context, provide a summary:
 - Current version/release
 - Open work items

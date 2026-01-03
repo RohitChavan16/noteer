@@ -4,6 +4,7 @@ import { db, SYNC_STATUS, LOCAL_IMAGE_PREFIX } from '../db/db';
 import { useAuthStore } from '../stores/authStore';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { useNotesStore } from '../stores/notesStore';
+import { logger } from '../utils/logger';
 
 // Constants
 const API_URL = '/api';
@@ -55,12 +56,12 @@ export function useSync() {
                                 });
                             }
                         });
-                        console.log(`[LazySync] Fetched ${versions.length} versions for ${idsToFetch.length} notes`);
+                        logger.debug('SYNC', `[LazySync] Fetched ${versions.length} versions for ${idsToFetch.length} notes`);
 
                     }
                 }
             } catch (error) {
-                console.error('[LazySync] Failed to fetch versions:', error);
+                logger.warn('SYNC', '[LazySync] Failed to fetch versions', error);
                 // In a real enterprise app, we'd smart-retry or dead-letter queue this
             }
         };
@@ -77,7 +78,7 @@ export function useSync() {
         const encryptionStore = useEncryptionStore.getState();
 
         if (!encryptionStore.isUnlocked) {
-            console.warn('Sync: Encryption not unlocked, skipping pull');
+            logger.info('SYNC', 'Encryption not unlocked, skipping pull');
             return;
         }
 
@@ -141,7 +142,7 @@ export function useSync() {
                         // CRITICAL: If locally deleted, ALWAYS keep local deletion (ignore server update)
                         // The deletion will be pushed in the next cycle
                         if (local.sync_status === SYNC_STATUS.DELETED) {
-                            console.log('[pullChanges] Validating: Skipping update for locally DELETED note', encryptedNote.id);
+                            logger.debug('SYNC', '[pullChanges] Validating: Skipping update for locally DELETED note', encryptedNote.id);
                             continue;
                         }
 
@@ -163,7 +164,7 @@ export function useSync() {
                         decryptedNote = await encryptionStore.decryptNote(encryptedNote);
 
                     } catch (e) {
-                        console.error('Failed to decrypt note:', encryptedNote.id, e);
+                        logger.error('SYNC', 'Failed to decrypt note', { id: encryptedNote.id, error: e });
                         // Store with decryption error marker
                         decryptedNote = {
                             ...encryptedNote,
@@ -175,7 +176,7 @@ export function useSync() {
 
                     // Store decrypted note in local DB
                     if (decryptedNote.is_trashed) {
-                        console.log('[pullChanges] Validating trashed note before save:', decryptedNote.id, 'is_trashed:', decryptedNote.is_trashed);
+                        logger.debug('SYNC', '[pullChanges] Validating trashed note before save:', { id: decryptedNote.id, is_trashed: decryptedNote.is_trashed });
                     }
 
                     // Map server label_ids to local labels property
@@ -215,7 +216,7 @@ export function useSync() {
                 });
             }
         } catch (error) {
-            console.error('Pull sync failed:', error);
+            logger.error('SYNC', 'Pull sync failed', error);
         }
     }, [authFetch]);
 
@@ -239,7 +240,7 @@ export function useSync() {
                     });
 
                     if (!res.ok) {
-                        console.error('Failed to upload offline image:', offlineImage.id);
+                        logger.error('SYNC', 'Failed to upload offline image', { id: offlineImage.id });
                         continue;
                     }
 
@@ -284,11 +285,11 @@ export function useSync() {
                     await db.offline_images.delete(offlineImage.id);
 
                 } catch (error) {
-                    console.error('Error processing offline image:', offlineImage.id, error);
+                    logger.error('SYNC', 'Error processing offline image', { id: offlineImage.id, error });
                 }
             }
         } catch (error) {
-            console.error('Failed to upload offline images:', error);
+            logger.error('SYNC', 'Failed to upload offline images', error);
         }
     }, [authFetch]);
 
@@ -327,7 +328,7 @@ export function useSync() {
 
                 for (const local of localSynced) {
                     if (!serverIds.has(local.id)) {
-                        console.log('[pullLabels] Removing ghost label:', local.id, local.name);
+                        logger.info('SYNC', 'Removing ghost label', { id: local.id, name: local.name });
 
                         // 1. Delete label
                         await db.labels.delete(local.id);
@@ -349,7 +350,7 @@ export function useSync() {
                 }
             });
         } catch (error) {
-            console.error('Pull labels failed:', error);
+            logger.error('SYNC', 'Pull labels failed', error);
         }
     }, [authFetch]);
 
@@ -428,11 +429,11 @@ export function useSync() {
                         }
                     }
                 } catch (e) {
-                    console.error('Failed to push label:', label.id, e);
+                    logger.error('SYNC', 'Failed to push label', { id: label.id, error: e });
                 }
             }
         } catch (error) {
-            console.error('Push labels failed:', error);
+            logger.error('SYNC', 'Push labels failed', error);
         }
     }, [authFetch]);
 
@@ -456,15 +457,15 @@ export function useSync() {
                             // Success or already gone
                             await db.offline_queue.delete(item.id);
                         } else {
-                            console.error('Failed to process unshare:', await res.text());
+                            logger.error('SYNC', 'Failed to process unshare', await res.text());
                         }
                     }
                 } catch (error) {
-                    console.error('Error processing offline queue item:', item.id, error);
+                    logger.error('SYNC', 'Error processing offline queue item', { id: item.id, error });
                 }
             }
         } catch (error) {
-            console.error('Offline queue processing failed:', error);
+            logger.error('SYNC', 'Offline queue processing failed', error);
         }
     }, [authFetch]);
 
@@ -474,7 +475,7 @@ export function useSync() {
 
         const encryptionStore = useEncryptionStore.getState();
         if (!encryptionStore.isUnlocked) {
-            console.warn('Sync: Encryption not unlocked, skipping push');
+            logger.info('SYNC', 'Encryption not unlocked, skipping push');
             return;
         }
 
@@ -495,7 +496,7 @@ export function useSync() {
                 // We must wait for pushLabels to resolve them to server IDs (integers)
                 // Otherwise we risk sending empty labels (if filtered) or crashing backend (if sent as UUID)
                 if (note.labels && note.labels.some(id => isNaN(Number(id)))) {
-                    console.log(`[pushChanges] Skipping note ${note.id} waiting for label resolution`);
+                    logger.debug('SYNC', `[pushChanges] Skipping note ${note.id} waiting for label resolution`);
                     continue;
                 }
 
@@ -604,7 +605,7 @@ export function useSync() {
                             });
                         }
                     } else if (result.status === 409 || result.error === 'Conflict') {
-                        console.warn(`Conflict detected for note ${original.id}. Resolving...`);
+                        logger.warn('SYNC', `Conflict detected for note ${original.id}. Resolving...`);
 
                         try {
                             // 1. Fetch server version
@@ -617,7 +618,7 @@ export function useSync() {
                                 try {
                                     decryptedServerNote = await encryptionStore.decryptNote(serverNote);
                                 } catch (e) {
-                                    console.error('Failed to decrypt server note during conflict:', e);
+                                    logger.error('SYNC', 'Failed to decrypt server note during conflict', e);
                                     decryptedServerNote = { ...serverNote, content: '[Decryption Failed]' };
                                 }
 
@@ -639,18 +640,18 @@ export function useSync() {
                                     sync_status: SYNC_STATUS.SYNCED
                                 });
 
-                                console.log(`Conflict resolved: Created copy ${conflictId}, reverted ${original.id}`);
+                                logger.info('SYNC', `Conflict resolved: Created copy ${conflictId}, reverted ${original.id}`);
                             }
                         } catch (err) {
-                            console.error('Error resolving conflict:', err);
+                            logger.error('SYNC', 'Error resolving conflict', err);
                         }
                     } else {
-                        console.error('Operation failed:', result);
+                        logger.error('SYNC', 'Operation failed', result);
                     }
                 }
             });
         } catch (error) {
-            console.error('Push sync failed:', error);
+            logger.error('SYNC', 'Push sync failed', error);
         }
     }, [authFetch]);
 
@@ -698,13 +699,13 @@ export function useSync() {
             });
 
         } catch (error) {
-            console.error('Sync failed:', error);
+            logger.error('SYNC', 'Sync failed', error);
             useNotesStore.setState({ isSyncing: false });
 
             // Retry with exponential backoff (only if online)
             if (navigator.onLine && retryCount < MAX_RETRY_ATTEMPTS) {
                 const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount);
-                console.log(`Sync retry ${retryCount + 1}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
+                logger.info('SYNC', `Sync retry ${retryCount + 1}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
                 globalSyncLock = false; // Allow retry
                 setTimeout(() => sync(retryCount + 1), delay);
                 return; // Don't reset syncInProgress yet

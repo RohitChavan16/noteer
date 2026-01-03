@@ -5,6 +5,7 @@ import path from 'path';
 import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 const UPLOADS_PATH = process.env.UPLOADS_PATH || '/var/lib/noteer/uploads';
 
@@ -238,7 +239,7 @@ router.delete('/:id', [requireRole('admin'), param('id').isInt()], async (req, r
                     if (fs.existsSync(mediumThumb)) fs.unlinkSync(mediumThumb);
                 }
             } catch (fileErr) {
-                console.error(`Failed to delete file ${row.url}:`, fileErr.message);
+                logger.error('USER', `Failed to delete file ${row.url}`, fileErr.message);
                 // Continue with deletion even if file cleanup fails
             }
         }
@@ -259,6 +260,7 @@ router.delete('/:id', [requireRole('admin'), param('id').isInt()], async (req, r
         // Now delete user from database (CASCADE will handle notes, images records, etc.)
         await query('DELETE FROM users WHERE id = $1', [id]);
 
+        logger.info('USER', `Admin ${req.user.id} deleted user ${id}`);
         res.status(204).send();
     } catch (error) {
         next(error);

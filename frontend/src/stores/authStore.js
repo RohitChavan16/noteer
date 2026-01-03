@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 import { useEncryptionStore } from './encryptionStore';
 import { db } from '../db/db';
+import { logger } from '../utils/logger';
 
 const API_URL = '/api';
 
@@ -123,15 +124,15 @@ export const useAuthStore = create(
                 try {
                     useEncryptionStore.getState().lock();
                 } catch (e) {
-                    console.warn('Failed to lock encryption store:', e);
+                    logger.warn('AUTH', 'Failed to lock encryption store', e);
                 }
 
                 // SECURITY: Wipe local IndexedDB containing decrypted notes
                 try {
                     await db.delete();
-                    console.log('Local database wiped on logout');
+                    logger.info('AUTH', 'Local database wiped on logout');
                 } catch (e) {
-                    console.warn('Failed to wipe local database:', e);
+                    logger.warn('AUTH', 'Failed to wipe local database', e);
                 }
 
                 set({ user: null, token: null, isAuthenticated: false });

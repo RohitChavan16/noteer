@@ -9,6 +9,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -20,7 +21,7 @@ const safeParse = (str) => {
     try {
         return str ? JSON.parse(str) : null;
     } catch (e) {
-        console.warn('Failed to parse JSON for user key:', e.message);
+        logger.warn('CRYPTO', 'Failed to parse JSON for user key', e.message);
         return null;
     }
 };
@@ -40,7 +41,7 @@ router.get('/status', async (req, res) => {
             hasPublicKey: !!result.rows[0]?.public_key
         });
     } catch (error) {
-        console.error('Get encryption status error:', error);
+        logger.error('CRYPTO', 'Get encryption status error', error);
         res.status(500).json({ error: 'Failed to get encryption status' });
     }
 });
@@ -75,9 +76,10 @@ router.post('/keys', async (req, res) => {
             [publicKeyJson, privateKeyJson, req.user.id]
         );
 
+        logger.info('CRYPTO', `User ${req.user.id} stored encryption keys`);
         res.json({ success: true });
     } catch (error) {
-        console.error('Store keys error:', error);
+        logger.error('CRYPTO', 'Store keys error', error);
         res.status(500).json({ error: 'Failed to store encryption keys' });
     }
 });
@@ -113,8 +115,9 @@ router.get('/keys', async (req, res) => {
             publicKey,
             encryptedPrivateKey
         });
+
     } catch (error) {
-        console.error('Get keys error:', error);
+        logger.error('CRYPTO', 'Get keys error', error);
         res.status(500).json({ error: 'Failed to retrieve encryption keys' });
     }
 });
@@ -151,7 +154,7 @@ router.get('/public-key/:userId', async (req, res) => {
             publicKey
         });
     } catch (error) {
-        console.error('Get public key error:', error);
+        logger.error('CRYPTO', 'Get public key error', error);
         res.status(500).json({ error: 'Failed to get public key' });
     }
 });
@@ -192,7 +195,7 @@ router.post('/notes/:noteId/keys', async (req, res) => {
 
         res.json({ success: true });
     } catch (error) {
-        console.error('Store note key error:', error);
+        logger.error('CRYPTO', 'Store note key error', error);
         res.status(500).json({ error: 'Failed to store note key' });
     }
 });
@@ -218,7 +221,7 @@ router.get('/notes/:noteId/key', async (req, res) => {
             encryptedKey: result.rows[0].encrypted_key
         });
     } catch (error) {
-        console.error('Get note key error:', error);
+        logger.error('CRYPTO', 'Get note key error', error);
         res.status(500).json({ error: 'Failed to get note key' });
     }
 });
@@ -248,7 +251,7 @@ router.delete('/notes/:noteId/keys/:userId', async (req, res) => {
 
         res.json({ success: true });
     } catch (error) {
-        console.error('Delete note key error:', error);
+        logger.error('CRYPTO', 'Delete note key error', error);
         res.status(500).json({ error: 'Failed to delete note key' });
     }
 });

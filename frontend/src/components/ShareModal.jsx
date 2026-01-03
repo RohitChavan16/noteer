@@ -5,6 +5,7 @@ import { IconSearch, IconX, IconUserPlus, IconWifiOff } from '@tabler/icons-reac
 import { useAuthStore } from '../stores/authStore';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { db } from '../db/db';
+import { logger } from '../utils/logger';
 
 const API_URL = '/api';
 
@@ -57,7 +58,7 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
                     setSearchResults(filtered);
                 }
             } catch (err) {
-                console.error('Search failed:', err);
+                logger.error('UI', 'User search failed', err);
             } finally {
                 setIsSearching(false);
             }
@@ -95,7 +96,7 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
                         return;
                     }
                 } catch (encError) {
-                    console.warn('Failed to prepare encryption key:', encError);
+                    logger.warn('UI', 'Failed to prepare share key', encError);
                     // Block sharing if we can't prepare the encryption key for encrypted notes
                     setError('Failed to prepare encryption key for sharing. Please try again.');
                     return;

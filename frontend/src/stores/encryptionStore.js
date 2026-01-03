@@ -25,6 +25,7 @@ import {
     bytesToHex,
     hexToBytes
 } from '../utils/crypto';
+import { logger } from '../utils/logger';
 
 const API_URL = '/api';
 // Keys are stored in localStorage for persistence across browser sessions until logout.
@@ -43,7 +44,7 @@ function saveKeysToStorage(masterKey, privateKey, publicKey) {
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
-        console.warn('Failed to save keys to storage:', e);
+        logger.warn('CRYPTO', 'Failed to save keys to storage', e);
     }
 }
 
@@ -61,7 +62,7 @@ function loadKeysFromStorage() {
             publicKey: data.publicKey
         };
     } catch (e) {
-        console.warn('Failed to load keys from storage:', e);
+        logger.warn('CRYPTO', 'Failed to load keys from storage', e);
         return null;
     }
 }
@@ -73,7 +74,7 @@ function clearKeysFromStorage() {
     try {
         localStorage.removeItem(STORAGE_KEY);
     } catch (e) {
-        console.warn('Failed to clear keys from storage:', e);
+        logger.warn('CRYPTO', 'Failed to clear keys from storage', e);
     }
 }
 
@@ -108,7 +109,7 @@ export const useEncryptionStore = create((set, get) => ({
             }
             return false;
         } catch (error) {
-            console.error('Failed to check encryption status:', error);
+            logger.error('CRYPTO', 'Failed to check setup status', error);
             return false;
         }
     },
@@ -233,7 +234,7 @@ export const useEncryptionStore = create((set, get) => ({
 
             return true;
         } catch (error) {
-            console.error('Unlock error:', error);
+            logger.error('CRYPTO', 'Unlock failed', error);
             // Provide friendly error message for decryption failure
             if (error.name === 'OperationError' || error.message.includes('decrypt')) {
                 set({ isLoading: false, error: 'Failed to decrypt private key. Wrong mnemonic or passphrase?' });
@@ -287,7 +288,7 @@ export const useEncryptionStore = create((set, get) => ({
                 // Cache it for future use
                 noteKeysCache.set(note.id, noteKey);
             } catch (e) {
-                console.error('Failed to decrypt existing note key, generating new one:', e);
+                logger.warn('CRYPTO', 'Failed to decrypt existing note key, generating new', e);
                 noteKey = generateNoteKey();
             }
         } else {
@@ -374,7 +375,7 @@ export const useEncryptionStore = create((set, get) => ({
                 content: decryptedContent
             };
         } catch (error) {
-            console.error('Failed to decrypt note:', error);
+            logger.error('CRYPTO', 'Note decryption failed', error);
             return {
                 ...note,
                 title: '[Decryption failed]',

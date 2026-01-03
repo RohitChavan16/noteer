@@ -7,6 +7,7 @@
  */
 
 const isProduction = process.env.NODE_ENV === 'production';
+import { logger } from '../utils/logger.js';
 
 // Request counter for correlation
 let requestCounter = 0;
@@ -43,10 +44,12 @@ function logError(err, req) {
     }
 
     // In production, this would go to log aggregation (e.g., stdout for Docker/K8s)
-    console.error(isProduction
-        ? JSON.stringify(errorLog)
-        : `[ERROR] ${errorLog.requestId}: ${err.message}\n${err.stack}`
-    );
+    // In production, this would go to log aggregation (e.g., stdout for Docker/K8s)
+    if (isProduction) {
+        logger.error('API', err.message, errorLog);
+    } else {
+        logger.error('API', `${errorLog.requestId}: ${err.message}`, err.stack);
+    }
 
     return errorLog;
 }

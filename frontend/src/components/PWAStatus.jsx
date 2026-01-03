@@ -4,6 +4,7 @@ import { IconWifiOff, IconRefresh, IconDownload, IconSettings } from '@tabler/ic
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { notifications } from '@mantine/notifications';
 import { usePWAStore } from '../stores/pwaStore';
+import { logger } from '../utils/logger';
 
 /**
  * PWA Status Component
@@ -25,10 +26,10 @@ export default function PWAStatus() {
         updateServiceWorker
     } = useRegisterSW({
         onRegistered(r) {
-            console.log('SW Registered:', r);
+            logger.info('PWA', 'SW Registered', r);
         },
         onRegisterError(error) {
-            console.log('SW registration error', error);
+            logger.error('PWA', 'SW registration error', error);
         }
     });
 

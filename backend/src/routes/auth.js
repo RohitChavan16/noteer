@@ -6,6 +6,7 @@ import * as client from 'openid-client';
 import { query } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { getOIDCSettingsFromDB, getAppUrl } from './settings.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -20,7 +21,7 @@ async function getOIDCConfig() {
         clientId = dbConfig.clientId;
         clientSecret = dbConfig.clientSecret;
     } catch (_e) {
-        console.log('[OIDC] Database config not available, using env vars');
+        logger.warn('OIDC', 'Database config not available, using env vars');
     }
 
     // Fallback to env vars removed. OIDC must be configured via Admin Panel.
@@ -51,7 +52,7 @@ async function isOIDCConfigured() {
 
 // GET /api/auth/debug - Log frontend messages
 router.get('/debug', (req, res) => {
-    console.log('[Frontend Debug]', req.query.msg);
+    logger.debug('FRONTEND', req.query.msg);
     res.sendStatus(200);
 });
 
@@ -76,9 +77,9 @@ router.get('/oidc/login', async (req, res, next) => {
 
         const redirect_uri = process.env.OIDC_CALLBACK_URL || `${baseUrl}/api/auth/callback`;
 
-        console.log('[OIDC] Login started');
-        console.log('[OIDC] Base URL:', baseUrl);
-        console.log('[OIDC] Redirect URI:', redirect_uri);
+        logger.info('OIDC', 'Login started');
+        logger.debug('OIDC', 'Base URL', baseUrl);
+        logger.debug('OIDC', 'Redirect URI', redirect_uri);
 
         let parameters = {
             redirect_uri,
@@ -100,8 +101,10 @@ router.get('/oidc/login', async (req, res, next) => {
             maxAge: 300000 // 5 minutes
         });
 
-        console.log('[OIDC] Set cookie oidc_session. Secure:', isSecure);
-        console.log('[OIDC] Redirecting to:', redirectTo.href);
+
+
+        logger.debug('OIDC', 'Set cookie oidc_session', { isSecure });
+        logger.info('OIDC', 'Redirecting to provider', redirectTo.href);
 
         res.redirect(redirectTo.href);
     } catch (error) {
@@ -127,17 +130,18 @@ router.get('/callback', async (req, res) => {
             const session = sessionCookie ? JSON.parse(sessionCookie) : {};
             code_verifier = session.code_verifier;
             state = session.state;
+            state = session.state;
         } catch (e) {
-            console.error('[OIDC] Failed to parse cookie:', e);
+            logger.error('OIDC', 'Failed to parse cookie', e);
         }
 
-        console.log('[OIDC] Callback received');
-        console.log('[OIDC] Current URL:', currentUrl.toString());
-        console.log('[OIDC] Session found:', !!sessionCookie);
-        console.log('[OIDC] State match:', !!state);
+        logger.info('OIDC', 'Callback received');
+        logger.debug('OIDC', 'Current URL', currentUrl.toString());
+        logger.debug('OIDC', 'Session found', !!sessionCookie);
+        logger.debug('OIDC', 'State match', !!state);
 
         if (!code_verifier || !state) {
-            console.error('[OIDC] Missing secure session data');
+            logger.error('OIDC', 'Missing secure session data');
             return res.status(400).send('Missing secure session verification data. Please try again.');
         }
 
@@ -150,7 +154,7 @@ router.get('/callback', async (req, res) => {
             }
         );
 
-        console.log('[OIDC] Tokens received');
+        logger.info('OIDC', 'Tokens received');
 
         // Check if we got claims immediately or need to fetch userinfo
         let claims = tokens.claims();
@@ -162,9 +166,9 @@ router.get('/callback', async (req, res) => {
         let picture = claims.picture;
 
         if (!email || (!given_name && !name)) {
-            console.log('[OIDC] Fetching full UserInfo...');
+            logger.info('OIDC', 'Fetching full UserInfo...');
             const userInfo = await client.fetchUserInfo(config, tokens.access_token, sub);
-            console.log('[OIDC] User info received:', JSON.stringify(userInfo));
+            logger.debug('OIDC', 'User info received', userInfo);
 
             email = email || userInfo.email;
             sub = sub || userInfo.sub;
@@ -201,7 +205,7 @@ router.get('/callback', async (req, res) => {
             // User exists and is already linked. Sync details.
             // We update email, names, and avatar to match the identity provider
             if (user.email !== email || user.given_name !== given_name || user.family_name !== family_name || user.avatar_url !== picture) {
-                console.log(`[OIDC] Syncing user ${user.id}: Profile changed in provider`);
+                logger.info('OIDC', `Syncing user ${user.id}: Profile changed in provider`);
                 await query(
                     'UPDATE users SET email = $1, given_name = $2, family_name = $3, avatar_url = $4 WHERE id = $5',
                     [email, given_name, family_name, picture || null, user.id]
@@ -219,7 +223,7 @@ router.get('/callback', async (req, res) => {
 
             if (user) {
                 // User exists but not linked. Link now.
-                console.log(`[OIDC] Linking existing user ${user.email} to OIDC subject ${sub}`);
+                logger.info('OIDC', `Linking existing user ${user.email} to OIDC subject ${sub}`);
                 // Also update names if they are currently default/empty, or just always sync them?
                 // Strategy: For good UX, we sync names from OIDC on link
                 await query(
@@ -228,7 +232,7 @@ router.get('/callback', async (req, res) => {
                 );
             } else {
                 // 3. Create new user
-                console.log(`[OIDC] Creating new user ${email}`);
+                logger.info('OIDC', `Creating new user ${email}`);
                 const insertResult = await query(
                     'INSERT INTO users (email, given_name, family_name, role, oidc_subject, oidc_issuer, avatar_url) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
                     [email, given_name, family_name || '', 'user', sub, config._issuerUrl, picture || null]
@@ -254,9 +258,9 @@ router.get('/callback', async (req, res) => {
         res.redirect(`/?token=${token}&enc=${hasEncryptionKey}`);
 
     } catch (error) {
-        console.error('OIDC Error:', error);
+        logger.error('OIDC', 'Authentication failed', error);
         // Log cause if available
-        if (error.cause) console.error('OIDC Error Cause:', error.cause);
+        if (error.cause) logger.error('OIDC', 'Error Cause', error.cause);
 
         res.status(500).send('Authentication failed: ' + error.message);
     }
@@ -322,6 +326,7 @@ router.post('/login', validateLogin, async (req, res, next) => {
         }
 
         const token = generateToken(user);
+        logger.debug('AUTH', `User ${user.id} logged in via password`);
         res.json({
             token,
             user: {
@@ -372,6 +377,7 @@ router.post('/register', validateRegister, async (req, res, next) => {
         const user = result.rows[0];
         const token = generateToken(user);
 
+        logger.info('AUTH', `New user registered: ${user.email} (ID: ${user.id})`);
         res.status(201).json({
             token,
             user: {

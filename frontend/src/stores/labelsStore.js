@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { db, SYNC_STATUS } from '../db/db';
 import { v4 as uuidv4 } from 'uuid';
 import { useEncryptionStore } from './encryptionStore';
+import { logger } from '../utils/logger';
 
 export const useLabelsStore = create((set, get) => ({
     // State is now managed by useLabels hook via Dexie, this store handles actions
@@ -39,7 +40,7 @@ export const useLabelsStore = create((set, get) => ({
             set({ isLoading: false });
             return { success: true, label: newLabel };
         } catch (error) {
-            console.error('Failed to create label:', error);
+            logger.error('LABELS', 'Failed to create label', error);
             set({ error: 'Failed to create label locally', isLoading: false });
             return { success: false, error: 'Failed to create label' };
         }
@@ -70,7 +71,7 @@ export const useLabelsStore = create((set, get) => ({
 
             return { success: true };
         } catch (error) {
-            console.error('Failed to delete label:', error);
+            logger.error('LABELS', 'Failed to delete label', error);
             return { success: false, error: error.message };
         }
     },

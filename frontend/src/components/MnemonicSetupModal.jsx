@@ -31,6 +31,7 @@ import {
 } from '@tabler/icons-react';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { useAuthStore } from '../stores/authStore';
+import { logger } from '../utils/logger';
 
 export function MnemonicSetupModal({ opened, onComplete }) {
     const [mnemonic, setMnemonic] = useState('');
@@ -72,7 +73,7 @@ export function MnemonicSetupModal({ opened, onComplete }) {
                 await confirmSetup(mnemonic, passphrase, authFetch);
                 setStep(2);
             } catch (err) {
-                console.error('Failed to setup encryption:', err);
+                logger.error('UI', 'Setup failed', err);
             }
         } else if (step === 2) {
             onComplete?.();

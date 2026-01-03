@@ -28,6 +28,7 @@ import {
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { getWordlist } from '../utils/crypto';
 import { useAuthStore } from '../stores/authStore';
+import { logger } from '../utils/logger';
 
 export function MnemonicUnlockModal({ opened, onUnlock }) {
     const [words, setWords] = useState(Array(24).fill(''));
@@ -102,7 +103,7 @@ export function MnemonicUnlockModal({ opened, onUnlock }) {
             await unlockWithMnemonic(mnemonic, passphrase, authFetch);
             onUnlock?.();
         } catch (err) {
-            console.error('Failed to unlock:', err);
+            logger.error('UI', 'Unlock failed', err);
         } finally {
             setIsSubmitting(false);
         }

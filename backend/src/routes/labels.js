@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -50,6 +51,7 @@ router.post('/', [
             [userId, name]
         );
 
+        logger.debug('LABELS', `Created label ${result.rows[0].id} for user ${userId}`);
         res.status(201).json({ ...result.rows[0], note_count: 0 });
     } catch (error) {
         next(error);
@@ -81,6 +83,7 @@ router.delete('/:id', [
         // Delete label (user_note_labels will cascade)
         await query('DELETE FROM labels WHERE id = $1', [id]);
 
+        logger.debug('LABELS', `Deleted label ${id} by user ${userId}`);
         res.status(204).send();
     } catch (error) {
         next(error);

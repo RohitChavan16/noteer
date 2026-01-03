@@ -3,6 +3,7 @@ import { Image, Loader, Center, Text } from '@mantine/core';
 import { useEncryptionStore } from '../stores/encryptionStore';
 import { IconLock } from '@tabler/icons-react';
 import { db, LOCAL_IMAGE_PREFIX } from '../db/db';
+import { logger } from '../utils/logger';
 
 export default function EncryptedImage({ src, noteId, alt, iv, originalName, encryptionIv, ...props }) {
     const [decryptedSrc, setDecryptedSrc] = useState(null);
@@ -31,7 +32,7 @@ export default function EncryptedImage({ src, noteId, alt, iv, originalName, enc
                         setError('Image not found');
                     }
                 } catch (err) {
-                    console.error('Failed to load offline image:', err);
+                    logger.error('UI', 'Failed to load offline image', err);
                     if (isMounted) setError('Failed to load image');
                 } finally {
                     if (isMounted) setLoading(false);
@@ -52,7 +53,7 @@ export default function EncryptedImage({ src, noteId, alt, iv, originalName, enc
 
             if (!effectiveIv) {
                 // Encrypted file but no IV? Cannot decrypt.
-                console.warn('Encrypted image missing IV:', src);
+                logger.warn('UI', 'Encrypted image missing IV', src);
                 setError('Missing encryption metadata');
                 return;
             }
@@ -72,7 +73,7 @@ export default function EncryptedImage({ src, noteId, alt, iv, originalName, enc
                     setDecryptedSrc(objectUrl);
                 }
             } catch (err) {
-                console.error('Failed to decrypt image:', err);
+                logger.error('UI', 'Failed to decrypt image', err);
                 if (isMounted) setError('Decryption failed');
             } finally {
                 if (isMounted) setLoading(false);

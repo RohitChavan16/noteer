@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db, SYNC_STATUS } from '../db/db';
 import { useAuthStore } from './authStore';
 import { useEncryptionStore } from './encryptionStore';
+import { logger } from '../utils/logger';
 
 const API_URL = '/api';
 
@@ -122,14 +123,14 @@ export const useNotesStore = create((set, get) => ({
             try {
                 await db.notes.add(newNote);
             } catch (dbError) {
-                console.error('[createNote] Dexie write failed:', dbError);
+                logger.error('NOTES', 'Dexie write failed (createNote)', dbError);
                 throw dbError;
             }
 
             set({ pendingChanges: true });
             return newNote;
         } catch (error) {
-            console.error('Failed to create note:', error);
+            logger.error('NOTES', 'Failed to create note', error);
             set({ error: error.message });
             return null;
         }
@@ -179,7 +180,7 @@ export const useNotesStore = create((set, get) => ({
             set({ pendingChanges: true });
             return true;
         } catch (error) {
-            console.error('Failed to update note:', error);
+            logger.error('NOTES', 'Failed to update note', error);
             set({ error: error.message });
             return false;
         }
@@ -207,22 +208,24 @@ export const useNotesStore = create((set, get) => ({
             const note = await db.notes.get(id);
             if (!note) return true;
 
-            console.log('[deleteNote] Deleting note:', id, 'status:', note.sync_status);
+            if (!note) return true;
+
+            logger.debug('NOTES', 'Deleting note', { id, status: note.sync_status });
 
             if (note.sync_status === SYNC_STATUS.NEW) {
                 // Note was never synced to server, just delete locally
-                console.log('[deleteNote] Physical delete (NEW)');
+                logger.debug('NOTES', 'Physical delete (NEW)');
                 await db.notes.delete(id);
             } else {
                 // Mark for deletion, sync engine will delete on server
-                console.log('[deleteNote] Soft delete (marking DELETED)');
+                logger.debug('NOTES', 'Soft delete (marking DELETED)');
                 await db.notes.update(id, { sync_status: SYNC_STATUS.DELETED });
             }
 
             set({ pendingChanges: true });
             return true;
         } catch (error) {
-            console.error('Failed to delete note:', error);
+            logger.error('NOTES', 'Failed to delete note', error);
             set({ error: error.message });
             return false;
         }
@@ -259,7 +262,7 @@ export const useNotesStore = create((set, get) => ({
             if (!res.ok) throw new Error('Failed to fetch versions');
             return await res.json();
         } catch (error) {
-            console.error(error);
+            logger.error('NOTES', 'Failed to get note versions', error);
             return [];
         }
     },
@@ -290,7 +293,7 @@ export const useNotesStore = create((set, get) => ({
 
             return restoredNote;
         } catch (error) {
-            console.error(error);
+            logger.error('NOTES', 'Failed to restore note version', error);
             throw error;
         }
     },
@@ -343,7 +346,7 @@ export const useNotesStore = create((set, get) => ({
                 };
             }
         } catch (error) {
-            console.error(error);
+            logger.error('NOTES', 'Failed to upload image', error);
             set({ error: error.message });
             return null;
         }

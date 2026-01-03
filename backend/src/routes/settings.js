@@ -10,6 +10,7 @@ import { body, validationResult } from 'express-validator';
 import * as client from 'openid-client';
 import { query } from '../db/index.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -106,6 +107,7 @@ router.put('/', validateSettings, async (req, res, next) => {
         // Clear OIDC config cache
         clearOIDCConfigCache();
 
+        logger.info('SETTINGS', `Admin ${req.user.id} updated OIDC settings`);
         res.json({ success: true });
     } catch (error) {
         next(error);
@@ -152,7 +154,7 @@ router.post('/test-oidc', async (req, res, _next) => {
             tokenEndpoint: config.serverMetadata().token_endpoint,
         });
     } catch (error) {
-        console.error('OIDC test failed:', error);
+        logger.error('SETTINGS', 'OIDC test failed', error);
         res.status(400).json({
             success: false,
             error: error.message || 'Failed to connect to OIDC provider'

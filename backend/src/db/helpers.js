@@ -5,6 +5,7 @@
  */
 
 import { query } from './index.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Bulk insert checklist items for a note
@@ -181,8 +182,10 @@ export async function cleanupOrphanImages(noteId, deletedVersionsData) {
                 if (fs.existsSync(filePath)) {
                     fs.unlinkSync(filePath);
                 }
+
+
             } catch (err) {
-                console.error(`Failed to delete orphan image: ${filePath}`, err);
+                logger.error('DB', `Failed to delete orphan image: ${filePath}`, err);
             }
         }
     }

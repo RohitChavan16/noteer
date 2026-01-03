@@ -15,6 +15,7 @@ import NoteRichTextEditor from './NoteRichTextEditor';
 import LabelPicker from './LabelPicker';
 import ShareModal from './ShareModal';
 import EncryptedImage from './EncryptedImage';
+import { logger } from '../utils/logger';
 
 import {
     DndContext,
@@ -242,7 +243,7 @@ export default function NoteModal({ note, onClose }) {
                         fileToUpload = new File([encryptedBlob], file.name + '.enc', { type: 'application/octet-stream' });
                         encryptionIv = iv;
                     } catch (encError) {
-                        console.warn('Image encryption failed, uploading unencrypted:', encError);
+                        logger.warn('UI', 'Image encryption failed, falling back to unencrypted', encError);
                         // Fall back to unencrypted upload
                     }
                 }
@@ -257,7 +258,7 @@ export default function NoteModal({ note, onClose }) {
                 }
             }
         } catch (error) {
-            console.error(error);
+            logger.error('UI', 'Image upload failed', error);
             notifications.show({ title: 'Upload failed', message: 'Failed to upload image', color: 'red' });
         } finally {
             setIsUploading(false);
@@ -638,7 +639,7 @@ export default function NoteModal({ note, onClose }) {
                                                     method: 'DELETE'
                                                 });
                                             } catch (e) {
-                                                console.error('Failed to unshare:', e);
+                                                logger.error('UI', 'Failed to unshare self', e);
                                             }
                                             onClose();
                                             // Note: useLiveQuery automatically updates UI when data changes

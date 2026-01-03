@@ -14,6 +14,7 @@ import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
 import { bulkInsertItems, bulkInsertImages, setNoteLabels, setNoteLabelIds, cleanupOrphanImages } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 import { PAGINATION } from '../config/constants.js';
 
 const router = Router();
@@ -250,6 +251,7 @@ router.post('/', validateNote, async (req, res, next) => {
         note.label_ids = label_ids || [];
         note.images = images || [];
 
+        logger.debug('NOTES', `Created note ${note.id} for user ${userId}`);
         res.status(201).json(note);
     } catch (error) {
         next(error);
@@ -448,6 +450,7 @@ router.post('/:id/trash', param('id').isInt(), async (req, res, next) => {
             return res.status(404).json({ error: 'Note not found' });
         }
 
+        logger.debug('NOTES', `User ${userId} trashed note ${id}`);
         res.json(result.rows[0]);
     } catch (error) {
         next(error);
@@ -470,6 +473,7 @@ router.post('/:id/restore', param('id').isInt(), async (req, res, next) => {
             return res.status(404).json({ error: 'Note not found' });
         }
 
+        logger.debug('NOTES', `User ${userId} restored note ${id} from trash`);
         res.json(result.rows[0]);
     } catch (error) {
         next(error);
@@ -488,6 +492,7 @@ router.delete('/:id', param('id').isInt(), async (req, res, next) => {
             return res.status(404).json({ error: 'Note not found' });
         }
 
+        logger.debug('NOTES', `Permanently deleted note ${id} by user ${userId}`);
         res.status(204).send();
     } catch (error) {
         next(error);

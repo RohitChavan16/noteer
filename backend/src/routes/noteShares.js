@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { query, getPool } from '../db/index.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 const router = Router();
 
@@ -81,6 +82,7 @@ router.post('/:id/share', [param('id').isInt(), body('user_id').isInt()], async 
 
             await client.query('COMMIT');
 
+            logger.debug('SHARE', `User ${userId} shared note ${id} with user ${targetUserId}`);
             res.status(201).json({
                 success: true,
                 user: {
@@ -90,7 +92,7 @@ router.post('/:id/share', [param('id').isInt(), body('user_id').isInt()], async 
             });
         } catch (error) {
             await client.query('ROLLBACK');
-            console.error('Share transaction error:', error);
+            logger.error('SHARE', 'Share transaction error', error);
             throw error; // Propagate to outer catch
         } finally {
             client.release();
@@ -132,6 +134,7 @@ router.delete('/:id/share/:userId', [param('id').isInt(), param('userId').isInt(
         // Update note's updated_at for sync
         await query('UPDATE notes SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 
+        logger.debug('SHARE', `User ${currentUserId} unshared note ${id} from user ${targetId}`);
         res.status(204).send();
     } catch (error) {
         next(error);

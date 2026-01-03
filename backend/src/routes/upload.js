@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import sharp from 'sharp';
 import { authenticateToken } from '../middleware/auth.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -130,9 +131,10 @@ router.post('/', authenticateToken, upload.array('images', 2), async (req, res) 
             uploadedFiles.push(fileData);
         }
 
+        logger.debug('UPLOAD', `User ${req.user.id} uploaded ${uploadedFiles.length} file(s)`);
         res.json(uploadedFiles);
     } catch (error) {
-        console.error('Upload error:', error);
+        logger.error('UPLOAD', 'Upload error', error);
         res.status(500).json({ error: 'Failed to upload images' });
     }
 });
