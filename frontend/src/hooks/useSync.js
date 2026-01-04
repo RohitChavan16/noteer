@@ -645,6 +645,16 @@ export function useSync() {
                         } catch (err) {
                             logger.error('SYNC', 'Error resolving conflict', err);
                         }
+                    } else if (result.op === 'update' && result.error === 'Note not found') {
+                        // FIX: Note exists locally but missing on server (e.g. wiped or ID mismatch)
+                        // Self-heal by marking as NEW to force re-creation/upload
+                        logger.warn('SYNC', `Note ${original.id} not found on server. Resurrecting as new.`);
+
+                        await db.notes.update(original.id, {
+                            sync_status: SYNC_STATUS.NEW,
+                            updated_at: new Date().toISOString()
+                        });
+
                     } else {
                         logger.error('SYNC', 'Operation failed', result);
                     }

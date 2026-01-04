@@ -81,7 +81,7 @@ export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuer
  * @param {('asc'|'desc')} options.sortOrder - Sort direction
  * @returns {Array|undefined} Array of archived notes
  */
-export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc' } = {}) {
+export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', limit = 20 } = {}) {
     return useLiveQuery(async () => {
         // Filter for archived, non-trashed notes
         let notes = await db.notes
@@ -103,15 +103,17 @@ export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc' } =
             });
         }
 
-        return notes;
-    }, [sortBy, sortOrder], EMPTY_ARRAY);
+        return notes.slice(0, limit);
+    }, [sortBy, sortOrder, limit], EMPTY_ARRAY);
 }
 
 /**
  * Get trashed notes
+ * @param {Object} options - Query options
+ * @param {number} options.limit - Max items to return
  * @returns {Array|undefined} Array of trashed notes
  */
-export function useTrashedNotes() {
+export function useTrashedNotes({ limit = 20 } = {}) {
     return useLiveQuery(async () => {
         const notes = await db.notes
             .filter(n => n.is_trashed === true && n.sync_status !== 'deleted')
@@ -126,8 +128,8 @@ export function useTrashedNotes() {
             return bTime - aTime;
         });
 
-        return notes;
-    }, [], EMPTY_ARRAY);
+        return notes.slice(0, limit);
+    }, [limit], EMPTY_ARRAY);
 }
 
 /**

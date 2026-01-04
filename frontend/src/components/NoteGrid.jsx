@@ -8,8 +8,22 @@ import ShareModal from './ShareModal';
 import { useNotesStore } from '../stores/notesStore';
 import { useLabelsMap } from '../hooks/useLabels';
 
+import SelectionBottomBar from './SelectionBottomBar';
+
 export default function NoteGrid({ notes, showRestore, showDelete }) {
-    const { viewMode, pinNote, archiveNote, unarchiveNote, trashNote, deleteNote, restoreNote, updateNote } = useNotesStore();
+    const {
+        viewMode,
+        pinNote,
+        archiveNote,
+        unarchiveNote,
+        trashNote,
+        deleteNote,
+        restoreNote,
+        updateNote,
+        isSelectionMode,
+        selectedNoteIds,
+        toggleNoteSelection
+    } = useNotesStore();
     const [selectedNote, setSelectedNote] = useState(null);
     const [versionHistoryNoteId, setVersionHistoryNoteId] = useState(null);
     const [shareNoteId, setShareNoteId] = useState(null);
@@ -64,6 +78,15 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         ? { maxWidth: 600, margin: '0 auto' }
         : { columnCount: 4, columnGap: 16 };
 
+    const handleSelectAll = useCallback(() => {
+        const ids = notes.map(n => n.id);
+        const { selectAll } = useNotesStore.getState();
+        selectAll(ids);
+    }, [notes]);
+
+    // Ensure we pass the latest version of the note to the modal
+    const activeNote = selectedNote ? (notes.find(n => n.id === selectedNote.id) || selectedNote) : null;
+
     const renderNotes = (noteList, title) => (
         <>
             {title && noteList.length > 0 && (
@@ -88,6 +111,11 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                         onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
                         onLabelsChange={!isTrash ? handleLabelsChange : undefined}
                         onShare={!isTrash ? handleShare : undefined}
+
+                        // Selection Props
+                        selectionMode={isSelectionMode}
+                        isSelected={selectedNoteIds.includes(note.id)}
+                        onToggleSelect={toggleNoteSelection}
                     />
                 ))}
             </Box>
@@ -130,9 +158,6 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
         );
     }
 
-    // Ensure we pass the latest version of the note to the modal
-    const activeNote = selectedNote ? (notes.find(n => n.id === selectedNote.id) || selectedNote) : null;
-
     return (
         <>
             <Box w="100%">
@@ -144,6 +169,14 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
                     <Box ref={observerRef} h={20} w="100%" /> // Invisible 20px trigger area
                 )}
             </Box>
+
+            {/* Selection Bottom Bar */}
+            <SelectionBottomBar
+                showRestore={showRestore}
+                showDelete={showDelete}
+                onSelectAll={handleSelectAll}
+                notes={notes}
+            />
 
             {activeNote && (
                 <NoteModal note={activeNote} onClose={handleModalClose} />

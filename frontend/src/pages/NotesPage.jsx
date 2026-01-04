@@ -9,7 +9,7 @@ import NoteInput from '../components/NoteInput';
 
 export default function NotesPage() {
     const { labelId } = useParams();
-    const { searchQuery, sortBy, sortOrder } = useNotesStore();
+    const { searchQuery, sortBy, sortOrder, displayLimit } = useNotesStore();
     const labelsMap = useLabelsMap();
 
     // Resolve label name
@@ -20,7 +20,8 @@ export default function NotesPage() {
         sortBy,
         sortOrder,
         searchQuery,
-        labelId: labelId ? (Number(labelId) || labelId) : null
+        labelId: labelId ? (Number(labelId) || labelId) : null,
+        limit: displayLimit
     });
 
     // Notes is undefined while loading

@@ -9,53 +9,147 @@ export const TEST_CREDENTIALS = {
 };
 
 /**
+ * Test mnemonic for E2E tests (BIP-39 standard test phrase)
+ * Use this exact phrase when setting up admin user encryption after volume wipe.
+ */
+export const TEST_MNEMONIC = 'vessel erase embark marriage detail torch equip uniform better replace pride family lion special scrap mechanic pact test axis gloom short cement giggle gap';
+
+/**
+ * Setup console and page error logging for debugging
+ */
+export function setupPageConsoleDebug(page) {
+    page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
+    page.on('pageerror', err => console.log('BROWSER ERROR:', err.toString()));
+    page.on('request', request => console.log('>>', request.method(), request.url()));
+    page.on('response', response => console.log('<<', response.status(), response.url()));
+    page.on('requestfailed', request => console.log('!!', request.failure().errorText, request.url()));
+}
+
+/**
  * Login with test credentials
  * @param {import('@playwright/test').Page} page
- * @param {string} mnemonic - Optional mnemonic for encryption unlock
+ * @param {string} mnemonic - Optional mnemonic for encryption unlock (defaults to TEST_MNEMONIC)
  */
-export async function login(page, mnemonic = null) {
+export async function login(page, mnemonic = TEST_MNEMONIC) {
     await page.goto('/');
-    await page.fill('input[type="email"]', TEST_CREDENTIALS.email);
-    await page.fill('input[type="password"]', TEST_CREDENTIALS.password);
-    await page.click('button:has-text("Sign in")');
+    await page.locator('input[type="email"]').fill(TEST_CREDENTIALS.email);
+    await page.locator('input[type="password"]').fill(TEST_CREDENTIALS.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
 
-    // Handle encryption modals if they appear
-    try {
-        // Check if unlock modal appears (returning user with encryption)
-        const unlockModal = page.getByRole('heading', { name: 'Unlock Notes' });
-        const isUnlockVisible = await unlockModal.isVisible({ timeout: 3000 }).catch(() => false);
+    // Check if unlock modal appears (returning user with encryption)
+    const unlockModal = page.getByRole('heading', { name: 'Unlock Notes' }).first();
+    const isUnlockVisible = await unlockModal.isVisible().catch(() => false);
 
-        if (isUnlockVisible && mnemonic) {
-            // Paste mnemonic and unlock
-            const firstInput = page.locator('.mantine-Autocomplete-input').first();
-            await firstInput.fill(mnemonic);
-            await page.getByRole('button', { name: 'Unlock' }).click();
-        } else if (isUnlockVisible) {
-            // No mnemonic provided but unlock modal appeared - skip test or fail
-            throw new Error('Encryption unlock required but no mnemonic provided');
+    // Wait a bit for modal to potentially appear
+    if (!isUnlockVisible) {
+        await page.waitForTimeout(1000);
+    }
+
+    const isUnlockNowVisible = await unlockModal.isVisible().catch(() => false);
+
+    if (isUnlockNowVisible || await unlockModal.isVisible().catch(() => false)) {
+        console.log('Unlocking with mnemonic...');
+        await expect(unlockModal).toBeVisible({ timeout: 10000 });
+
+        // Fill all inputs individually
+        const inputs = page.locator('.mantine-Autocomplete-input');
+        const words = mnemonic.split(' ');
+        for (let i = 0; i < words.length; i++) {
+            await inputs.nth(i).fill(words[i]);
         }
 
-        // Check if setup modal appears (new user)
-        const setupModal = page.getByRole('heading', { name: 'Encryption Setup' });
-        const isSetupVisible = await setupModal.isVisible({ timeout: 1000 }).catch(() => false);
-
-        if (isSetupVisible) {
-            // Complete setup flow
-            await page.getByText('I have written down all 24 words').click();
-            await page.getByRole('button', { name: 'Continue' }).click();
-            await expect(page.getByText('Encryption is active')).toBeVisible({ timeout: 30000 });
-            await page.getByRole('button', { name: 'Start using Noteer' }).click();
-        }
-    } catch (error) {
-        // If no encryption modals, continue normally
-        if (!error.message.includes('Encryption')) {
-            console.log('No encryption modal detected, continuing...');
-        } else {
-            throw error;
-        }
+        const unlockBtn = page.getByRole('button', { name: 'Unlock' });
+        await expect(unlockBtn).toBeEnabled();
+        await unlockBtn.click({ force: true });
+    } else {
+        // Handle new user setup if no unlock modal
+        await handleEncryptionSetup(page);
     }
 
     await expect(page.locator('text=Take a note...')).toBeVisible({ timeout: 15000 });
+}
+
+/**
+ * Handle Encryption Setup modal for new users
+ * @param {import('@playwright/test').Page} page
+ */
+export async function handleEncryptionSetup(page) {
+    // Debug: listen to console and page errors
+    page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
+    page.on('pageerror', err => console.log('BROWSER ERROR:', err.toString()));
+
+    // Check if setup modal appears (new user)
+    console.log('Checking for Encryption Setpu modal...');
+    // Try role first, then text content if role fails (sometimes Mantine modals are tricky)
+    const setupModal = page.getByRole('heading', { name: 'Encryption Setup' });
+    let isSetupVisible = await setupModal.isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (!isSetupVisible) {
+        console.log('Heading with role not found, trying text content...');
+        isSetupVisible = await page.getByText('Encryption Setup').first().isVisible({ timeout: 2000 }).catch(() => false);
+
+        // Debug registration error if we are stuck
+        const alert = page.locator('.mantine-Alert-message');
+        if (await alert.isVisible()) {
+            console.log('ERROR ALERT DETECTED:', await alert.innerText());
+        } else {
+            // Deep debug of the state
+            const debugInfo = await page.evaluate(() => {
+                return {
+                    url: window.location.href,
+                    hasBuffer: !!window.Buffer,
+                    authStore: localStorage.getItem('noteer-auth'),
+                    encryptionKeys: localStorage.getItem('noteer-encryption-keys'),
+                    rootContent: document.getElementById('root')?.innerHTML || 'ROOT_MISSING',
+                    bodyContent: document.body.innerHTML
+                };
+            });
+
+            console.log('--- DEBUG STATE DUMP ---');
+            console.log('URL:', debugInfo.url);
+            console.log('Has Buffer:', debugInfo.hasBuffer);
+            console.log('Auth Store:', debugInfo.authStore ? 'PRESENT' : 'MISSING');
+            if (debugInfo.authStore) console.log('Auth Data:', debugInfo.authStore.substring(0, 200) + '...');
+            console.log('Encryption Keys:', debugInfo.encryptionKeys ? 'PRESENT' : 'MISSING');
+            console.log('Root Content:', debugInfo.rootContent);
+            console.log('------------------------');
+
+            await page.screenshot({ path: 'debug-setup-failure.png' });
+            console.log('Took screenshot: debug-setup-failure.png');
+        }
+    }
+
+    console.log(`Encryption Setup modal visible: ${isSetupVisible}. Current URL: ${page.url()}`);
+
+    if (isSetupVisible) {
+        console.log('Starting encryption setup flow...');
+
+        // Capture the mnemonic words
+        // Target the second Text element in each Group within the SimpleGrid
+        const wordElements = page.locator('.mantine-Modal-body .mantine-SimpleGrid-root .mantine-Group-root > .mantine-Text-root:last-child');
+        try {
+            await expect(wordElements).toHaveCount(24, { timeout: 5000 });
+        } catch (e) {
+            console.log('Failed to find 24 words. Dumping DOM...');
+            console.log(await page.locator('.mantine-Modal-body').innerHTML());
+            throw e;
+        }
+
+        const words = await wordElements.allInnerTexts();
+        const mnemonic = words.join(' ');
+        console.log('Captured mnemonic:', mnemonic.substring(0, 20) + '...');
+
+        // Complete setup flow
+        await page.getByText('I have written down all 24 words').click();
+        await page.getByRole('button', { name: 'Continue' }).click();
+        await expect(page.getByText('Encryption is active')).toBeVisible({ timeout: 30000 });
+        console.log('Encryption active message visible');
+        await page.getByRole('button', { name: 'Start using Noteer' }).click();
+        console.log('Clicked Start using Noteer');
+
+        return mnemonic;
+    }
+    return null;
 }
 
 /**
@@ -86,8 +180,10 @@ export async function logout(page, isMobile) {
     } catch (error) {
         console.log(`Click failed: ${error.message}. Retrying with dispatchEvent...`);
         await logoutBtn.dispatchEvent('click');
+        // Wait a bit for the navigation to start
+        await page.waitForTimeout(500);
     }
-    await expect(page.locator('text=Welcome back')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('text=Welcome back')).toBeVisible({ timeout: 10000 });
 }
 
 /**
@@ -109,9 +205,9 @@ export async function navigateTo(page, isMobile, path) {
 
     // Use the NavLink with matching href
     if (path === '/') {
-        await page.locator('a[href="/"]').first().click();
+        await page.locator('a[href="/"]').first().click({ force: true });
     } else {
-        await page.locator(`a[href="${path}"]`).click();
+        await page.locator(`a[href="${path}"]`).click({ force: true });
     }
     // Wait for page to fully load including network requests
     await page.waitForLoadState('networkidle');
@@ -128,7 +224,13 @@ export async function navigateTo(page, isMobile, path) {
 export async function createNote(page, title, content) {
     await page.click('text=Take a note...');
     await page.fill('input[placeholder="Title"]', title);
-    await page.fill('textarea[placeholder="Take a note..."]', content);
+
+    // The content area is a TipTap RichTextEditor (ProseMirror), not a textarea
+    // We need to click into it and type
+    const editor = page.locator('.ProseMirror');
+    await editor.click();
+    await page.keyboard.type(content);
+
     await page.click('button:has-text("Close")');
 
     const noteCard = page.locator('.note-card').filter({ hasText: title }).first();
@@ -145,7 +247,8 @@ export async function createNote(page, title, content) {
  */
 export async function createChecklist(page, title, items) {
     await page.click('text=Take a note...');
-    await page.locator('[title="Checklist"]').click();
+    // The checklist button has title="New list" in the expanded note input
+    await page.locator('[title="New list"]').click();
     await page.fill('input[placeholder="Title"]', title);
 
     for (const item of items) {

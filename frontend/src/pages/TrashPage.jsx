@@ -1,9 +1,11 @@
+import { useNotesStore } from '../stores/notesStore';
 import { useTrashedNotes } from '../hooks/useNotes';
 import { Box, Center, Loader, Text, Stack, Title } from '@mantine/core';
 import NoteGrid from '../components/NoteGrid';
 
 export default function TrashPage() {
-    const notes = useTrashedNotes();
+    const { displayLimit } = useNotesStore();
+    const notes = useTrashedNotes({ limit: displayLimit });
 
     // Notes is undefined while loading
     const isLoading = notes === undefined;

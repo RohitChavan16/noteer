@@ -1,8 +1,8 @@
 import { useState, memo } from 'react';
 import DOMPurify from 'dompurify';
-import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid } from '@mantine/core';
+import { Card, Text, Badge, Group, ActionIcon, Stack, Checkbox, Box, Menu, Avatar, Tooltip, SimpleGrid, ThemeIcon } from '@mantine/core';
 import { useMantineColorScheme } from '@mantine/core';
-import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory, IconUsers, IconShare } from '@tabler/icons-react';
+import { IconPin, IconPinFilled, IconArchive, IconArchiveOff, IconTrash, IconRestore, IconDotsVertical, IconHistory, IconUsers, IconShare, IconCheck } from '@tabler/icons-react';
 
 import { getNoteColor, getNoteTextColor } from '../constants/noteColors';
 import { getInitials } from '../utils/helpers';
@@ -10,7 +10,24 @@ import LabelPicker from './LabelPicker';
 
 import EncryptedImage from './EncryptedImage';
 
-const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArchive, onUnarchive, onRestore, onTrash, onDelete, onItemToggle, onVersionHistory, onLabelsChange, onShare }) {
+const NoteCard = memo(function NoteCard({
+    note,
+    labelsMap,
+    onClick,
+    onPin,
+    onArchive,
+    onUnarchive,
+    onRestore,
+    onTrash,
+    onDelete,
+    onItemToggle,
+    onVersionHistory,
+    onLabelsChange,
+    onShare,
+    selectionMode,
+    isSelected,
+    onToggleSelect
+}) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
     const [isHovered, setIsHovered] = useState(false);
@@ -23,7 +40,19 @@ const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArc
 
     const handleAction = (e, action) => {
         e.stopPropagation();
+        if (selectionMode) {
+            onToggleSelect(note.id);
+            return;
+        }
         action();
+    };
+
+    const handleCardClick = () => {
+        if (selectionMode) {
+            onToggleSelect(note.id);
+        } else {
+            onClick?.(note);
+        }
     };
 
     const bgColor = getNoteColor(note.color, isDark);
@@ -35,7 +64,7 @@ const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArc
             padding={note.type === 'picture' ? 0 : "md"}
             radius="md"
             withBorder
-            onClick={() => onClick?.(note)}
+            onClick={handleCardClick}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             style={{
@@ -43,26 +72,60 @@ const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArc
                 breakInside: 'avoid',
                 marginBottom: 16,
                 backgroundColor: bgColor,
-                color: textColor
+                color: textColor,
+                position: 'relative'
             }}
             className="note-card"
             styles={(theme) => ({
                 root: {
                     transition: 'transform 0.15s, box-shadow 0.15s',
                     '&:hover': {
-                        transform: 'translateY(-2px)',
+                        transform: selectionMode ? 'none' : 'translateY(-2px)',
                         boxShadow: theme.shadows.md,
                     },
-                    borderColor: isPinned ? 'var(--mantine-color-blue-5)' : undefined,
+                    borderColor: isSelected
+                        ? 'var(--mantine-color-blue-6)'
+                        : (isPinned ? 'var(--mantine-color-blue-5)' : undefined),
+                    borderWidth: isSelected ? 2 : 1
                 },
             })}
         >
-            {isPinned && (
+            {/* Selection Checkbox Overlay */}
+            {selectionMode && (
+                <Box
+                    style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8, // Moved to right
+                        zIndex: 20,
+                        cursor: 'pointer'
+                    }}
+                    onClick={(e) => { e.stopPropagation(); onToggleSelect(note.id); }}
+                >
+                    {isSelected ? (
+                        <ThemeIcon radius="xl" size="lg" color="blue">
+                            <IconCheck size={18} />
+                        </ThemeIcon>
+                    ) : (
+                        <Box
+                            style={{
+                                width: 26,
+                                height: 26,
+                                borderRadius: '50%',
+                                border: `2px solid ${isDark ? 'var(--mantine-color-gray-6)' : 'var(--mantine-color-gray-4)'}`,
+                                backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.8)'
+                            }}
+                        />
+                    )}
+                </Box>
+            )}
+
+            {isPinned && !selectionMode && (
                 <ActionIcon
                     variant="transparent"
                     color={textColor === '#000000' ? 'dark' : 'blue'}
                     size="sm"
-                    style={{ position: 'absolute', top: 8, right: 8 }}
+                    style={{ position: 'absolute', top: 8, right: 8, zIndex: 15 }}
                 >
                     <IconPinFilled size={16} />
                 </ActionIcon>
@@ -102,10 +165,15 @@ const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArc
                 <Stack gap="xs" mt="sm">
                     {note.items.map((item, idx) => (
                         <Group key={idx} gap="xs" wrap="nowrap">
-                            <Box onClick={(e) => e.stopPropagation()}>
+                            <Box onClick={(e) => {
+                                e.stopPropagation();
+                                if (!selectionMode) onItemToggle && onItemToggle(note.id, idx);
+                                else onToggleSelect(note.id);
+                            }}>
                                 <Checkbox
                                     checked={item.is_checked}
-                                    onChange={() => onItemToggle && onItemToggle(note.id, idx)}
+                                    readOnly={selectionMode}
+                                    onChange={() => !selectionMode && onItemToggle && onItemToggle(note.id, idx)}
                                     size="xs"
                                     color={textColor === '#000000' ? 'dark' : 'blue'}
                                     styles={{ input: { cursor: 'pointer', borderColor: textColor === '#000000' ? 'rgba(0,0,0,0.3)' : undefined } }}
@@ -137,7 +205,7 @@ const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArc
                         top: 8,
                         left: 8,
                         zIndex: 10,
-                        marginTop: 0
+                        marginTop: 0,
                     } : {}}
                 >
                     {note.labels.map((label, idx) => (
@@ -163,163 +231,165 @@ const NoteCard = memo(function NoteCard({ note, labelsMap, onClick, onPin, onArc
                 </Group>
             )}
 
-            <Group
-                mt={note.type === 'picture' ? 0 : "sm"}
-                justify="space-between"
-                align="center"
-                style={note.type === 'picture' ? {
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    padding: 'var(--mantine-spacing-sm)',
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)',
-                    zIndex: 10,
-                    opacity: (isHovered || isTouchDevice) ? 1 : 0,
-                    transition: 'opacity 0.15s'
-                } : {}}
-            >
-                {/* Left side: Action buttons */}
-                <Group gap="xs" style={{ opacity: (isHovered || isTouchDevice) ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
-                    {onPin && (
-                        <ActionIcon
-                            variant="subtle"
-                            size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onPin(note.id, !isPinned))}
-                            title={isPinned ? 'Unpin' : 'Pin'}
-                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
-                        >
-                            {isPinned ? <IconPinFilled size={isTouchDevice ? 20 : 16} /> : <IconPin size={isTouchDevice ? 20 : 16} />}
-                        </ActionIcon>
-                    )}
+            {!selectionMode && (
+                <Group
+                    mt={note.type === 'picture' ? 0 : "sm"}
+                    justify="space-between"
+                    align="center"
+                    style={note.type === 'picture' ? {
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        padding: 'var(--mantine-spacing-sm)',
+                        background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)',
+                        zIndex: 10,
+                        opacity: (isHovered || isTouchDevice) ? 1 : 0,
+                        transition: 'opacity 0.15s'
+                    } : {}}
+                >
+                    {/* Left side: Action buttons */}
+                    <Group gap="xs" style={{ opacity: (isHovered || isTouchDevice) ? 1 : 0, transition: 'opacity 0.15s', position: 'relative', zIndex: 2 }}>
+                        {onPin && (
+                            <ActionIcon
+                                variant="subtle"
+                                size={isTouchDevice ? "lg" : "sm"}
+                                onClick={(e) => handleAction(e, () => onPin(note.id, !isPinned))}
+                                title={isPinned ? 'Unpin' : 'Pin'}
+                                style={{ color: note.type === 'picture' ? '#fff' : textColor }}
+                            >
+                                {isPinned ? <IconPinFilled size={isTouchDevice ? 20 : 16} /> : <IconPin size={isTouchDevice ? 20 : 16} />}
+                            </ActionIcon>
+                        )}
 
-                    {onArchive && (
-                        <ActionIcon
-                            variant="subtle"
-                            size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onArchive(note.id))}
-                            title="Archive"
-                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
-                        >
-                            <IconArchive size={isTouchDevice ? 20 : 16} />
-                        </ActionIcon>
-                    )}
+                        {onArchive && (
+                            <ActionIcon
+                                variant="subtle"
+                                size={isTouchDevice ? "lg" : "sm"}
+                                onClick={(e) => handleAction(e, () => onArchive(note.id))}
+                                title="Archive"
+                                style={{ color: note.type === 'picture' ? '#fff' : textColor }}
+                            >
+                                <IconArchive size={isTouchDevice ? 20 : 16} />
+                            </ActionIcon>
+                        )}
 
-                    {onUnarchive && (
-                        <ActionIcon
-                            variant="subtle"
-                            size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onUnarchive(note.id))}
-                            title="Unarchive"
-                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
-                        >
-                            <IconArchiveOff size={isTouchDevice ? 20 : 16} />
-                        </ActionIcon>
-                    )}
+                        {onUnarchive && (
+                            <ActionIcon
+                                variant="subtle"
+                                size={isTouchDevice ? "lg" : "sm"}
+                                onClick={(e) => handleAction(e, () => onUnarchive(note.id))}
+                                title="Unarchive"
+                                style={{ color: note.type === 'picture' ? '#fff' : textColor }}
+                            >
+                                <IconArchiveOff size={isTouchDevice ? 20 : 16} />
+                            </ActionIcon>
+                        )}
 
-                    {/* Share button for owner */}
-                    {onShare && note.is_owner !== false && !note.is_trashed && (
-                        <ActionIcon
-                            variant="subtle"
-                            size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onShare(note))}
-                            title="Share"
-                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
-                        >
-                            <IconShare size={isTouchDevice ? 20 : 16} />
-                        </ActionIcon>
-                    )}
+                        {/* Share button for owner */}
+                        {onShare && note.is_owner !== false && !note.is_trashed && (
+                            <ActionIcon
+                                variant="subtle"
+                                size={isTouchDevice ? "lg" : "sm"}
+                                onClick={(e) => handleAction(e, () => onShare(note))}
+                                title="Share"
+                                style={{ color: note.type === 'picture' ? '#fff' : textColor }}
+                            >
+                                <IconShare size={isTouchDevice ? 20 : 16} />
+                            </ActionIcon>
+                        )}
 
-                    {onRestore && (
-                        <ActionIcon
-                            variant="subtle"
-                            size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onRestore(note.id))}
-                            title="Restore"
-                            style={{ color: note.type === 'picture' ? '#fff' : textColor }}
-                        >
-                            <IconRestore size={isTouchDevice ? 20 : 16} />
-                        </ActionIcon>
-                    )}
+                        {onRestore && (
+                            <ActionIcon
+                                variant="subtle"
+                                size={isTouchDevice ? "lg" : "sm"}
+                                onClick={(e) => handleAction(e, () => onRestore(note.id))}
+                                title="Restore"
+                                style={{ color: note.type === 'picture' ? '#fff' : textColor }}
+                            >
+                                <IconRestore size={isTouchDevice ? 20 : 16} />
+                            </ActionIcon>
+                        )}
 
-                    {onLabelsChange && (
-                        <LabelPicker
-                            selectedLabels={note.labels || []}
-                            onChange={(labels) => onLabelsChange(note.id, labels)}
-                            triggerStyle={{ color: note.type === 'picture' ? '#fff' : textColor }}
-                        />
-                    )}
+                        {onLabelsChange && (
+                            <LabelPicker
+                                selectedLabels={note.labels || []}
+                                onChange={(labels) => onLabelsChange(note.id, labels)}
+                                triggerStyle={{ color: note.type === 'picture' ? '#fff' : textColor }}
+                            />
+                        )}
 
-                    {/* Permanent delete - only in trash view */}
-                    {onDelete && (
-                        <ActionIcon
-                            variant="subtle"
-                            color="red"
-                            size={isTouchDevice ? "lg" : "sm"}
-                            onClick={(e) => handleAction(e, () => onDelete(note.id))}
-                            title="Delete forever"
-                        >
-                            <IconTrash size={isTouchDevice ? 20 : 16} />
-                        </ActionIcon>
-                    )}
+                        {/* Permanent delete - only in trash view */}
+                        {onDelete && (
+                            <ActionIcon
+                                variant="subtle"
+                                color="red"
+                                size={isTouchDevice ? "lg" : "sm"}
+                                onClick={(e) => handleAction(e, () => onDelete(note.id))}
+                                title="Delete forever"
+                            >
+                                <IconTrash size={isTouchDevice ? 20 : 16} />
+                            </ActionIcon>
+                        )}
 
-                    {/* 3-dot menu - only for owner (version history + trash) */}
-                    {note.is_owner !== false && (onVersionHistory || onTrash) && (
-                        <Menu shadow="md" width={200} position="bottom-end">
-                            <Menu.Target>
-                                <ActionIcon
-                                    variant="subtle"
-                                    size={isTouchDevice ? "lg" : "sm"}
-                                    onClick={(e) => e.stopPropagation()}
-                                    title="More options"
-                                    style={{ color: note.type === 'picture' ? '#fff' : textColor }}
-                                >
-                                    <IconDotsVertical size={isTouchDevice ? 20 : 16} />
-                                </ActionIcon>
-                            </Menu.Target>
-
-                            <Menu.Dropdown>
-                                {onVersionHistory && note.type !== 'picture' && (
-                                    <Menu.Item
-                                        leftSection={<IconHistory size={14} />}
-                                        onClick={(e) => handleAction(e, () => onVersionHistory(note.id))}
+                        {/* 3-dot menu - only for owner (version history + trash) */}
+                        {note.is_owner !== false && (onVersionHistory || onTrash) && (
+                            <Menu shadow="md" width={200} position="bottom-end">
+                                <Menu.Target>
+                                    <ActionIcon
+                                        variant="subtle"
+                                        size={isTouchDevice ? "lg" : "sm"}
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="More options"
+                                        style={{ color: note.type === 'picture' ? '#fff' : textColor }}
                                     >
-                                        Version history
-                                    </Menu.Item>
-                                )}
-                                {onTrash && (
-                                    <Menu.Item
-                                        color="red"
-                                        leftSection={<IconTrash size={14} />}
-                                        onClick={(e) => handleAction(e, () => onTrash(note.id))}
-                                    >
-                                        Move to trash
-                                    </Menu.Item>
-                                )}
-                            </Menu.Dropdown>
-                        </Menu>
-                    )}
-                </Group>
+                                        <IconDotsVertical size={isTouchDevice ? 20 : 16} />
+                                    </ActionIcon>
+                                </Menu.Target>
 
-                {/* Right side: Share indicator - NO TIMESTAMP */}
-                <Group gap="xs" align="center">
-                    {/* Show owner avatar for shared notes (not owned by current user) */}
-                    {note.owner && (
-                        <Tooltip label={`Shared by ${note.owner.given_name || note.owner.email}`}>
-                            <Avatar src={note.owner.avatar_url} size="sm" radius="xl">
-                                {getInitials(note.owner.given_name, note.owner.family_name)}
-                            </Avatar>
-                        </Tooltip>
-                    )}
+                                <Menu.Dropdown>
+                                    {onVersionHistory && note.type !== 'picture' && (
+                                        <Menu.Item
+                                            leftSection={<IconHistory size={14} />}
+                                            onClick={(e) => handleAction(e, () => onVersionHistory(note.id))}
+                                        >
+                                            Version history
+                                        </Menu.Item>
+                                    )}
+                                    {onTrash && (
+                                        <Menu.Item
+                                            color="red"
+                                            leftSection={<IconTrash size={14} />}
+                                            onClick={(e) => handleAction(e, () => onTrash(note.id))}
+                                        >
+                                            Move to trash
+                                        </Menu.Item>
+                                    )}
+                                </Menu.Dropdown>
+                            </Menu>
+                        )}
+                    </Group>
 
-                    {/* Shared with others indicator for owner */}
-                    {note.is_shared && note.is_owner && (
-                        <Tooltip label="Shared with others">
-                            <IconUsers size={14} style={{ color: note.type === 'picture' ? '#fff' : textColor, opacity: 0.7 }} />
-                        </Tooltip>
-                    )}
+                    {/* Right side: Share indicator - NO TIMESTAMP */}
+                    <Group gap="xs" align="center">
+                        {/* Show owner avatar for shared notes (not owned by current user) */}
+                        {note.owner && (
+                            <Tooltip label={`Shared by ${note.owner.given_name || note.owner.email}`}>
+                                <Avatar src={note.owner.avatar_url} size="sm" radius="xl">
+                                    {getInitials(note.owner.given_name, note.owner.family_name)}
+                                </Avatar>
+                            </Tooltip>
+                        )}
+
+                        {/* Shared with others indicator for owner */}
+                        {note.is_shared && note.is_owner && (
+                            <Tooltip label="Shared with others">
+                                <IconUsers size={14} style={{ color: note.type === 'picture' ? '#fff' : textColor, opacity: 0.7 }} />
+                            </Tooltip>
+                        )}
+                    </Group>
                 </Group>
-            </Group>
+            )}
         </Card>
     );
 });

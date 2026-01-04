@@ -1,9 +1,11 @@
+import { useNotesStore } from '../stores/notesStore';
 import { useArchivedNotes } from '../hooks/useNotes';
 import { Box, Center, Loader, Text, Stack, Title } from '@mantine/core';
 import NoteGrid from '../components/NoteGrid';
 
 export default function ArchivePage() {
-    const notes = useArchivedNotes();
+    const { displayLimit } = useNotesStore();
+    const notes = useArchivedNotes({ limit: displayLimit });
 
     // Notes is undefined while loading
     const isLoading = notes === undefined;

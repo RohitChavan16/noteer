@@ -87,7 +87,7 @@ export function MnemonicUnlockModal({ opened, onUnlock }) {
         if (!value || value.length < 2) return [];
         const lowerValue = value.toLowerCase();
         return wordlist
-            .filter(word => word.startsWith(lowerValue))
+            .filter(word => word.startsWith(lowerValue) && word !== lowerValue)
             .slice(0, 5);
     };
 

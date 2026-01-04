@@ -1,6 +1,6 @@
-import { defineConfig, devices } from '@playwright/test';
+const { defineConfig, devices } = require('@playwright/test');
 
-export default defineConfig({
+module.exports = defineConfig({
     testDir: './e2e/tests',
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
@@ -9,9 +9,9 @@ export default defineConfig({
     reporter: 'html',
 
     use: {
-        baseURL: 'https://noteer-test.veselarodina.cz',
+        baseURL: 'http://localhost:3000',
         trace: 'on-first-retry',
-        screenshot: 'only-on-failure',
+        screenshot: 'only-on-failure'
     },
 
     projects: [
@@ -32,13 +32,4 @@ export default defineConfig({
             use: { ...devices['Pixel 5'] },
         }
     ],
-
-    /* Run your local dev server before starting the tests */
-    // webServer: {
-    //     command: 'npm run dev',
-    //     cwd: './frontend',
-    //     url: 'http://localhost:5173',
-    //     reuseExistingServer: !process.env.CI,
-    //     timeout: 120 * 1000,
-    // },
 });

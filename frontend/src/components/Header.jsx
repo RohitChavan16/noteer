@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useMantineColorScheme } from '@mantine/core';
 import { Group, TextInput, ActionIcon, Burger, SegmentedControl, Menu, Tooltip } from '@mantine/core';
 import { useNotesStore } from '../stores/notesStore';
-import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList, IconSortAscending, IconSortDescending, IconSortAZ } from '@tabler/icons-react';
+import { IconSearch, IconX, IconSun, IconMoon, IconLayoutGrid, IconList, IconSortAscending, IconSortDescending, IconSortAZ, IconCheckbox } from '@tabler/icons-react';
 import { SyncStatus } from './SyncStatus';
 
 export default function Header({ onMenuToggle, isMenuOpen }) {
     const { colorScheme, toggleColorScheme } = useMantineColorScheme();
-    const { searchQuery, setSearchQuery, viewMode, setViewMode, sortBy, sortOrder, setSortBy, setSortOrder } = useNotesStore();
+    const { searchQuery, setSearchQuery, viewMode, setViewMode, sortBy, sortOrder, setSortBy, setSortOrder, isSelectionMode, toggleSelectionMode } = useNotesStore();
     const [localSearch, setLocalSearch] = useState(searchQuery);
 
     const handleSearch = (e) => {
@@ -129,6 +129,18 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                             size="xs"
                         />
                     )}
+                    {/* Selection Toggle */}
+                    <Tooltip label={isSelectionMode ? "Cancel selection" : "Select notes"}>
+                        <ActionIcon
+                            variant={isSelectionMode ? "filled" : "subtle"}
+                            color={isSelectionMode ? "blue" : undefined}
+                            size="md"
+                            onClick={toggleSelectionMode}
+                        >
+                            <IconCheckbox size={18} />
+                        </ActionIcon>
+                    </Tooltip>
+
                     <ActionIcon
                         variant="subtle"
                         size="md"

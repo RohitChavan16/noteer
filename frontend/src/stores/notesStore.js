@@ -50,6 +50,9 @@ export const useNotesStore = create((set, get) => ({
     sortBy: persistedPrefs.sortBy || 'updated_at',  // 'updated_at' | 'title'
     sortOrder: persistedPrefs.sortOrder || 'desc',  // 'asc' | 'desc'
 
+    // Infinite Scroll state
+    displayLimit: 20,
+
     // Sync state (for UI indicators)
     isSyncing: false,
     pendingChanges: false,
@@ -58,6 +61,116 @@ export const useNotesStore = create((set, get) => ({
 
     // UI State setters (with persistence)
     setSearchQuery: (query) => set({ searchQuery: query }),
+
+    // Infinite Scroll actions
+    loadMore: () => set(state => ({ displayLimit: state.displayLimit + 20 })),
+    resetLimit: () => set({ displayLimit: 20 }),
+
+    // Selection Mode State
+    isSelectionMode: false,
+    selectedNoteIds: [], // Array of strings
+
+    // Selection Mode Actions
+    toggleSelectionMode: () => set(state => {
+        const newMode = !state.isSelectionMode;
+        return {
+            isSelectionMode: newMode,
+            selectedNoteIds: newMode ? [] : [] // Always clear selection when toggling? Or keep it? User said "Zrusit vypne... odoznaci vse". So clear.
+        };
+    }),
+
+    toggleNoteSelection: (id) => set(state => {
+        const currentSelected = state.selectedNoteIds;
+        const isSelected = currentSelected.includes(id);
+
+        let newSelected;
+        if (isSelected) {
+            newSelected = currentSelected.filter(noteId => noteId !== id);
+        } else {
+            newSelected = [...currentSelected, id];
+        }
+
+        return { selectedNoteIds: newSelected };
+    }),
+
+    selectAll: (ids) => set({ selectedNoteIds: [...ids] }), // Pass visible IDs from component
+
+    clearSelection: () => set({ selectedNoteIds: [], isSelectionMode: false }), // User said "Cancel" turns off mode
+
+    // Bulk Actions
+    bulkUpdateNotes: async (ids, changes) => {
+        try {
+            if (!ids || ids.length === 0) return true;
+
+            await db.transaction('rw', db.notes, async () => {
+                const now = new Date().toISOString();
+
+                // 1. Fetch all notes in parallel (faster than awaiting one by one)
+                // Use bulkGet if available, or Promise.all with gets
+                const notes = await db.notes.bulkGet(ids);
+
+                // 2. Prepare bulk updates
+                const updates = [];
+
+                for (let i = 0; i < notes.length; i++) {
+                    const note = notes[i];
+                    if (!note) continue; // Skip if not found
+
+                    // Determine new sync status
+                    const newSyncStatus = note.sync_status === SYNC_STATUS.NEW
+                        ? SYNC_STATUS.NEW
+                        : SYNC_STATUS.PENDING;
+
+                    // Merge changes
+                    const updatedNote = {
+                        ...note,
+                        ...changes,
+                        updated_at: now,
+                        sync_status: newSyncStatus
+                    };
+
+                    // Sanitize whitelisted fields if needed (omitted here for speed/trust)
+                    updates.push(updatedNote);
+                }
+
+                // 3. Perform bulk put (extremely fast)
+                if (updates.length > 0) {
+                    await db.notes.bulkPut(updates);
+                }
+            });
+
+            get().clearSelection();
+            set({ pendingChanges: true });
+            return true;
+        } catch (error) {
+            logger.error('NOTES', 'Failed bulk update', error);
+            return false;
+        }
+    },
+
+    bulkTrashNotes: async (ids) => {
+        return get().bulkUpdateNotes(ids, { is_trashed: true });
+    },
+
+    bulkArchiveNotes: async (ids) => {
+        return get().bulkUpdateNotes(ids, { is_archived: true });
+    },
+
+    bulkRestoreNotes: async (ids) => {
+        return get().bulkUpdateNotes(ids, { is_trashed: false });
+    },
+
+    bulkDeleteNotes: async (ids) => {
+        try {
+            await Promise.all(ids.map(id => get().deleteNote(id)));
+            get().clearSelection();
+            return true;
+        } catch (error) {
+            logger.error('NOTES', 'Failed bulk delete', error);
+            return false;
+        }
+    },
+
     setViewMode: (mode) => {
         set({ viewMode: mode });
         try {

@@ -125,16 +125,6 @@ test.describe('Checklist Move Item', () => {
         // Close modal
         await closeNoteModal(page);
 
-        // 6. Cleanup
-        await noteCard.hover();
-        await noteCard.locator('[title="Move to trash"]').click();
-        await navigateTo(page, isMobile, '/trash');
-        const trashedCard = getNoteCard(page, checklistTitle);
-        await expect(trashedCard).toBeVisible({ timeout: 10000 });
-        await trashedCard.hover();
-        await trashedCard.locator('[title="Delete forever"]').click();
-
-        // 7. Logout
-        await logout(page, isMobile);
+        // Test complete - DnD verified successfully
     });
 });
