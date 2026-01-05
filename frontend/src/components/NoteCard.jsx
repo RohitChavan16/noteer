@@ -81,12 +81,15 @@ const NoteCard = memo(function NoteCard({
                     transition: 'transform 0.15s, box-shadow 0.15s',
                     '&:hover': {
                         transform: selectionMode ? 'none' : 'translateY(-2px)',
-                        boxShadow: theme.shadows.md,
+                        boxShadow: isSelected
+                            ? `0 0 0 1px var(--mantine-color-blue-6), ${theme.shadows.md}`
+                            : theme.shadows.md,
                     },
                     borderColor: isSelected
                         ? 'var(--mantine-color-blue-6)'
                         : (isPinned ? 'var(--mantine-color-blue-5)' : undefined),
-                    borderWidth: isSelected ? 2 : 1
+                    borderWidth: 1,
+                    boxShadow: isSelected ? `0 0 0 1px var(--mantine-color-blue-6)` : undefined
                 },
             })}
         >
@@ -103,14 +106,14 @@ const NoteCard = memo(function NoteCard({
                     onClick={(e) => { e.stopPropagation(); onToggleSelect(note.id); }}
                 >
                     {isSelected ? (
-                        <ThemeIcon radius="xl" size="lg" color="blue">
-                            <IconCheck size={18} />
+                        <ThemeIcon radius="xl" size={20} color="blue">
+                            <IconCheck size={12} />
                         </ThemeIcon>
                     ) : (
                         <Box
                             style={{
-                                width: 26,
-                                height: 26,
+                                width: 20,
+                                height: 20,
                                 borderRadius: '50%',
                                 border: `2px solid ${isDark ? 'var(--mantine-color-gray-6)' : 'var(--mantine-color-gray-4)'}`,
                                 backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.8)'

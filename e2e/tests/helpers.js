@@ -48,7 +48,6 @@ export async function login(page, mnemonic = TEST_MNEMONIC) {
     const isUnlockNowVisible = await unlockModal.isVisible().catch(() => false);
 
     if (isUnlockNowVisible || await unlockModal.isVisible().catch(() => false)) {
-        console.log('Unlocking with mnemonic...');
         await expect(unlockModal).toBeVisible({ timeout: 10000 });
 
         // Fill all inputs individually
@@ -74,78 +73,29 @@ export async function login(page, mnemonic = TEST_MNEMONIC) {
  * @param {import('@playwright/test').Page} page
  */
 export async function handleEncryptionSetup(page) {
-    // Debug: listen to console and page errors
-    page.on('console', msg => console.log('BROWSER LOG:', msg.text()));
-    page.on('pageerror', err => console.log('BROWSER ERROR:', err.toString()));
-
     // Check if setup modal appears (new user)
-    console.log('Checking for Encryption Setpu modal...');
     // Try role first, then text content if role fails (sometimes Mantine modals are tricky)
     const setupModal = page.getByRole('heading', { name: 'Encryption Setup' });
-    let isSetupVisible = await setupModal.isVisible({ timeout: 5000 }).catch(() => false);
+    let isSetupVisible = await setupModal.isVisible({ timeout: 15000 }).catch(() => false);
 
     if (!isSetupVisible) {
-        console.log('Heading with role not found, trying text content...');
-        isSetupVisible = await page.getByText('Encryption Setup').first().isVisible({ timeout: 2000 }).catch(() => false);
-
-        // Debug registration error if we are stuck
-        const alert = page.locator('.mantine-Alert-message');
-        if (await alert.isVisible()) {
-            console.log('ERROR ALERT DETECTED:', await alert.innerText());
-        } else {
-            // Deep debug of the state
-            const debugInfo = await page.evaluate(() => {
-                return {
-                    url: window.location.href,
-                    hasBuffer: !!window.Buffer,
-                    authStore: localStorage.getItem('noteer-auth'),
-                    encryptionKeys: localStorage.getItem('noteer-encryption-keys'),
-                    rootContent: document.getElementById('root')?.innerHTML || 'ROOT_MISSING',
-                    bodyContent: document.body.innerHTML
-                };
-            });
-
-            console.log('--- DEBUG STATE DUMP ---');
-            console.log('URL:', debugInfo.url);
-            console.log('Has Buffer:', debugInfo.hasBuffer);
-            console.log('Auth Store:', debugInfo.authStore ? 'PRESENT' : 'MISSING');
-            if (debugInfo.authStore) console.log('Auth Data:', debugInfo.authStore.substring(0, 200) + '...');
-            console.log('Encryption Keys:', debugInfo.encryptionKeys ? 'PRESENT' : 'MISSING');
-            console.log('Root Content:', debugInfo.rootContent);
-            console.log('------------------------');
-
-            await page.screenshot({ path: 'debug-setup-failure.png' });
-            console.log('Took screenshot: debug-setup-failure.png');
-        }
+        isSetupVisible = await page.getByText('Encryption Setup').first().isVisible({ timeout: 3000 }).catch(() => false);
     }
 
-    console.log(`Encryption Setup modal visible: ${isSetupVisible}. Current URL: ${page.url()}`);
-
     if (isSetupVisible) {
-        console.log('Starting encryption setup flow...');
-
         // Capture the mnemonic words
         // Target the second Text element in each Group within the SimpleGrid
         const wordElements = page.locator('.mantine-Modal-body .mantine-SimpleGrid-root .mantine-Group-root > .mantine-Text-root:last-child');
-        try {
-            await expect(wordElements).toHaveCount(24, { timeout: 5000 });
-        } catch (e) {
-            console.log('Failed to find 24 words. Dumping DOM...');
-            console.log(await page.locator('.mantine-Modal-body').innerHTML());
-            throw e;
-        }
+        await expect(wordElements).toHaveCount(24, { timeout: 5000 });
 
         const words = await wordElements.allInnerTexts();
         const mnemonic = words.join(' ');
-        console.log('Captured mnemonic:', mnemonic.substring(0, 20) + '...');
 
         // Complete setup flow
         await page.getByText('I have written down all 24 words').click();
         await page.getByRole('button', { name: 'Continue' }).click();
         await expect(page.getByText('Encryption is active')).toBeVisible({ timeout: 30000 });
-        console.log('Encryption active message visible');
         await page.getByRole('button', { name: 'Start using Noteer' }).click();
-        console.log('Clicked Start using Noteer');
 
         return mnemonic;
     }

@@ -22,7 +22,7 @@ export default function ArchivePage() {
                     </Stack>
                 </Center>
             ) : (
-                <NoteGrid notes={notes} showRestore />
+                <NoteGrid notes={notes} showUnarchive />
             )}
         </Box>
     );

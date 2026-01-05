@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { logout, uniqueId } from './helpers.js';
+import { logout, uniqueId, handleEncryptionSetup } from './helpers.js';
 
 test.describe('Registration', () => {
 
@@ -24,10 +24,17 @@ test.describe('Registration', () => {
         await passwordInputs.nth(0).fill(password);  // Password
         await passwordInputs.nth(1).fill(password);  // Confirm password
 
-        // 3. Submit registration
+        // 3. Submit registration - wait for response
+        const registerPromise = page.waitForResponse(response =>
+            response.url().includes('/auth/register') && response.status() === 201
+        );
         await page.getByRole('button', { name: 'Create account' }).click();
+        await registerPromise;
 
-        // 4. Wait for redirect to dashboard (auto-login on registration)
+        // 4. Handle encryption setup for new user
+        await handleEncryptionSetup(page);
+
+        // 5. Wait for redirect to dashboard
         await expect(page.locator('text=Take a note...')).toBeVisible({ timeout: 15000 });
 
         // 5. Verify logged in with correct name
@@ -47,8 +54,5 @@ test.describe('Registration', () => {
         const adminLink = page.locator('a[href="/admin"]');
         const isAdminVisible = await adminLink.isVisible().catch(() => false);
         expect(isAdminVisible).toBe(false);
-
-        // 7. Logout
-        await logout(page, isMobile);
     });
 });

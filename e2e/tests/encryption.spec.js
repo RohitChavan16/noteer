@@ -158,7 +158,12 @@ test.describe('Encryption Setup', () => {
         // 2. Create an encrypted note
         await page.locator('text=Take a note...').click();
         await page.fill('input[placeholder="Title"]', 'Secret Title');
-        await page.fill('textarea[placeholder="Take a note..."]', 'Secret Content');
+
+        // Content area is a ProseMirror RichTextEditor, not textarea
+        const editor = page.locator('.ProseMirror');
+        await editor.click();
+        await page.keyboard.type('Secret Content');
+
         await page.click('button:has-text("Close")');
 
         // 3. Verify note is visible and decrypted

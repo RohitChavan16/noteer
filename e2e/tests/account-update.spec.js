@@ -1,12 +1,11 @@
 const { test, expect } = require('@playwright/test');
-const { logout, navigateTo, uniqueId, handleEncryptionSetup, setupPageConsoleDebug } = require('./helpers.js');
+const { logout, navigateTo, uniqueId, handleEncryptionSetup } = require('./helpers.js');
 
 test.describe('Account Update', () => {
 
     test('should update account details and verify changes', async ({ page, isMobile }) => {
         test.setTimeout(60000);
         const timestamp = uniqueId();
-        setupPageConsoleDebug(page);
 
         // Initial account - we'll create a fresh user first
         const initialEmail = `account_test_${timestamp}@test.com`;
@@ -29,15 +28,11 @@ test.describe('Account Update', () => {
         await page.locator('input[placeholder="you@example.com"]').fill(initialEmail);
 
         const regPasswordInputs = page.locator('input[type="password"]');
-        const pwCount = await regPasswordInputs.count();
-        console.log(`Password inputs found: ${pwCount}`);
-
         await regPasswordInputs.nth(0).fill(initialPassword);
         await regPasswordInputs.nth(1).fill(initialPassword);
 
         const createAccountBtn = page.getByRole('button', { name: 'Create account' });
         await expect(createAccountBtn).toBeEnabled({ timeout: 5000 });
-        console.log(`Button disabled? ${await createAccountBtn.isDisabled()}`);
 
         // Wait for registration request to complete
         const registerPromise = page.waitForResponse(response =>
@@ -54,7 +49,8 @@ test.describe('Account Update', () => {
         await expect(page.locator('text=Take a note...')).toBeVisible({ timeout: 15000 });
 
         // 2. Navigate to settings
-        await navigateTo(page, isMobile, '/settings');
+        await page.goto('/settings');
+        await page.waitForLoadState('networkidle');
         await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
 
         // 3. Update first name - find by current placeholder
@@ -90,7 +86,6 @@ test.describe('Account Update', () => {
 
         // Unlock with the mnemonic we saved earlier if present
         if (mnemonic) {
-            console.log('Unlocking with captured mnemonic...');
             const unlockModal = page.getByRole('heading', { name: 'Unlock Notes' }).first();
             await expect(unlockModal).toBeVisible({ timeout: 10000 });
 
@@ -103,8 +98,6 @@ test.describe('Account Update', () => {
             }
 
             const unlockBtn = page.getByRole('button', { name: 'Unlock' });
-            await page.screenshot({ path: 'debug-unlock-filled.png' });
-            console.log('Took screenshot: debug-unlock-filled.png');
             await expect(unlockBtn).toBeEnabled();
             await unlockBtn.click({ force: true });
         }

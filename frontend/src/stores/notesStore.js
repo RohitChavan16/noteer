@@ -47,7 +47,7 @@ export const useNotesStore = create((set, get) => ({
     error: null,
     searchQuery: '',
     viewMode: persistedPrefs.viewMode || getDefaultViewMode(),
-    sortBy: persistedPrefs.sortBy || 'updated_at',  // 'updated_at' | 'title'
+    sortBy: persistedPrefs.sortBy || 'created_at',  // 'created_at' | 'title'
     sortOrder: persistedPrefs.sortOrder || 'desc',  // 'asc' | 'desc'
 
     // Infinite Scroll state
@@ -121,12 +121,18 @@ export const useNotesStore = create((set, get) => ({
                         ? SYNC_STATUS.NEW
                         : SYNC_STATUS.PENDING;
 
+                    // Track dirty fields for partial sync
+                    const changeKeys = Object.keys(changes).filter(k => k !== 'updated_at' && k !== 'sync_status');
+                    const existingDirty = note.sync_dirty_fields || [];
+                    const newDirty = [...new Set([...existingDirty, ...changeKeys])];
+
                     // Merge changes
                     const updatedNote = {
                         ...note,
                         ...changes,
                         updated_at: now,
-                        sync_status: newSyncStatus
+                        sync_status: newSyncStatus,
+                        sync_dirty_fields: newDirty
                     };
 
                     // Sanitize whitelisted fields if needed (omitted here for speed/trust)
@@ -148,12 +154,118 @@ export const useNotesStore = create((set, get) => ({
         }
     },
 
+    /**
+     * Bulk add labels to notes (merges with existing labels)
+     */
+    bulkAddLabels: async (ids, newLabels) => {
+        try {
+            if (!ids || ids.length === 0 || !newLabels || newLabels.length === 0) return true;
+
+            await db.transaction('rw', db.notes, async () => {
+                const now = new Date().toISOString();
+                const notes = await db.notes.bulkGet(ids);
+                const updates = [];
+
+                for (let i = 0; i < notes.length; i++) {
+                    const note = notes[i];
+                    if (!note) continue;
+
+                    const newSyncStatus = note.sync_status === SYNC_STATUS.NEW
+                        ? SYNC_STATUS.NEW
+                        : SYNC_STATUS.PENDING;
+
+                    const currentLabels = note.labels || [];
+                    // Merge and deduplicate
+                    const mergedLabels = [...new Set([...currentLabels, ...newLabels])];
+
+                    // Track dirty fields
+                    const existingDirty = note.sync_dirty_fields || [];
+                    const newDirty = [...new Set([...existingDirty, 'labels'])];
+
+                    const updatedNote = {
+                        ...note,
+                        labels: mergedLabels,
+                        updated_at: now,
+                        sync_status: newSyncStatus,
+                        sync_dirty_fields: newDirty
+                    };
+                    updates.push(updatedNote);
+                }
+
+                if (updates.length > 0) {
+                    await db.notes.bulkPut(updates);
+                }
+            });
+            get().clearSelection();
+            set({ pendingChanges: true });
+            return true;
+        } catch (error) {
+            logger.error('NOTES', 'Failed bulk label add', error);
+            return false;
+        }
+    },
+
+    bulkRemoveLabels: async (ids, labelsToRemove) => {
+        try {
+            if (!ids || ids.length === 0 || !labelsToRemove || labelsToRemove.length === 0) return true;
+
+            await db.transaction('rw', db.notes, async () => {
+                const now = new Date().toISOString();
+                const notes = await db.notes.bulkGet(ids);
+                const updates = [];
+
+                for (let i = 0; i < notes.length; i++) {
+                    const note = notes[i];
+                    if (!note) continue;
+
+                    const currentLabels = note.labels || [];
+                    // Remove specified labels
+                    const newLabels = currentLabels.filter(l => !labelsToRemove.includes(l));
+
+                    // working only if something changed
+                    if (newLabels.length === currentLabels.length) continue;
+
+                    const newSyncStatus = note.sync_status === SYNC_STATUS.NEW
+                        ? SYNC_STATUS.NEW
+                        : SYNC_STATUS.PENDING;
+
+                    // Track dirty fields
+                    const existingDirty = note.sync_dirty_fields || [];
+                    const newDirty = [...new Set([...existingDirty, 'labels'])];
+
+                    const updatedNote = {
+                        ...note,
+                        labels: newLabels,
+                        updated_at: now,
+                        sync_status: newSyncStatus,
+                        sync_dirty_fields: newDirty
+                    };
+                    updates.push(updatedNote);
+                }
+
+                if (updates.length > 0) {
+                    await db.notes.bulkPut(updates);
+                }
+            });
+            get().clearSelection();
+            set({ pendingChanges: true });
+            return true;
+        } catch (error) {
+            logger.error('NOTES', 'Failed bulk label remove', error);
+            return false;
+        }
+    },
+
     bulkTrashNotes: async (ids) => {
         return get().bulkUpdateNotes(ids, { is_trashed: true });
     },
 
     bulkArchiveNotes: async (ids) => {
         return get().bulkUpdateNotes(ids, { is_archived: true });
+    },
+
+    bulkUnarchiveNotes: async (ids) => {
+        return get().bulkUpdateNotes(ids, { is_archived: false });
     },
 
     bulkRestoreNotes: async (ids) => {
@@ -286,6 +398,11 @@ export const useNotesStore = create((set, get) => ({
             // Always update metadata
             updates.updated_at = now;
             updates.sync_status = newSyncStatus;
+
+            // Track dirty fields for partial sync
+            const dirtyKeys = Object.keys(updates).filter(k => k !== 'updated_at' && k !== 'sync_status' && k !== 'sync_dirty_fields');
+            const existingDirty = currentNote.sync_dirty_fields || [];
+            updates.sync_dirty_fields = [...new Set([...existingDirty, ...dirtyKeys])];
 
             // Update in Dexie
             await db.notes.update(id, updates);

@@ -10,7 +10,7 @@ import { useLabelsMap } from '../hooks/useLabels';
 
 import SelectionBottomBar from './SelectionBottomBar';
 
-export default function NoteGrid({ notes, showRestore, showDelete }) {
+export default function NoteGrid({ notes, showRestore, showDelete, showUnarchive }) {
     const {
         viewMode,
         pinNote,
@@ -30,7 +30,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
     const labelsMap = useLabelsMap();
 
     const isTrash = showDelete;
-    const isArchive = showRestore && !showDelete;
+    const isArchive = showUnarchive;
 
     // Helper to get correct pinned state (owner uses notes.is_pinned, recipient uses note_shares.is_pinned)
     const isPinned = (note) => note.is_owner === false ? note.share_is_pinned : note.is_pinned;
@@ -174,6 +174,7 @@ export default function NoteGrid({ notes, showRestore, showDelete }) {
             <SelectionBottomBar
                 showRestore={showRestore}
                 showDelete={showDelete}
+                showUnarchive={showUnarchive}
                 onSelectAll={handleSelectAll}
                 notes={notes}
             />

@@ -532,23 +532,64 @@ export function useSync() {
                     operations.push({ op: 'delete', id: note.id });
                 } else {
                     // PENDING - update existing note
-                    // Need to encrypt with existing note key
-                    const encryptedNote = await encryptionStore.encryptNote({
-                        id: note.id,
-                        title: note.title,
-                        content: note.content,
-                        color: note.color,
-                        is_pinned: note.is_pinned,
-                        is_archived: note.is_archived,
-                        is_trashed: note.is_trashed,
-                        items: note.items,
-                        encrypted_note_key: note.encrypted_note_key // Pass existing key
-                    });
 
-                    operations.push({
-                        op: 'update',
-                        id: note.id,
-                        data: {
+                    let data = {};
+                    let shouldFullSync = true;
+
+                    // Check for dirty fields (Partial Sync)
+                    if (note.sync_dirty_fields && note.sync_dirty_fields.length > 0) {
+                        const dirty = new Set(note.sync_dirty_fields);
+                        shouldFullSync = false;
+
+                        // Encrypt ONLY if title/content changed
+                        if (dirty.has('title') || dirty.has('content')) {
+                            const encryptedNote = await encryptionStore.encryptNote({
+                                id: note.id,
+                                title: note.title,
+                                content: note.content,
+                                encrypted_note_key: note.encrypted_note_key
+                            });
+                            if (dirty.has('title')) data.title = encryptedNote.title;
+                            if (dirty.has('content')) data.content = encryptedNote.content;
+
+                            // Always send encryption metadata if we touched encrypted fields
+                            data.encrypted = true;
+                            data.encrypted_note_key = encryptedNote.encrypted_note_key;
+                        }
+
+                        // Map other fields
+                        if (dirty.has('color')) data.color = note.color;
+                        if (dirty.has('is_pinned')) data.is_pinned = note.is_pinned;
+                        if (dirty.has('is_archived')) data.is_archived = note.is_archived;
+                        if (dirty.has('is_trashed')) data.is_trashed = note.is_trashed;
+
+                        // Sub-resources - only include if dirty
+                        if (dirty.has('items')) data.items = note.items;
+                        if (dirty.has('labels')) {
+                            data.label_ids = note.labels || [];
+                            data.labels = []; // Clear legacy
+                        }
+                        if (dirty.has('images')) data.images = note.images || [];
+
+                        // Debug log for partial sync
+                        // logger.debug('SYNC', `[PartialSync] Note ${note.id} fields: ${Array.from(dirty).join(', ')}`);
+                    }
+
+                    if (shouldFullSync) {
+                        // Full sync fallback (Legacy behavior or missing dirty flags)
+                        const encryptedNote = await encryptionStore.encryptNote({
+                            id: note.id,
+                            title: note.title,
+                            content: note.content,
+                            color: note.color,
+                            is_pinned: note.is_pinned,
+                            is_archived: note.is_archived,
+                            is_trashed: note.is_trashed,
+                            items: note.items,
+                            encrypted_note_key: note.encrypted_note_key
+                        });
+
+                        data = {
                             title: encryptedNote.title,
                             content: encryptedNote.content,
                             color: encryptedNote.color,
@@ -557,11 +598,17 @@ export function useSync() {
                             is_trashed: encryptedNote.is_trashed,
                             items: encryptedNote.items,
                             label_ids: note.labels || [],
-                            labels: [], // Legacy compat
-                            images: note.images || [], // FIX: Sync images metadata
+                            labels: [],
+                            images: note.images || [],
                             encrypted: encryptedNote.encrypted,
                             encrypted_note_key: encryptedNote.encrypted_note_key
-                        },
+                        };
+                    }
+
+                    operations.push({
+                        op: 'update',
+                        id: note.id,
+                        data: data,
                         version: note.version // Enable Optimistic Concurrency Control
                     });
                 }
@@ -601,7 +648,8 @@ export function useSync() {
                             // Update
                             await db.notes.update(original.id, {
                                 updated_at: result.updated_at,
-                                sync_status: SYNC_STATUS.SYNCED
+                                sync_status: SYNC_STATUS.SYNCED,
+                                sync_dirty_fields: [] // Clear dirty flags
                             });
                         }
                     } else if (result.status === 409 || result.error === 'Conflict') {

@@ -16,13 +16,13 @@ const EMPTY_ARRAY = [];
 /**
  * Get all active notes (not archived, not trashed) with sorting
  * @param {Object} options - Query options
- * @param {('updated_at'|'title')} options.sortBy - Sort field (default: 'updated_at')
+ * @param {('created_at'|'title')} options.sortBy - Sort field (default: 'created_at')
  * @param {('asc'|'desc')} options.sortOrder - Sort direction (default: 'desc')
  * @param {string} options.searchQuery - Optional search filter
  * @param {string} options.label - Optional label filter
  * @returns {Array|undefined} Array of notes or undefined while loading
  */
-export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuery = '', labelId = null, limit = 20 } = {}) {
+export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuery = '', labelId = null, limit = 20 } = {}) {
     return useLiveQuery(async () => {
         let notes = await db.notes
             .filter(n => n.is_archived !== true && n.is_trashed !== true)
@@ -63,8 +63,8 @@ export function useNotes({ sortBy = 'updated_at', sortOrder = 'desc', searchQuer
                 if (a.is_pinned && !b.is_pinned) return -1;
                 if (!a.is_pinned && b.is_pinned) return 1;
 
-                const aTime = new Date(a.updated_at || 0).getTime();
-                const bTime = new Date(b.updated_at || 0).getTime();
+                const aTime = new Date(a.created_at || 0).getTime();
+                const bTime = new Date(b.created_at || 0).getTime();
                 return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
             });
         }

@@ -41,7 +41,7 @@ test.describe('Note Versioning', () => {
             response.url().includes(`/api/notes/${noteId}`) && response.request().method() === 'PATCH'
         );
         await closeNoteModal(page);
-        await closeNoteModal(page);
+
         await updateResponsePromise;
 
         // Verify content updated

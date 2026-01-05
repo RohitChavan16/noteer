@@ -79,7 +79,7 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                     <Menu shadow="md" width={180} position="bottom-end">
                         <Menu.Target>
                             <Tooltip label={getSortLabel()}>
-                                <ActionIcon variant="subtle" size="md">
+                                <ActionIcon variant="subtle" size="md" aria-label={getSortLabel()}>
                                     {getSortIcon()}
                                 </ActionIcon>
                             </Tooltip>
@@ -88,15 +88,15 @@ export default function Header({ onMenuToggle, isMenuOpen }) {
                             <Menu.Label>Sort by</Menu.Label>
                             <Menu.Item
                                 leftSection={<IconSortDescending size={14} />}
-                                onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}
-                                style={{ fontWeight: sortBy === 'updated_at' && sortOrder === 'desc' ? 600 : 400 }}
+                                onClick={() => { setSortBy('created_at'); setSortOrder('desc'); }}
+                                style={{ fontWeight: sortBy === 'created_at' && sortOrder === 'desc' ? 600 : 400 }}
                             >
                                 Newest first
                             </Menu.Item>
                             <Menu.Item
                                 leftSection={<IconSortAscending size={14} />}
-                                onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}
-                                style={{ fontWeight: sortBy === 'updated_at' && sortOrder === 'asc' ? 600 : 400 }}
+                                onClick={() => { setSortBy('created_at'); setSortOrder('asc'); }}
+                                style={{ fontWeight: sortBy === 'created_at' && sortOrder === 'asc' ? 600 : 400 }}
                             >
                                 Oldest first
                             </Menu.Item>

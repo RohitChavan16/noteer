@@ -133,7 +133,7 @@ router.get('/', async (req, res, next) => {
             paramIndex++;
         }
 
-        sql += ` ORDER BY nd.is_pinned DESC, nd.updated_at DESC`;
+        sql += ` ORDER BY nd.is_pinned DESC, nd.created_at DESC`;
 
         const limitRaw = parseInt(req.query.limit);
         // Default and limit using constants

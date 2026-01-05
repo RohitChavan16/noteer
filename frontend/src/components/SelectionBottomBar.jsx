@@ -1,10 +1,10 @@
 import { ActionIcon, Button, Group, Text, Transition, Tooltip, Menu, Paper, useMantineColorScheme, ThemeIcon } from '@mantine/core';
-import { IconTrash, IconArchive, IconPalette, IconX, IconRestore, IconCheck, IconTag } from '@tabler/icons-react';
+import { IconTrash, IconArchive, IconPalette, IconX, IconRestore, IconCheck, IconTag, IconArchiveOff, IconTagOff } from '@tabler/icons-react';
 import { useNotesStore } from '../stores/notesStore';
 import { NOTE_COLORS } from '../constants/noteColors';
 import LabelPicker from './LabelPicker';
 
-export default function SelectionBottomBar({ showRestore, showDelete, onSelectAll, notes }) {
+export default function SelectionBottomBar({ showRestore, showDelete, showUnarchive, onSelectAll }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';
 
@@ -14,10 +14,12 @@ export default function SelectionBottomBar({ showRestore, showDelete, onSelectAl
         clearSelection,
         bulkTrashNotes,
         bulkArchiveNotes,
+        bulkUnarchiveNotes,
         bulkRestoreNotes,
         bulkDeleteNotes,
         bulkUpdateNotes,
-        updateNote
+        bulkAddLabels,
+        bulkRemoveLabels
     } = useNotesStore();
 
     const count = selectedNoteIds.length;
@@ -30,19 +32,8 @@ export default function SelectionBottomBar({ showRestore, showDelete, onSelectAl
     const handleAddLabels = async (newLabels) => {
         if (!newLabels || newLabels.length === 0) return;
 
-        // Iterate selected notes and append labels
-        const updates = selectedNoteIds.map(id => {
-            const note = notes.find(n => n.id === id);
-            if (!note) return null;
-
-            const currentLabels = note.labels || [];
-            const mergedLabels = [...new Set([...currentLabels, ...newLabels])];
-
-            return { id, labels: mergedLabels };
-        }).filter(Boolean);
-
-        await Promise.all(updates.map(u => updateNote(u.id, { labels: u.labels })));
-        clearSelection();
+        // Use optimized bulk action
+        await bulkAddLabels(selectedNoteIds, newLabels);
     };
 
     return (
@@ -117,18 +108,31 @@ export default function SelectionBottomBar({ showRestore, showDelete, onSelectAl
                                     )}
                                 </>
                             ) : (
-                                // Standard Actions
+                                // Standard / Archive Actions
                                 <>
-                                    <Tooltip label="Archive selected">
-                                        <ActionIcon
-                                            variant="subtle"
-                                            size="lg"
-                                            disabled={!hasSelection}
-                                            onClick={() => bulkArchiveNotes(selectedNoteIds)}
-                                        >
-                                            <IconArchive size={22} />
-                                        </ActionIcon>
-                                    </Tooltip>
+                                    {showUnarchive ? (
+                                        <Tooltip label="Unarchive selected">
+                                            <ActionIcon
+                                                variant="subtle"
+                                                size="lg"
+                                                disabled={!hasSelection}
+                                                onClick={() => bulkUnarchiveNotes(selectedNoteIds)}
+                                            >
+                                                <IconArchiveOff size={22} />
+                                            </ActionIcon>
+                                        </Tooltip>
+                                    ) : (
+                                        <Tooltip label="Archive selected">
+                                            <ActionIcon
+                                                variant="subtle"
+                                                size="lg"
+                                                disabled={!hasSelection}
+                                                onClick={() => bulkArchiveNotes(selectedNoteIds)}
+                                            >
+                                                <IconArchive size={22} />
+                                            </ActionIcon>
+                                        </Tooltip>
+                                    )}
 
                                     <Tooltip label="Move to trash">
                                         <ActionIcon
@@ -149,6 +153,20 @@ export default function SelectionBottomBar({ showRestore, showDelete, onSelectAl
                                         triggerStyle={{}}
                                         iconSize={22}
                                         buttonSize="lg"
+                                        triggerTooltip="Add labels"
+                                        modalTitle="Add Labels"
+                                    />
+
+                                    {/* Mass Untag */}
+                                    <LabelPicker
+                                        selectedLabels={[]}
+                                        onChange={(labelsToRemove) => bulkRemoveLabels(selectedNoteIds, labelsToRemove)}
+                                        triggerStyle={{}}
+                                        iconSize={22}
+                                        buttonSize="lg"
+                                        triggerTooltip="Remove labels"
+                                        modalTitle="Remove Labels"
+                                        Icon={IconTagOff}
                                     />
 
                                     <Menu position="top" shadow="md">
