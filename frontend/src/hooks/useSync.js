@@ -47,16 +47,33 @@ export function useSync() {
                     const versions = await response.json();
                     if (versions.length > 0) {
                         await db.transaction('rw', db.note_versions, async () => {
+                            // Group versions by note_id
+                            const versionsByNote = new Map();
                             for (const version of versions) {
-                                await db.note_versions.put({
-                                    id: version.id,
-                                    note_id: version.note_id,
-                                    created_at: version.created_at,
-                                    data: version.data
-                                });
+                                if (!versionsByNote.has(version.note_id)) {
+                                    versionsByNote.set(version.note_id, []);
+                                }
+                                versionsByNote.get(version.note_id).push(version);
+                            }
+
+                            // For each note: delete LOCAL versions, then insert SERVER versions
+                            // Server is the source of truth for versions
+                            for (const [noteId, noteVersions] of versionsByNote) {
+                                // Delete all local versions for this note
+                                await db.note_versions.where('note_id').equals(noteId).delete();
+
+                                // Insert server versions
+                                for (const version of noteVersions) {
+                                    await db.note_versions.put({
+                                        id: version.id,
+                                        note_id: version.note_id,
+                                        created_at: version.created_at,
+                                        data: version.data
+                                    });
+                                }
                             }
                         });
-                        logger.debug('SYNC', `[LazySync] Fetched ${versions.length} versions for ${idsToFetch.length} notes`);
+                        logger.debug('SYNC', `[LazySync] Replaced local versions with ${versions.length} server versions for ${idsToFetch.length} notes`);
 
                     }
                 }
@@ -121,11 +138,19 @@ export function useSync() {
 
 
 
-            // Decrypt and upsert notes
+            // OPTIMIZATION: Process in transaction but yield periodically to avoid blocking main thread
+            const YIELD_INTERVAL = 20; // Yield every 20 notes
             const notesToFetchVersions = [];
 
             await db.transaction('rw', db.notes, db.syncState, db.note_versions, async () => {
-                for (const encryptedNote of allNotes) {
+                for (let i = 0; i < allNotes.length; i++) {
+                    const encryptedNote = allNotes[i];
+
+                    // Yield to main thread periodically (don't block UI)
+                    if (i > 0 && i % YIELD_INTERVAL === 0) {
+                        await new Promise(r => setTimeout(r, 0));
+                    }
+
                     // Check if we have a pending local change
                     let local = await db.notes.get(encryptedNote.id);
 
@@ -627,14 +652,16 @@ export function useSync() {
 
 
             // Process results
-            await db.transaction('rw', db.notes, async () => {
-                for (let i = 0; i < results.length; i++) {
-                    const result = results[i];
-                    const original = pendingNotes[i];
+            // Note: We cannot use a transaction here because we await authFetch inside the loop for conflict resolution
+            for (let i = 0; i < results.length; i++) {
+                const result = results[i];
+                const original = pendingNotes[i];
 
-                    if (result.success) {
-                        if (result.op === 'create') {
-                            // Replace temp ID with server ID
+                if (result.success) {
+                    if (result.op === 'create') {
+                        // Replace temp ID with server ID
+                        // We use small transactions for atomic ID swaps if needed, but here simple deletes/puts appear safer one by one
+                        await db.transaction('rw', db.notes, async () => {
                             await db.notes.delete(original.id);
                             await db.notes.put({
                                 ...original,
@@ -642,72 +669,73 @@ export function useSync() {
                                 updated_at: result.updated_at,
                                 sync_status: SYNC_STATUS.SYNCED
                             });
-                        } else if (result.op === 'delete') {
-                            await db.notes.delete(original.id);
-                        } else {
-                            // Update
-                            await db.notes.update(original.id, {
-                                updated_at: result.updated_at,
-                                sync_status: SYNC_STATUS.SYNCED,
-                                sync_dirty_fields: [] // Clear dirty flags
-                            });
-                        }
-                    } else if (result.status === 409 || result.error === 'Conflict') {
-                        logger.warn('SYNC', `Conflict detected for note ${original.id}. Resolving...`);
-
-                        try {
-                            // 1. Fetch server version
-                            const res = await authFetch(`${API_URL}/notes/${original.id}`);
-                            if (res.ok) {
-                                const serverNote = await res.json();
-                                let decryptedServerNote;
-
-                                // 2. Decrypt server version
-                                try {
-                                    decryptedServerNote = await encryptionStore.decryptNote(serverNote);
-                                } catch (e) {
-                                    logger.error('SYNC', 'Failed to decrypt server note during conflict', e);
-                                    decryptedServerNote = { ...serverNote, content: '[Decryption Failed]' };
-                                }
-
-                                // 3. Create Conflicted Copy from LOCAL changes
-                                const conflictId = uuidv4();
-                                const conflictNote = {
-                                    ...original,
-                                    id: conflictId,
-                                    title: `${original.title} (Conflict ${new Date().toLocaleTimeString()})`,
-                                    sync_status: SYNC_STATUS.NEW,
-                                    version: 1,
-                                    updated_at: new Date().toISOString()
-                                };
-                                await db.notes.add(conflictNote);
-
-                                // 4. Revert original note to SERVER version
-                                await db.notes.put({
-                                    ...decryptedServerNote,
-                                    sync_status: SYNC_STATUS.SYNCED
-                                });
-
-                                logger.info('SYNC', `Conflict resolved: Created copy ${conflictId}, reverted ${original.id}`);
-                            }
-                        } catch (err) {
-                            logger.error('SYNC', 'Error resolving conflict', err);
-                        }
-                    } else if (result.op === 'update' && result.error === 'Note not found') {
-                        // FIX: Note exists locally but missing on server (e.g. wiped or ID mismatch)
-                        // Self-heal by marking as NEW to force re-creation/upload
-                        logger.warn('SYNC', `Note ${original.id} not found on server. Resurrecting as new.`);
-
-                        await db.notes.update(original.id, {
-                            sync_status: SYNC_STATUS.NEW,
-                            updated_at: new Date().toISOString()
                         });
-
+                    } else if (result.op === 'delete') {
+                        await db.notes.delete(original.id);
                     } else {
-                        logger.error('SYNC', 'Operation failed', result);
+                        // Update
+                        await db.notes.update(original.id, {
+                            updated_at: result.updated_at,
+                            sync_status: SYNC_STATUS.SYNCED,
+                            sync_dirty_fields: [] // Clear dirty flags
+                        });
                     }
+                } else if (result.status === 409 || result.error === 'Conflict') {
+                    logger.warn('SYNC', `Conflict detected for note ${original.id}. Resolving...`);
+
+                    try {
+                        // 1. Fetch server version
+                        const res = await authFetch(`${API_URL}/notes/${original.id}`);
+                        if (res.ok) {
+                            const serverNote = await res.json();
+                            let decryptedServerNote;
+
+                            // 2. Decrypt server version
+                            try {
+                                const encryptionStore = useEncryptionStore.getState();
+                                decryptedServerNote = await encryptionStore.decryptNote(serverNote);
+                            } catch (e) {
+                                logger.error('SYNC', 'Failed to decrypt server note during conflict', e);
+                                decryptedServerNote = { ...serverNote, content: '[Decryption Failed]' };
+                            }
+
+                            // 3. Create Conflicted Copy from LOCAL changes
+                            const conflictId = uuidv4();
+                            const conflictNote = {
+                                ...original,
+                                id: conflictId,
+                                title: `${original.title} (Conflict ${new Date().toLocaleTimeString()})`,
+                                sync_status: SYNC_STATUS.NEW,
+                                version: 1,
+                                updated_at: new Date().toISOString()
+                            };
+                            await db.notes.add(conflictNote);
+
+                            // 4. Revert original note to SERVER version
+                            await db.notes.put({
+                                ...decryptedServerNote,
+                                sync_status: SYNC_STATUS.SYNCED
+                            });
+
+                            logger.info('SYNC', `Conflict resolved: Created copy ${conflictId}, reverted ${original.id}`);
+                        }
+                    } catch (err) {
+                        logger.error('SYNC', 'Error resolving conflict', err);
+                    }
+                } else if (result.op === 'update' && result.error === 'Note not found') {
+                    // FIX: Note exists locally but missing on server (e.g. wiped or ID mismatch)
+                    // Self-heal by marking as NEW to force re-creation/upload
+                    logger.warn('SYNC', `Note ${original.id} not found on server. Resurrecting as new.`);
+
+                    await db.notes.update(original.id, {
+                        sync_status: SYNC_STATUS.NEW,
+                        updated_at: new Date().toISOString()
+                    });
+
+                } else {
+                    logger.error('SYNC', 'Operation failed', result);
                 }
-            });
+            }
         } catch (error) {
             logger.error('SYNC', 'Push sync failed', error);
         }

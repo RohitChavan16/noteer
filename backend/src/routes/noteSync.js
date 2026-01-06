@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query, getPool } from '../db/index.js';
 import { logger } from '../utils/logger.js';
-import { setNoteLabelIds, setNoteLabels, bulkInsertImages } from '../db/helpers.js';
+import { setNoteLabelIds, setNoteLabels, bulkInsertImages, saveNoteVersion } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
@@ -260,9 +260,14 @@ router.post('/batch', async (req, res, next) => {
                     if (is_archived !== undefined) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
                     if (is_trashed !== undefined) { updates.push(`is_trashed = $${paramIndex++}`); params.push(is_trashed); }
 
+
                     // Increment version explicitly
                     updates.push(`version = version + 1`);
                     updates.push(`updated_at = CURRENT_TIMESTAMP`);
+
+                    // Save version history using current state (before this update)
+                    await saveNoteVersion(id, userId, client);
+
 
                     params.push(id, userId);
 

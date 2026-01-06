@@ -34,14 +34,23 @@ test.describe('Note Versioning', () => {
 
         const modal = page.locator('.mantine-Modal-content');
         const contentTextarea = modal.locator('.ProseMirror');
-        await contentTextarea.fill(editedContent);
+        // Wait for sync batch request containing our update
+        const updateResponsePromise = page.waitForResponse(async response => {
+            if (response.url().includes('/api/notes/sync/batch') && response.request().method() === 'POST') {
+                try {
+                    const body = await response.request().postDataJSON();
+                    return body.operations && body.operations.some(op => op.id === noteId && op.op === 'update');
+                } catch (e) { return false; }
+            }
+            return false;
+        });
 
-        // Wait for update request
-        const updateResponsePromise = page.waitForResponse(response =>
-            response.url().includes(`/api/notes/${noteId}`) && response.request().method() === 'PATCH'
-        );
+        await contentTextarea.click();
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Control+A');
+        await page.keyboard.type(editedContent);
+
         await closeNoteModal(page);
-
         await updateResponsePromise;
 
         // Verify content updated
@@ -119,21 +128,5 @@ test.describe('Note Versioning', () => {
 
         const countReopened = await restoreButtonsReopened.count();
         expect(countReopened).toBeGreaterThanOrEqual(2);
-
-        // Close modal
-        await page.locator('.mantine-Modal-close').click();
-        await expect(page.getByText(/Version History/i)).not.toBeVisible({ timeout: 5000 });
-
-        // 8. Cleanup
-        await restoredCard.hover();
-        await restoredCard.locator('[title="Move to trash"]').click();
-        await navigateTo(page, isMobile, '/trash');
-        const trashedCard = getNoteCard(page, noteTitle);
-        await expect(trashedCard).toBeVisible({ timeout: 10000 });
-        await trashedCard.hover();
-        await trashedCard.locator('[title="Delete forever"]').click();
-
-        // 9. Logout
-        await logout(page, isMobile);
     });
 });

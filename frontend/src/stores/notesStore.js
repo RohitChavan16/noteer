@@ -1,9 +1,21 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
+import Dexie from 'dexie';
 import { db, SYNC_STATUS } from '../db/db';
 import { useAuthStore } from './authStore';
 import { useEncryptionStore } from './encryptionStore';
 import { logger } from '../utils/logger';
+
+// Debounce utility for performance optimization
+const debounce = (fn, delay) => {
+    let timeoutId;
+    const debounced = (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delay);
+    };
+    debounced.cancel = () => clearTimeout(timeoutId);
+    return debounced;
+};
 
 const API_URL = '/api';
 
@@ -285,24 +297,31 @@ export const useNotesStore = create((set, get) => ({
 
     setViewMode: (mode) => {
         set({ viewMode: mode });
-        try {
-            const prefs = loadPersistedPrefs();
-            localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, viewMode: mode }));
-        } catch (_e) { /* ignore */ }
+        // Defer localStorage write to not block main thread
+        queueMicrotask(() => {
+            try {
+                const prefs = loadPersistedPrefs();
+                localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, viewMode: mode }));
+            } catch (_e) { /* ignore */ }
+        });
     },
     setSortBy: (sortBy) => {
         set({ sortBy });
-        try {
-            const prefs = loadPersistedPrefs();
-            localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortBy }));
-        } catch (_e) { /* ignore */ }
+        queueMicrotask(() => {
+            try {
+                const prefs = loadPersistedPrefs();
+                localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortBy }));
+            } catch (_e) { /* ignore */ }
+        });
     },
     setSortOrder: (sortOrder) => {
         set({ sortOrder });
-        try {
-            const prefs = loadPersistedPrefs();
-            localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortOrder }));
-        } catch (_e) { /* ignore */ }
+        queueMicrotask(() => {
+            try {
+                const prefs = loadPersistedPrefs();
+                localStorage.setItem('noteer-ui-prefs', JSON.stringify({ ...prefs, sortOrder }));
+            } catch (_e) { /* ignore */ }
+        });
     },
 
     setTriggerSync: (fn) => set({ triggerSync: fn }),
@@ -375,6 +394,45 @@ export const useNotesStore = create((set, get) => ({
                 throw new Error('Note not found');
             }
 
+            // --- OFFLINE VERSIONING START ---
+            // Save current state as version before update
+            // OPTIMIZATION: Only version on actual CONTENT changes (title/content)
+            // Items, images, pin, archive, color, labels = no version needed
+            const isContentChange =
+                (noteData.title !== undefined && noteData.title !== currentNote.title) ||
+                (noteData.content !== undefined && noteData.content !== currentNote.content);
+
+            if (isContentChange) {
+                const { v4: uuidv4 } = await import('uuid');
+                const versionId = uuidv4(); // Local version ID
+
+                await db.note_versions.add({
+                    id: versionId,
+                    note_id: id,
+                    created_at: currentNote.updated_at, // Version represents state AT this time
+                    data: currentNote
+                });
+
+                // OPTIMIZATION: Move version cleanup to background (don't block save)
+                const NOTE_VERSION_LIMIT = 10;
+                queueMicrotask(async () => {
+                    try {
+                        const allVersionKeys = await db.note_versions
+                            .where('[note_id+created_at]')
+                            .between([id, Dexie.minKey], [id, Dexie.maxKey])
+                            .primaryKeys();
+
+                        if (allVersionKeys.length > NOTE_VERSION_LIMIT) {
+                            const keysToDelete = allVersionKeys.slice(0, allVersionKeys.length - NOTE_VERSION_LIMIT);
+                            await db.note_versions.bulkDelete(keysToDelete);
+                        }
+                    } catch (e) {
+                        // Silently fail cleanup - not critical
+                    }
+                });
+            }
+            // --- OFFLINE VERSIONING END ---
+
             // Determine new sync status
             // If note is NEW (not yet on server), keep it NEW
             // Otherwise mark as PENDING
@@ -438,8 +496,6 @@ export const useNotesStore = create((set, get) => ({
             const note = await db.notes.get(id);
             if (!note) return true;
 
-            if (!note) return true;
-
             logger.debug('NOTES', 'Deleting note', { id, status: note.sync_status });
 
             if (note.sync_status === SYNC_STATUS.NEW) {
@@ -498,30 +554,103 @@ export const useNotesStore = create((set, get) => ({
     },
 
     /**
-     * Restore a note version (still uses API - versions are server-side only)
+     * Restore a note version
+     * Supports both Online (API) and Offline (Local DB) restoration
+     * PREFERS Local DB to handle optimistic UI and locally created versions (UUIDs)
      */
     restoreNoteVersion: async (id, versionId) => {
         try {
-            const authFetch = getAuthFetch();
-            const res = await authFetch(`${API_URL}/notes/${id}/versions/${versionId}/restore`, {
-                method: 'POST'
-            });
-            if (!res.ok) throw new Error('Failed to restore version');
-            const restoredNote = await res.json();
+            // 1. Try to find version locally first (Offline First strategy)
+            const version = await db.note_versions.get(versionId);
 
-            // Update local DB with restored content
-            const { isUnlocked, decryptNote } = getEncryption();
-            let noteToStore = restoredNote;
-            if (isUnlocked && restoredNote.encrypted) {
-                noteToStore = await decryptNote(restoredNote);
+            if (version && version.data) {
+                logger.debug('NOTES', 'Restoring version from local DB', { id, versionId });
+
+                // The version.data contains the complete note object at that time
+                const versionData = version.data;
+
+                // Strip metadata that shouldn't be restored directly
+                // We want to restore these fields:
+                const restoreData = {
+                    title: versionData.title || '',
+                    content: versionData.content || '',
+                    type: versionData.type || 'note',
+                    color: versionData.color || 'default',
+                    is_pinned: versionData.is_pinned || false,
+                    items: versionData.items || [],
+                    labels: versionData.labels || [],
+                    images: versionData.images || [],
+                    // Critical for restoring encrypted notes correctly:
+                    encrypted: versionData.encrypted,
+                    encrypted_note_key: versionData.encrypted_note_key
+                };
+
+                // Use updateNote to apply changes (this will also create a NEW version of the PRE-restore state!)
+                // CRITICAL: Decrypt content if needed before interacting with updateNote/local DB
+                // updateNote expects plaintext for active notes
+                const { decryptNote, isUnlocked } = useEncryptionStore.getState();
+                let finalData = restoreData;
+
+                // Helper to detect if content is actually encrypted (JSON string with ciphertext) vs plaintext (Local Snapshot)
+                const seemsEncrypted = (text) =>
+                    typeof text === 'string' && text.includes('"ciphertext"') && text.includes('"iv"');
+
+                if (isUnlocked && restoreData.encrypted) {
+                    // Only attempt decrypt if it looks like a server-synced encrypted version
+                    if (seemsEncrypted(restoreData.title) || seemsEncrypted(restoreData.content)) {
+                        try {
+                            // decryptNote expects a full note object structure, so we mock it with what we have
+                            // using a spread to ensure ID presence if needed by decrypt logic (though specific ID passed to updateNote is target)
+                            const decrypted = await decryptNote({ ...restoreData, id: id });
+                            finalData = {
+                                ...restoreData,
+                                title: decrypted.title,
+                                content: decrypted.content,
+                                // We keep encrypted=true and key to ensure it STAYS encrypted when synced back
+                                // but locally it is stored decrypted (managed by encryption store/sync)
+                                encrypted: true,
+                                encrypted_note_key: restoreData.encrypted_note_key
+                            };
+                        } catch (err) {
+                            logger.error('NOTES', 'Failed to decrypt restored version', err);
+                            // Fallback to raw data (better than nothing, though will show cyphered text)
+                        }
+                    }
+                    // Else check: if it is NOT encrypted string, but encrypted=true, it is a local snapshot.
+                    // It is already plaintext. We preserve encrypted=true flag.
+                }
+
+                await get().updateNote(id, finalData);
+
+                return versionData;
             }
 
-            await db.notes.put({
-                ...noteToStore,
-                sync_status: SYNC_STATUS.SYNCED
-            });
+            // 2. Fallback to Server API only if not found locally (and Online)
+            if (navigator.onLine) {
+                logger.debug('NOTES', 'Version not found locally, trying server', { id, versionId });
+                const authFetch = getAuthFetch();
+                const res = await authFetch(`${API_URL}/notes/${id}/versions/${versionId}/restore`, {
+                    method: 'POST'
+                });
+                if (!res.ok) throw new Error('Failed to restore version');
+                const restoredNote = await res.json();
 
-            return restoredNote;
+                // Update local DB with restored content
+                const { isUnlocked, decryptNote } = getEncryption();
+                let noteToStore = restoredNote;
+                if (isUnlocked && restoredNote.encrypted) {
+                    noteToStore = await decryptNote(restoredNote);
+                }
+
+                await db.notes.put({
+                    ...noteToStore,
+                    sync_status: SYNC_STATUS.SYNCED
+                });
+
+                return restoredNote;
+            }
+
+            throw new Error('Version not found locally and offline');
         } catch (error) {
             logger.error('NOTES', 'Failed to restore note version', error);
             throw error;
@@ -582,3 +711,10 @@ export const useNotesStore = create((set, get) => ({
         }
     },
 }));
+
+// Debounced version of updateNote for content changes (500ms delay)
+// Usage: import { debouncedUpdateNote } from './notesStore' 
+// Call for title/content changes to avoid blocking on every keystroke
+export const debouncedUpdateNote = debounce(async (id, noteData) => {
+    await useNotesStore.getState().updateNote(id, noteData);
+}, 500);

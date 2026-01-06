@@ -12,7 +12,7 @@
 import { Router } from 'express';
 import { body, param, validationResult } from 'express-validator';
 import { query } from '../db/index.js';
-import { bulkInsertItems, bulkInsertImages, setNoteLabels, setNoteLabelIds, cleanupOrphanImages } from '../db/helpers.js';
+import { bulkInsertItems, bulkInsertImages, setNoteLabels, setNoteLabelIds, saveNoteVersion } from '../db/helpers.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 import { PAGINATION } from '../config/constants.js';
@@ -328,37 +328,7 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 
         // Save version before ANY changes (including items, labels, images)
         if (hasAnyChanges && isOwner) {
-            const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
-            const currentState = await query(
-                `SELECT n.*, 
-                        COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
-                        COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels,
-                        COALESCE((SELECT json_agg(img) FROM note_images img WHERE img.note_id = n.id), '[]'::json) as images
-                 FROM notes n WHERE n.id = $1`,
-                [id, userId]
-            );
-
-            if (currentState.rows.length > 0) {
-                await query('INSERT INTO note_versions (note_id, data) VALUES ($1, $2)', [id, JSON.stringify(currentState.rows[0])]);
-
-                // Get versions that will be deleted (for image cleanup)
-                const versionsToDelete = await query(
-                    `SELECT data FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
-                    [id, versionLimit]
-                );
-
-                // Delete old versions
-                await query(
-                    `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
-                    [id, versionLimit]
-                );
-
-                // Cleanup orphan images from deleted versions
-                if (versionsToDelete.rows.length > 0) {
-                    const deletedData = versionsToDelete.rows.map(r => r.data);
-                    await cleanupOrphanImages(id, deletedData);
-                }
-            }
+            await saveNoteVersion(id, userId);
         }
 
         if (updates.length > 1) { // updated_at is always pushed, so check if any other fields

@@ -2,15 +2,30 @@ import { useState, useEffect } from 'react';
 import { Modal, Text, Timeline, Button, Group, Center, Loader } from '@mantine/core';
 import { IconHistory, IconRestore } from '@tabler/icons-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { v4 as uuidv4 } from 'uuid';
-import { db, SYNC_STATUS } from '../db/db';
+import { db } from '../db/db';
 import { useAuthStore } from '../stores/authStore';
+import { useNotesStore } from '../stores/notesStore';
 import { logger } from '../utils/logger';
 
 export default function VersionHistoryModal({ opened, onClose, noteId }) {
     const [restoring, setRestoring] = useState(false);
     const [fetching, setFetching] = useState(false);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
     const authFetch = useAuthStore.getState().authFetch;
+
+    // Track online status
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     // Live query from local DB (Offline First)
     const versions = useLiveQuery(
@@ -43,6 +58,11 @@ export default function VersionHistoryModal({ opened, onClose, noteId }) {
                     const fetchedVersions = await res.json();
                     if (fetchedVersions.length > 0) {
                         await db.transaction('rw', db.note_versions, async () => {
+                            // Delete all local versions for this note first
+                            // Server is the source of truth
+                            await db.note_versions.where('note_id').equals(noteId).delete();
+
+                            // Insert server versions
                             for (const version of fetchedVersions) {
                                 await db.note_versions.put({
                                     id: version.id,
@@ -66,43 +86,11 @@ export default function VersionHistoryModal({ opened, onClose, noteId }) {
     }, [opened, noteId, versions, authFetch]);
 
     const handleRestore = async (version) => {
-        if (!confirm('Are you sure you want to restore this version? Current state will be saved as a conflict copy.')) return;
+        if (!confirm('Are you sure you want to restore this version? The current state will be saved as a new version in history.')) return;
 
         setRestoring(true);
         try {
-            const versionData = version.data;
-            if (!versionData) throw new Error('Version data missing');
-
-            // 1. Get current note state
-            const currentNote = await db.notes.get(noteId);
-            if (!currentNote) throw new Error('Current note not found');
-
-            // 2. Create Safety "Conflict Copy" of current state
-            const conflictId = uuidv4();
-            const conflictNote = {
-                ...currentNote,
-                id: conflictId,
-                title: `${currentNote.title} (Before Restore ${new Date().toLocaleTimeString()})`,
-                sync_status: SYNC_STATUS.NEW,
-                updated_at: new Date().toISOString()
-            };
-            await db.notes.add(conflictNote);
-
-            // 3. Restore content from version
-            // We use the version's data but preserve current ID and update metadata
-            const restoredNote = {
-                ...currentNote, // Keep current implementation details like is_owner logic if any
-                ...versionData, // Overwrite with version data (title, content, color, items, etc.)
-                id: noteId,     // Force keep same ID
-                user_id: currentNote.user_id, // Force keep same owner
-                // Update implementation metadata
-                updated_at: new Date().toISOString(),
-                sync_status: SYNC_STATUS.PENDING, // Mark for sync
-                version: (currentNote.version || 0) + 1 // Increment version locally
-            };
-
-            await db.notes.put(restoredNote);
-
+            await useNotesStore.getState().restoreNoteVersion(noteId, version.id);
             onClose();
         } catch (error) {
             logger.error('UI', 'Failed to restore version', error);
@@ -123,7 +111,9 @@ export default function VersionHistoryModal({ opened, onClose, noteId }) {
             {fetching || !versions ? (
                 <Center py="xl"><Loader size="sm" /><Text ml="sm">Loading versions...</Text></Center>
             ) : versions.length === 0 ? (
-                <Text c="dimmed" ta="center" py="xl">No history available offline.</Text>
+                <Text c="dimmed" ta="center" py="xl">
+                    {isOnline ? "No version history found." : "No history available offline."}
+                </Text>
             ) : (
                 <Timeline active={-1} bulletSize={24} lineWidth={2}>
                     {versions.map((version) => (

@@ -73,7 +73,10 @@ export default function NoteModal({ note, onClose }) {
     const toggleCompletedExpanded = () => {
         setCompletedExpanded(prev => {
             const newVal = !prev;
-            localStorage.setItem('noteer-checklist-completed-expanded', JSON.stringify(newVal));
+            // Defer localStorage write to not block main thread
+            queueMicrotask(() => {
+                localStorage.setItem('noteer-checklist-completed-expanded', JSON.stringify(newVal));
+            });
             return newVal;
         });
     };
@@ -117,6 +120,9 @@ export default function NoteModal({ note, onClose }) {
             notifications.show({ title: 'Limit reached', message: 'Maximum 200 checklist items.', color: 'red' });
             return;
         }
+
+        // Release main thread before heavy JSON operations
+        await new Promise(r => setTimeout(r, 0));
 
         // Check for specific field changes to enable partial updates (merging)
         const changes = {};

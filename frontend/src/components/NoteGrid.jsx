@@ -52,14 +52,17 @@ export default function NoteGrid({ notes, showRestore, showDelete, showUnarchive
         setSelectedNote(null);
     }, []);
 
-    const handleItemToggle = useCallback(async (noteId, itemIndex) => {
+    // OPTIMIZATION: Optimistic checkbox toggle - don't await DB update
+    // UI updates immediately via useLiveQuery, DB write happens in background
+    const handleItemToggle = useCallback((noteId, itemIndex) => {
         const note = notes.find(n => n.id === noteId);
         if (!note || !note.items) return;
 
         const updatedItems = note.items.map((item, idx) =>
             idx === itemIndex ? { ...item, is_checked: !item.is_checked } : item
         );
-        await updateNote(noteId, { items: updatedItems });
+        // Fire and forget - no await, DB update happens in background
+        updateNote(noteId, { items: updatedItems });
     }, [notes, updateNote]);
 
     const handleLabelsChange = useCallback((noteId, labels) => {

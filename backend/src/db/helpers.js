@@ -190,3 +190,66 @@ export async function cleanupOrphanImages(noteId, deletedVersionsData) {
         }
     }
 }
+
+/**
+ * Save current state of note as a new version
+ * Handles version limits and orphan image cleanup
+ * @param {number} noteId 
+ * @param {number} userId 
+ * @param {object} [dbClient] - Optional database client for transactions
+ */
+export async function saveNoteVersion(noteId, userId, dbClient = null) {
+    const executeQuery = (text, params) => dbClient ? dbClient.query(text, params) : query(text, params);
+    const versionLimit = parseInt(process.env.NOTE_VERSION_LIMIT || '10');
+
+    // 1. Fetch complete current state
+    const currentState = await executeQuery(
+        `SELECT n.*, 
+                COALESCE((SELECT json_agg(ni ORDER BY position) FROM note_items ni WHERE ni.note_id = n.id), '[]'::json) as items,
+                COALESCE((SELECT json_agg(l.name) FROM user_note_labels unl JOIN labels l ON unl.label_id = l.id WHERE unl.note_id = n.id AND unl.user_id = $2), '[]'::json) as labels,
+                COALESCE((SELECT json_agg(img) FROM note_images img WHERE img.note_id = n.id), '[]'::json) as images
+         FROM notes n WHERE n.id = $1`,
+        [noteId, userId]
+    );
+
+    if (currentState.rows.length === 0) return;
+
+    // 2. Insert new version
+    await executeQuery(
+        'INSERT INTO note_versions (note_id, data) VALUES ($1, $2)',
+        [noteId, JSON.stringify(currentState.rows[0])]
+    );
+
+    // 3. Get versions above limit (to be deleted)
+    const versionsToDelete = await executeQuery(
+        `SELECT data FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
+        [noteId, versionLimit]
+    );
+
+    if (versionsToDelete.rows.length > 0) {
+        // 4. Delete old versions
+        await executeQuery(
+            `DELETE FROM note_versions WHERE id IN (SELECT id FROM note_versions WHERE note_id = $1 ORDER BY created_at DESC OFFSET $2)`,
+            [noteId, versionLimit]
+        );
+
+        // 5. Cleanup orphan images
+        // Note: cleanupOrphanImages creates its own internal queries/imports, usually safe to run outside transaction
+        // or we need to pass dbClient if we refactor it.
+        // Current implementation of cleanupOrphanImages uses 'query' directly from import.
+        // Ideally we should update cleanupOrphanImages to accept dbClient too, but for image deletion (fs) it doesn't matter much.
+        // However, it reads 'note_images' and 'note_versions'. If we are in a transaction that modified these, 
+        // using global 'query' might not see uncommitted changes if isolation level is Read Committed.
+        // BUT versions are inserted/deleted in this transaction.
+
+        // For safety, let's just await it. If it misses something due to transaction isolation, it just leaves a file for next time.
+        // The critical part is DB consistency.
+
+        try {
+            const deletedData = versionsToDelete.rows.map(r => r.data);
+            await cleanupOrphanImages(noteId, deletedData);
+        } catch (e) {
+            logger.warn('DB', 'Orphan image cleanup failed (non-critical)', e);
+        }
+    }
+}

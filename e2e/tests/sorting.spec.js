@@ -133,7 +133,12 @@ test.describe('Note Sorting', () => {
         // The button label should eventually become 'Oldest first'.
         await expect(page.locator('button[aria-label="Oldest first"]')).toBeVisible({ timeout: 5000 });
 
-        await page.waitForTimeout(3000);
+        // Wait for the UI to actually reorder the notes
+        // The first note card should now be the oldest note (note1)
+        await expect(async () => {
+            const firstCardText = await page.locator('.note-card').first().innerText();
+            expect(firstCardText).toContain(note1);
+        }).toPass({ timeout: 10000 });
 
         // Verify Order: Note 1 (Oldest), Note 2 (Newest)
         cardTexts = await page.locator('.note-card').allInnerTexts();
