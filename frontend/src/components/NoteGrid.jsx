@@ -168,9 +168,7 @@ export default function NoteGrid({ notes, showRestore, showDelete, showUnarchive
                 {renderNotes(otherNotes, pinnedNotes.length > 0 && !showDelete ? 'Others' : null)}
 
                 {/* Sentinel for Infinite Scroll */}
-                {!showDelete && (
-                    <Box ref={observerRef} h={20} w="100%" /> // Invisible 20px trigger area
-                )}
+                <Box ref={observerRef} h={20} w="100%" />
             </Box>
 
             {/* Selection Bottom Bar */}

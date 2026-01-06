@@ -1,4 +1,5 @@
 import Dexie from 'dexie';
+import { getWebWorkerDB } from 'dexie-worker';
 
 export const db = new Dexie('noteer');
 
@@ -11,6 +12,15 @@ db.version(2).stores({
     offline_queue: '++id, type, created_at', // Generic queue for offline actions (unshare, etc.)
     note_versions: 'id, note_id, created_at, [note_id+created_at]' // Offline version history
 });
+
+// Initialize DB (required for dexie-worker)
+db.open().catch(err => {
+    console.error('Failed to open database:', err);
+});
+
+// Web Worker DB proxy for heavy operations (runs off main thread)
+// Use workerDb for bulk writes to avoid blocking UI
+export const workerDb = getWebWorkerDB(db);
 
 // Helpers for sync status
 export const SYNC_STATUS = {

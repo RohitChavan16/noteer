@@ -83,7 +83,7 @@ export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuer
  */
 export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Filter for archived, non-trashed notes
+        // Reverted to .filter() due to DataError with boolean keys
         let notes = await db.notes
             .filter(n => n.is_archived === true && n.is_trashed !== true)
             .toArray();
@@ -115,6 +115,7 @@ export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', li
  */
 export function useTrashedNotes({ limit = 20 } = {}) {
     return useLiveQuery(async () => {
+        // Reverted to .filter() due to DataError with boolean keys
         const notes = await db.notes
             .filter(n => n.is_trashed === true && n.sync_status !== 'deleted')
             .toArray();

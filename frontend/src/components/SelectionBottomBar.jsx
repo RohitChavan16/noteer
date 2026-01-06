@@ -1,5 +1,5 @@
-import { ActionIcon, Button, Group, Text, Transition, Tooltip, Menu, Paper, useMantineColorScheme, ThemeIcon } from '@mantine/core';
-import { IconTrash, IconArchive, IconPalette, IconX, IconRestore, IconCheck, IconTag, IconArchiveOff, IconTagOff } from '@tabler/icons-react';
+import { ActionIcon, Button, Group, Text, Transition, Tooltip, Menu, Paper, useMantineColorScheme } from '@mantine/core';
+import { IconTrash, IconArchive, IconPalette, IconX, IconRestore, IconArchiveOff, IconTagOff } from '@tabler/icons-react';
 import { useNotesStore } from '../stores/notesStore';
 import { NOTE_COLORS } from '../constants/noteColors';
 import LabelPicker from './LabelPicker';
