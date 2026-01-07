@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { db, NOTE_STATUS } from '../db/db';
 import { logger } from '../utils/logger';
 
 /**
@@ -24,16 +24,23 @@ const EMPTY_ARRAY = [];
  */
 export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuery = '', labelId = null, limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        let notes = await db.notes
-            .filter(n => n.is_archived !== true && n.is_trashed !== true)
-            .toArray();
+        let notes;
 
-        // Filter by label
+        // Use indexed queries for better performance
         if (labelId) {
-            notes = notes.filter(n => n.labels && n.labels.some(l => l == labelId));
+            // Use *labels multiEntry index + filter for status
+            notes = await db.notes
+                .where('labels').equals(labelId)
+                .filter(n => n.status === NOTE_STATUS.ACTIVE)
+                .toArray();
+        } else {
+            // Use status index directly
+            notes = await db.notes
+                .where('status').equals(NOTE_STATUS.ACTIVE)
+                .toArray();
         }
 
-        // Filter by search query
+        // Filter by search query (still in-memory, search indexing would require full-text search)
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             notes = notes.filter(n =>
@@ -42,7 +49,7 @@ export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuer
             );
         }
 
-        // Sort (In-Memory)
+        // Sort (In-Memory - compound index already filters, sorting still needed for pinned)
         const stripHtml = (html) => {
             if (!html) return '';
             return html.replace(/<[^>]*>/g, '').trim();
@@ -83,9 +90,9 @@ export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuer
  */
 export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Reverted to .filter() due to DataError with boolean keys
+        // Use status index for efficient query
         let notes = await db.notes
-            .filter(n => n.is_archived === true && n.is_trashed !== true)
+            .where('status').equals(NOTE_STATUS.ARCHIVED)
             .toArray();
 
         // Sort
@@ -115,9 +122,10 @@ export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', li
  */
 export function useTrashedNotes({ limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Reverted to .filter() due to DataError with boolean keys
+        // Use status index for efficient query
         const notes = await db.notes
-            .filter(n => n.is_trashed === true && n.sync_status !== 'deleted')
+            .where('status').equals(NOTE_STATUS.TRASHED)
+            .filter(n => n.sync_status !== 'deleted')
             .toArray();
 
         logger.debug('HOOKS', 'useTrashedNotes found items', notes.length);

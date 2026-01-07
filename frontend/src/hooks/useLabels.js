@@ -13,7 +13,7 @@ export function useLabels() {
                     .filter(label => label.sync_status !== SYNC_STATUS.DELETED)
                     .toArray(),
                 db.notes
-                    .filter(n => n.is_trashed !== true)
+                    .filter(n => n.status !== 'trashed')
                     .toArray()
             ]);
 

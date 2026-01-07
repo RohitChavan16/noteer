@@ -196,9 +196,18 @@ export function useSync() {
                     decryptedNote.labels = encryptedNote.label_ids;
                 }
 
+                // Derive status from is_archived/is_trashed for efficient indexing
+                let status = 'active';
+                if (decryptedNote.is_trashed) {
+                    status = 'trashed';
+                } else if (decryptedNote.is_archived) {
+                    status = 'archived';
+                }
+
                 // Add to batch
                 notesToWrite.push({
                     ...decryptedNote,
+                    status,
                     sync_status: SYNC_STATUS.SYNCED
                 });
 
@@ -743,12 +752,20 @@ export function useSync() {
                                     id: conflictId,
                                     title: `${original.title} (Conflict ${new Date().toLocaleTimeString()})`,
                                     sync_status: SYNC_STATUS.NEW,
+                                    status: original.status || 'active',
                                     version: 1,
                                     updated_at: new Date().toISOString()
                                 };
                                 await db.notes.add(conflictNote);
+
+                                // Derive status for server note
+                                let serverStatus = 'active';
+                                if (decryptedServerNote.is_trashed) serverStatus = 'trashed';
+                                else if (decryptedServerNote.is_archived) serverStatus = 'archived';
+
                                 await db.notes.put({
                                     ...decryptedServerNote,
+                                    status: serverStatus,
                                     sync_status: SYNC_STATUS.SYNCED
                                 });
                                 logger.info('SYNC', `Conflict resolved: Created copy ${conflictId}`);

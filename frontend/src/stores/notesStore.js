@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import Dexie from 'dexie';
-import { db, SYNC_STATUS } from '../db/db';
+import { db, SYNC_STATUS, NOTE_STATUS } from '../db/db';
 import { useAuthStore } from './authStore';
 import { useEncryptionStore } from './encryptionStore';
 import { logger } from '../utils/logger';
@@ -351,6 +351,7 @@ export const useNotesStore = create((set, get) => ({
                 is_pinned: Boolean(noteData.is_pinned),
                 is_archived: false,
                 is_trashed: false,
+                status: NOTE_STATUS.ACTIVE, // For efficient indexing
                 items: Array.isArray(noteData.items) ? noteData.items : null,
                 labels: Array.isArray(noteData.labels) ? noteData.labels : [],
                 images: Array.isArray(noteData.images) ? noteData.images : [],
@@ -390,7 +391,7 @@ export const useNotesStore = create((set, get) => ({
             const now = new Date().toISOString();
 
             // Allowed fields for quick update (no versioning needed)
-            const allowed = ['is_pinned', 'is_archived', 'is_trashed', 'color', 'labels'];
+            const allowed = ['is_pinned', 'is_archived', 'is_trashed', 'color', 'labels', 'status'];
             const updates = {};
             const dirtyFields = [];
 
@@ -399,6 +400,18 @@ export const useNotesStore = create((set, get) => ({
                     updates[key] = changes[key];
                     dirtyFields.push(key);
                 }
+            }
+
+            // Auto-derive status from is_archived/is_trashed
+            if ('is_trashed' in updates || 'is_archived' in updates) {
+                if (updates.is_trashed) {
+                    updates.status = NOTE_STATUS.TRASHED;
+                } else if (updates.is_archived) {
+                    updates.status = NOTE_STATUS.ARCHIVED;
+                } else {
+                    updates.status = NOTE_STATUS.ACTIVE;
+                }
+                dirtyFields.push('status');
             }
 
             if (Object.keys(updates).length === 0) {
@@ -508,6 +521,17 @@ export const useNotesStore = create((set, get) => ({
             // Always update metadata
             updates.updated_at = now;
             updates.sync_status = newSyncStatus;
+
+            // Derive status from is_archived/is_trashed (uses currentNote for current values + updates)
+            const finalIsTrash = updates.is_trashed !== undefined ? updates.is_trashed : currentNote.is_trashed;
+            const finalIsArchive = updates.is_archived !== undefined ? updates.is_archived : currentNote.is_archived;
+            if (finalIsTrash) {
+                updates.status = NOTE_STATUS.TRASHED;
+            } else if (finalIsArchive) {
+                updates.status = NOTE_STATUS.ARCHIVED;
+            } else {
+                updates.status = NOTE_STATUS.ACTIVE;
+            }
 
             // Track dirty fields for partial sync
             const dirtyKeys = Object.keys(updates).filter(k => k !== 'updated_at' && k !== 'sync_status' && k !== 'sync_dirty_fields');
