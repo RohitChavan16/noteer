@@ -1,19 +1,33 @@
+/**
+ * Sync Hook - Orchestrates sync operations
+ * 
+ * This hook coordinates syncing between local Dexie database and server.
+ * Heavy logic has been extracted to service modules:
+ * - syncEngine.js: pullChanges, pushChanges, conflict resolution
+ * - labelSyncService.js: label sync operations
+ * - imageSyncService.js: offline image uploads
+ * - offlineQueueService.js: offline action queue
+ */
+
 import { useEffect, useCallback, useState } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { db, workerDb, SYNC_STATUS, LOCAL_IMAGE_PREFIX } from '../db/db';
+import { db, SYNC_STATUS } from '../db/db';
 import { useAuthStore } from '../stores/authStore';
-import { useEncryptionStore } from '../stores/encryptionStore';
 import { useNotesStore } from '../stores/notesStore';
 import { logger } from '../utils/logger';
 
+// Import service modules
+import { pullChanges, pushChanges } from '../services/syncEngine';
+import { pullLabels, pushLabels } from '../services/labelSyncService';
+import { uploadOfflineImages } from '../services/imageSyncService';
+import { processOfflineQueue } from '../services/offlineQueueService';
+
 // Constants
 const API_URL = '/api';
-const SYNC_INTERVAL_MS = 4000; // 4 seconds
-const SYNC_PAGE_SIZE = 1000;
+const SYNC_INTERVAL_MS = 4000;
 const MAX_RETRY_ATTEMPTS = 3;
 const INITIAL_RETRY_DELAY_MS = 1000;
 
-// Global sync lock - prevents duplicate syncs from multiple hook instances (React StrictMode)
+// Global sync lock
 let globalSyncLock = false;
 
 /**
@@ -21,19 +35,17 @@ let globalSyncLock = false;
  */
 export function useSync() {
     const authFetch = useAuthStore.getState().authFetch;
-    const isSyncing = useNotesStore(state => state.isSyncing); // Subscribe to syncing state
+    const isSyncing = useNotesStore(state => state.isSyncing);
 
     // Lazy Version Sync Queue
     const [versionSyncQueue, setVersionSyncQueue] = useState(new Set());
 
     // Effect: Background Fetch Versions for Queue
-    // Debounced to avoid spamming during active sync
     useEffect(() => {
         if (versionSyncQueue.size === 0 || isSyncing) return;
 
         const fetchVersions = async () => {
             const idsToFetch = Array.from(versionSyncQueue);
-            // Clear queue immediately (optimistic)
             setVersionSyncQueue(new Set());
 
             try {
@@ -47,7 +59,6 @@ export function useSync() {
                     const versions = await response.json();
                     if (versions.length > 0) {
                         await db.transaction('rw', db.note_versions, async () => {
-                            // Group versions by note_id
                             const versionsByNote = new Map();
                             for (const version of versions) {
                                 if (!versionsByNote.has(version.note_id)) {
@@ -56,13 +67,8 @@ export function useSync() {
                                 versionsByNote.get(version.note_id).push(version);
                             }
 
-                            // For each note: delete LOCAL versions, then insert SERVER versions
-                            // Server is the source of truth for versions
                             for (const [noteId, noteVersions] of versionsByNote) {
-                                // Delete all local versions for this note
                                 await db.note_versions.where('note_id').equals(noteId).delete();
-
-                                // Insert server versions
                                 for (const version of noteVersions) {
                                     await db.note_versions.put({
                                         id: version.id,
@@ -73,746 +79,66 @@ export function useSync() {
                                 }
                             }
                         });
-                        logger.debug('SYNC', `[LazySync] Replaced local versions with ${versions.length} server versions for ${idsToFetch.length} notes`);
-
+                        logger.debug('SYNC', `[LazySync] Replaced local versions with ${versions.length} server versions`);
                     }
                 }
             } catch (error) {
                 logger.warn('SYNC', '[LazySync] Failed to fetch versions', error);
-                // In a real enterprise app, we'd smart-retry or dead-letter queue this
             }
         };
 
-        const timeoutId = setTimeout(fetchVersions, 3000); // 3s debounce after sync activity
+        const timeoutId = setTimeout(fetchVersions, 3000);
         return () => clearTimeout(timeoutId);
     }, [versionSyncQueue, isSyncing, authFetch]);
 
-    // Pull changes from server (with decryption)
-    const pullChanges = useCallback(async () => {
-
-        if (!authFetch) return;
-
-        const encryptionStore = useEncryptionStore.getState();
-
-        if (!encryptionStore.isUnlocked) {
-            logger.info('SYNC', 'Encryption not unlocked, skipping pull');
-            return;
-        }
-
-        try {
-            // Get last sync time
-            const syncState = await db.syncState.get('lastSyncTime');
-            const since = syncState?.value || null;
-
-
-            // If no lastSyncTime, this is initial sync - need to fetch ALL notes
-            // Backend may paginate, so we loop until we get all
-            let allNotes = [];
-            let allDeleted = [];
-            let serverTime = null;
-            let page = 0;
-            const pageSize = SYNC_PAGE_SIZE;
-            let hasMore = true;
-
-            while (hasMore) {
-                const params = new URLSearchParams();
-                if (since) params.append('since', since);
-                params.append('limit', pageSize.toString());
-                params.append('offset', (page * pageSize).toString());
-
-                const url = `${API_URL}/notes/sync${params.toString() ? '?' + params.toString() : ''}`;
-                const res = await authFetch(url);
-
-                if (!res.ok) throw new Error('Sync pull failed');
-
-                const { notes, deleted, serverTime: st } = await res.json();
-
-                allNotes = allNotes.concat(notes || []);
-                allDeleted = allDeleted.concat(deleted || []);
-                serverTime = st;
-
-                // Check if we got less than pageSize, meaning no more pages
-                hasMore = notes && notes.length === pageSize;
-                page++;
-            }
-
-
-
-            // OPTIMIZATION: Process data on main thread, then bulk write via worker
-            // This moves heavy IndexedDB writes off main thread
-            const YIELD_INTERVAL = 20; // Yield every 20 notes
-            const notesToFetchVersions = [];
-            const notesToWrite = []; // Prepare for bulk write
-            const idsToDelete = []; // Prepare for bulk delete
-
-            // Phase 1: Read local state and prepare data (main thread - fast reads)
-            for (let i = 0; i < allNotes.length; i++) {
-                const encryptedNote = allNotes[i];
-
-                // Yield to main thread periodically
-                if (i > 0 && i % YIELD_INTERVAL === 0) {
-                    await new Promise(r => setTimeout(r, 0));
-                }
-
-                // Check if we have a pending local change
-                let local = await db.notes.get(encryptedNote.id);
-
-                // Fallback to number lookup if string fails (legacy IDs)
-                if (!local && !isNaN(Number(encryptedNote.id))) {
-                    local = await db.notes.get(Number(encryptedNote.id));
-                }
-
-                if (local && local.sync_status !== SYNC_STATUS.SYNCED) {
-                    // Conflict handling
-                    if (local.sync_status === SYNC_STATUS.DELETED) {
-                        logger.debug('SYNC', '[pullChanges] Skipping update for locally DELETED note', encryptedNote.id);
-                        continue;
-                    }
-
-                    const localTime = new Date(local.updated_at).getTime();
-                    const serverNoteTime = new Date(encryptedNote.updated_at).getTime();
-
-                    if (localTime > serverNoteTime) {
-                        continue; // Local is newer
-                    }
-                }
-
-                // Decrypt the note
-                let decryptedNote;
-                try {
-                    decryptedNote = await encryptionStore.decryptNote(encryptedNote);
-                } catch (e) {
-                    logger.error('SYNC', 'Failed to decrypt note', { id: encryptedNote.id, error: e });
-                    decryptedNote = {
-                        ...encryptedNote,
-                        title: '[Decryption failed]',
-                        content: '[Unable to decrypt]',
-                        decryptionError: true
-                    };
-                }
-
-                // Map server label_ids to local labels
-                if (encryptedNote.label_ids) {
-                    decryptedNote.labels = encryptedNote.label_ids;
-                }
-
-                // Derive status from is_archived/is_trashed for efficient indexing
-                let status = 'active';
-                if (decryptedNote.is_trashed) {
-                    status = 'trashed';
-                } else if (decryptedNote.is_archived) {
-                    status = 'archived';
-                }
-
-                // Add to batch
-                notesToWrite.push({
-                    ...decryptedNote,
-                    status,
-                    sync_status: SYNC_STATUS.SYNCED
-                });
-
-                notesToFetchVersions.push(encryptedNote.id);
-            }
-
-            // Prepare deletions
-            for (const id of allDeleted) {
-                idsToDelete.push(id);
-            }
-
-            // Phase 2: Bulk write via worker (off main thread!)
-            if (notesToWrite.length > 0) {
-                try {
-                    await workerDb.notes.bulkPut(notesToWrite);
-                    logger.debug('SYNC', `[pullChanges] Worker bulk-wrote ${notesToWrite.length} notes`);
-                } catch (e) {
-                    logger.error('SYNC', 'Worker bulk write failed, falling back to main thread', e);
-                    // Fallback to main thread
-                    await db.notes.bulkPut(notesToWrite);
-                }
-            }
-
-            // Phase 3: Handle deletions (smaller operation, main thread OK)
-            if (idsToDelete.length > 0) {
-                await db.transaction('rw', db.notes, db.note_versions, async () => {
-                    for (const id of idsToDelete) {
-                        await db.notes.delete(id);
-                        await db.note_versions.where('note_id').equals(id).delete();
-                    }
-                });
-            }
-
-            // Update sync time
-            if (serverTime) {
-                await db.syncState.put({ key: 'lastSyncTime', value: serverTime });
-            }
-
-            // Update queue for version fetching
-            if (notesToFetchVersions.length > 0) {
-                setVersionSyncQueue(prev => {
-                    const next = new Set(prev);
-                    notesToFetchVersions.forEach(id => next.add(id));
-                    return next;
-                });
-            }
-        } catch (error) {
-            logger.error('SYNC', 'Pull sync failed', error);
-        }
+    // Wrapped callbacks that pass authFetch
+    const doPullChanges = useCallback(async () => {
+        await pullChanges(authFetch, setVersionSyncQueue);
     }, [authFetch]);
 
-    // Upload offline images and replace local URLs with server URLs
-    const uploadOfflineImages = useCallback(async () => {
-        if (!authFetch) return;
-
-        try {
-            const offlineImages = await db.offline_images.toArray();
-            if (offlineImages.length === 0) return;
-
-            for (const offlineImage of offlineImages) {
-                try {
-                    // Upload blob to server
-                    const formData = new FormData();
-                    formData.append('images', offlineImage.blob, `image_${offlineImage.id}`);
-
-                    const res = await authFetch(`${API_URL}/upload`, {
-                        method: 'POST',
-                        body: formData,
-                    });
-
-                    if (!res.ok) {
-                        logger.error('SYNC', 'Failed to upload offline image', { id: offlineImage.id });
-                        continue;
-                    }
-
-                    const uploadedFiles = await res.json();
-                    const serverImage = uploadedFiles[0];
-                    const localUrl = `${LOCAL_IMAGE_PREFIX}${offlineImage.id}`;
-
-                    // Find all notes that reference this local image and update them
-                    const notesWithImage = await db.notes
-                        .filter(note => {
-                            if (!note.images || !Array.isArray(note.images)) return false;
-                            return note.images.some(img =>
-                                img.url === localUrl ||
-                                img.thumb_medium === localUrl ||
-                                img.thumb_small === localUrl
-                            );
-                        })
-                        .toArray();
-
-                    // Replace local URLs with server URLs in each note
-                    for (const note of notesWithImage) {
-                        const updatedImages = note.images.map(img => {
-                            if (img.url === localUrl || img.thumb_medium === localUrl) {
-                                return {
-                                    ...serverImage,
-                                    _isOffline: undefined
-                                };
-                            }
-                            return img;
-                        });
-
-                        // Update note with new image URLs and mark for sync
-                        await db.notes.update(note.id, {
-                            images: updatedImages,
-                            sync_status: note.sync_status === SYNC_STATUS.NEW
-                                ? SYNC_STATUS.NEW
-                                : SYNC_STATUS.PENDING
-                        });
-                    }
-
-                    // Delete from offline storage
-                    await db.offline_images.delete(offlineImage.id);
-
-                } catch (error) {
-                    logger.error('SYNC', 'Error processing offline image', { id: offlineImage.id, error });
-                }
-            }
-        } catch (error) {
-            logger.error('SYNC', 'Failed to upload offline images', error);
-        }
+    const doPushChanges = useCallback(async () => {
+        await pushChanges(authFetch);
     }, [authFetch]);
 
-    // Pull labels from server
-    const pullLabels = useCallback(async () => {
-        if (!authFetch) return;
-
-        try {
-            const res = await authFetch(`${API_URL}/labels`);
-            if (!res.ok) throw new Error('Failed to fetch labels');
-            const serverLabels = await res.json();
-
-            await db.transaction('rw', db.labels, db.notes, async () => {
-                for (const label of serverLabels) {
-                    // Check if we have a pending local change
-                    const local = await db.labels.get(label.id);
-                    if (local && local.sync_status !== SYNC_STATUS.SYNCED) {
-                        // Conflict: Local wins for now (LWW simplicity)
-                        continue;
-                    }
-
-                    // Upsert label
-                    await db.labels.put({
-                        ...label,
-                        sync_status: SYNC_STATUS.SYNCED
-                    });
-                }
-
-                // FIX: Delete local SYNCED labels that are missing from server (State Reconciliation)
-                // This handles cases where backend DB was reset or label was deleted on another device
-                const serverIds = new Set(serverLabels.map(l => l.id));
-                const localSynced = await db.labels
-                    .where('sync_status')
-                    .equals(SYNC_STATUS.SYNCED)
-                    .toArray();
-
-                for (const local of localSynced) {
-                    if (!serverIds.has(local.id)) {
-                        logger.info('SYNC', 'Removing ghost label', { id: local.id, name: local.name });
-
-                        // 1. Delete label
-                        await db.labels.delete(local.id);
-
-                        // 2. Remove reference from all notes
-                        const affectedNotes = await db.notes
-                            .filter(n => Array.isArray(n.labels) && n.labels.includes(local.id))
-                            .toArray();
-
-                        for (const note of affectedNotes) {
-                            const newLabels = note.labels.filter(lid => lid !== local.id);
-                            await db.notes.update(note.id, {
-                                labels: newLabels,
-                                updated_at: new Date().toISOString(), // Trigger UI update
-                                sync_status: note.sync_status === SYNC_STATUS.NEW ? SYNC_STATUS.NEW : SYNC_STATUS.PENDING
-                            });
-                        }
-                    }
-                }
-            });
-        } catch (error) {
-            logger.error('SYNC', 'Pull labels failed', error);
-        }
+    const doPullLabels = useCallback(async () => {
+        await pullLabels(authFetch);
     }, [authFetch]);
 
-    // Push local label changes to server
-    const pushLabels = useCallback(async () => {
-        if (!authFetch) return;
-
-        try {
-            const pendingLabels = await db.labels
-                .where('sync_status')
-                .anyOf([SYNC_STATUS.NEW, SYNC_STATUS.PENDING, SYNC_STATUS.DELETED])
-                .toArray();
-
-            if (pendingLabels.length === 0) return;
-
-            for (const label of pendingLabels) {
-                try {
-                    let res;
-                    if (label.sync_status === SYNC_STATUS.NEW) {
-                        res = await authFetch(`${API_URL}/labels`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: label.name, color: label.color })
-                        });
-                    } else if (label.sync_status === SYNC_STATUS.PENDING) {
-                        res = await authFetch(`${API_URL}/labels/${label.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name: label.name, color: label.color })
-                        });
-                    } else if (label.sync_status === SYNC_STATUS.DELETED) {
-                        res = await authFetch(`${API_URL}/labels/${label.id}`, {
-                            method: 'DELETE'
-                        });
-                    }
-
-                    if (res && (res.ok || (label.sync_status === SYNC_STATUS.DELETED && res.status === 404))) {
-                        if (label.sync_status === SYNC_STATUS.DELETED) {
-                            await db.labels.delete(label.id);
-                        } else if (label.sync_status === SYNC_STATUS.NEW) {
-                            const serverLabel = await res.json();
-
-                            // FIX: Update all notes that reference this temporary label ID
-                            // We must do this in a transaction to ensure no state drift
-                            await db.transaction('rw', db.notes, db.labels, async () => {
-                                // Find notes with the temporary label ID
-                                const affectedNotes = await db.notes
-                                    .filter(n => Array.isArray(n.labels) && n.labels.includes(label.id))
-                                    .toArray();
-
-                                // Update references
-                                for (const note of affectedNotes) {
-                                    const newLabels = note.labels.map(lid => lid === label.id ? serverLabel.id : lid);
-
-                                    // Ensure note is marked for sync to push the new Label ID
-                                    // If it was NEW, keep NEW. If SYNCED/PENDING, mark PENDING.
-                                    const nextStatus = note.sync_status === SYNC_STATUS.NEW
-                                        ? SYNC_STATUS.NEW
-                                        : SYNC_STATUS.PENDING;
-
-                                    await db.notes.update(note.id, {
-                                        labels: newLabels,
-                                        sync_status: nextStatus,
-                                        updated_at: new Date().toISOString()
-                                    });
-                                }
-
-                                // Delete temporary ID and insert server ID
-                                await db.labels.delete(label.id);
-                                await db.labels.put({ ...serverLabel, sync_status: SYNC_STATUS.SYNCED });
-                            });
-
-                        } else {
-                            // Update existing
-                            await db.labels.update(label.id, { sync_status: SYNC_STATUS.SYNCED });
-                        }
-                    }
-                } catch (e) {
-                    logger.error('SYNC', 'Failed to push label', { id: label.id, error: e });
-                }
-            }
-        } catch (error) {
-            logger.error('SYNC', 'Push labels failed', error);
-        }
+    const doPushLabels = useCallback(async () => {
+        await pushLabels(authFetch);
     }, [authFetch]);
 
-    // Process generic offline action queue (e.g. unsharing)
-    const processOfflineQueue = useCallback(async () => {
-        if (!authFetch) return;
-
-        try {
-            const queue = await db.offline_queue.toArray();
-            if (queue.length === 0) return;
-
-            for (const item of queue) {
-                try {
-                    if (item.type === 'UNSHARE_NOTE') {
-                        const { noteId, userId } = item.payload;
-                        const res = await authFetch(`${API_URL}/notes/${noteId}/share/${userId}`, {
-                            method: 'DELETE',
-                        });
-
-                        if (res.ok || res.status === 204 || res.status === 404) {
-                            // Success or already gone
-                            await db.offline_queue.delete(item.id);
-                        } else {
-                            logger.error('SYNC', 'Failed to process unshare', await res.text());
-                        }
-                    }
-                } catch (error) {
-                    logger.error('SYNC', 'Error processing offline queue item', { id: item.id, error });
-                }
-            }
-        } catch (error) {
-            logger.error('SYNC', 'Offline queue processing failed', error);
-        }
+    const doUploadOfflineImages = useCallback(async () => {
+        await uploadOfflineImages(authFetch);
     }, [authFetch]);
 
-    // Push local changes to server (with encryption)
-    const pushChanges = useCallback(async () => {
-        if (!authFetch) return;
-
-        const encryptionStore = useEncryptionStore.getState();
-        if (!encryptionStore.isUnlocked) {
-            logger.info('SYNC', 'Encryption not unlocked, skipping push');
-            return;
-        }
-
-        try {
-            // Get all pending notes
-            const pendingNotes = await db.notes
-                .where('sync_status')
-                .anyOf([SYNC_STATUS.NEW, SYNC_STATUS.PENDING, SYNC_STATUS.DELETED])
-                .toArray();
-
-            if (pendingNotes.length === 0) return;
-
-            // OPTIMIZATION: Yield interval for encryption loop
-            const YIELD_INTERVAL = 10;
-
-            // Build batch operations with encryption
-            const operations = [];
-            for (let i = 0; i < pendingNotes.length; i++) {
-                const note = pendingNotes[i];
-
-                // Yield to main thread periodically
-                if (i > 0 && i % YIELD_INTERVAL === 0) {
-                    await new Promise(r => setTimeout(r, 0));
-                }
-
-                // Skip notes with temporary label IDs (UUIDs)
-                if (note.labels && note.labels.some(id => isNaN(Number(id)))) {
-                    logger.debug('SYNC', `[pushChanges] Skipping note ${note.id} waiting for label resolution`);
-                    continue;
-                }
-
-                if (note.sync_status === SYNC_STATUS.NEW) {
-                    const encryptedNote = await encryptionStore.encryptNote({
-                        title: note.title,
-                        content: note.content,
-                        type: note.type,
-                        color: note.color,
-                        is_pinned: note.is_pinned,
-                        items: note.items
-                    });
-
-                    operations.push({
-                        op: 'create',
-                        tempId: note.id,
-                        data: {
-                            title: encryptedNote.title,
-                            content: encryptedNote.content,
-                            type: encryptedNote.type,
-                            color: encryptedNote.color,
-                            is_pinned: encryptedNote.is_pinned,
-                            items: encryptedNote.items,
-                            label_ids: note.labels || [],
-                            labels: [],
-                            images: note.images || [],
-                            encrypted: encryptedNote.encrypted,
-                            encrypted_note_key: encryptedNote.encrypted_note_key
-                        }
-                    });
-                } else if (note.sync_status === SYNC_STATUS.DELETED) {
-                    operations.push({ op: 'delete', id: note.id });
-                } else {
-                    // PENDING - update existing note
-                    let data = {};
-                    let shouldFullSync = true;
-
-                    if (note.sync_dirty_fields && note.sync_dirty_fields.length > 0) {
-                        const dirty = new Set(note.sync_dirty_fields);
-                        shouldFullSync = false;
-
-                        if (dirty.has('title') || dirty.has('content')) {
-                            const encryptedNote = await encryptionStore.encryptNote({
-                                id: note.id,
-                                title: note.title,
-                                content: note.content,
-                                encrypted_note_key: note.encrypted_note_key
-                            });
-                            if (dirty.has('title')) data.title = encryptedNote.title;
-                            if (dirty.has('content')) data.content = encryptedNote.content;
-                            data.encrypted = true;
-                            data.encrypted_note_key = encryptedNote.encrypted_note_key;
-                        }
-
-                        if (dirty.has('color')) data.color = note.color;
-                        if (dirty.has('is_pinned')) data.is_pinned = note.is_pinned;
-                        if (dirty.has('is_archived')) data.is_archived = note.is_archived;
-                        if (dirty.has('is_trashed')) data.is_trashed = note.is_trashed;
-                        if (dirty.has('items')) data.items = note.items;
-                        if (dirty.has('labels')) {
-                            data.label_ids = note.labels || [];
-                            data.labels = [];
-                        }
-                        if (dirty.has('images')) data.images = note.images || [];
-                    }
-
-                    if (shouldFullSync) {
-                        const encryptedNote = await encryptionStore.encryptNote({
-                            id: note.id,
-                            title: note.title,
-                            content: note.content,
-                            color: note.color,
-                            is_pinned: note.is_pinned,
-                            is_archived: note.is_archived,
-                            is_trashed: note.is_trashed,
-                            items: note.items,
-                            encrypted_note_key: note.encrypted_note_key
-                        });
-
-                        data = {
-                            title: encryptedNote.title,
-                            content: encryptedNote.content,
-                            color: encryptedNote.color,
-                            is_pinned: encryptedNote.is_pinned,
-                            is_archived: encryptedNote.is_archived,
-                            is_trashed: encryptedNote.is_trashed,
-                            items: encryptedNote.items,
-                            label_ids: note.labels || [],
-                            labels: [],
-                            images: note.images || [],
-                            encrypted: encryptedNote.encrypted,
-                            encrypted_note_key: encryptedNote.encrypted_note_key
-                        };
-                    }
-
-                    operations.push({
-                        op: 'update',
-                        id: note.id,
-                        data: data,
-                        version: note.version
-                    });
-                }
-            }
-
-            const res = await authFetch(`${API_URL}/notes/sync/batch`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ operations })
-            });
-
-            if (!res.ok) throw new Error('Sync push failed');
-
-            const { results } = await res.json();
-
-            // OPTIMIZATION: Batch process results - collect updates then bulk write
-            const notesToUpdate = [];
-            const idsToDelete = [];
-            const createsWithNewId = [];
-            const conflictsToResolve = [];
-            const notesToResurrect = [];
-
-            for (let i = 0; i < results.length; i++) {
-                const result = results[i];
-                const original = pendingNotes[i];
-
-                if (result.success) {
-                    if (result.op === 'create') {
-                        createsWithNewId.push({ original, result });
-                    } else if (result.op === 'delete') {
-                        idsToDelete.push(original.id);
-                    } else {
-                        // Update - collect for batch
-                        notesToUpdate.push({
-                            ...original,
-                            updated_at: result.updated_at,
-                            sync_status: SYNC_STATUS.SYNCED,
-                            sync_dirty_fields: []
-                        });
-                    }
-                } else if (result.status === 409 || result.error === 'Conflict') {
-                    conflictsToResolve.push({ original, result });
-                } else if (result.op === 'update' && result.error === 'Note not found') {
-                    notesToResurrect.push(original.id);
-                } else {
-                    logger.error('SYNC', 'Operation failed', result);
-                }
-            }
-
-            // OPTIMIZATION: Batch updates via worker (off main thread)
-            if (notesToUpdate.length > 0) {
-                try {
-                    await workerDb.notes.bulkPut(notesToUpdate);
-                } catch (e) {
-                    logger.error('SYNC', 'Worker bulk update failed, falling back', e);
-                    await db.notes.bulkPut(notesToUpdate);
-                }
-            }
-
-            // Handle creates with ID replacement (must be sequential)
-            for (const { original, result } of createsWithNewId) {
-                await db.transaction('rw', db.notes, async () => {
-                    await db.notes.delete(original.id);
-                    await db.notes.put({
-                        ...original,
-                        id: result.id,
-                        updated_at: result.updated_at,
-                        sync_status: SYNC_STATUS.SYNCED
-                    });
-                });
-            }
-
-            // Batch deletes
-            if (idsToDelete.length > 0) {
-                await db.notes.bulkDelete(idsToDelete);
-            }
-
-            // Resurrect notes not found on server
-            for (const id of notesToResurrect) {
-                logger.warn('SYNC', `Note ${id} not found on server. Resurrecting as new.`);
-                await db.notes.update(id, {
-                    sync_status: SYNC_STATUS.NEW,
-                    updated_at: new Date().toISOString()
-                });
-            }
-
-            // OPTIMIZATION: Defer conflict resolution to background (don't block sync)
-            if (conflictsToResolve.length > 0) {
-                queueMicrotask(async () => {
-                    for (const { original } of conflictsToResolve) {
-                        try {
-                            logger.warn('SYNC', `Resolving conflict for note ${original.id}...`);
-                            const res = await authFetch(`${API_URL}/notes/${original.id}`);
-                            if (res.ok) {
-                                const serverNote = await res.json();
-                                let decryptedServerNote;
-
-                                try {
-                                    const encStore = useEncryptionStore.getState();
-                                    decryptedServerNote = await encStore.decryptNote(serverNote);
-                                } catch (_e) {
-                                    decryptedServerNote = { ...serverNote, content: '[Decryption Failed]' };
-                                }
-
-                                const conflictId = uuidv4();
-                                const conflictNote = {
-                                    ...original,
-                                    id: conflictId,
-                                    title: `${original.title} (Conflict ${new Date().toLocaleTimeString()})`,
-                                    sync_status: SYNC_STATUS.NEW,
-                                    status: original.status || 'active',
-                                    version: 1,
-                                    updated_at: new Date().toISOString()
-                                };
-                                await db.notes.add(conflictNote);
-
-                                // Derive status for server note
-                                let serverStatus = 'active';
-                                if (decryptedServerNote.is_trashed) serverStatus = 'trashed';
-                                else if (decryptedServerNote.is_archived) serverStatus = 'archived';
-
-                                await db.notes.put({
-                                    ...decryptedServerNote,
-                                    status: serverStatus,
-                                    sync_status: SYNC_STATUS.SYNCED
-                                });
-                                logger.info('SYNC', `Conflict resolved: Created copy ${conflictId}`);
-                            }
-                        } catch (err) {
-                            logger.error('SYNC', 'Error resolving conflict', err);
-                        }
-                    }
-                });
-            }
-        } catch (error) {
-            logger.error('SYNC', 'Push sync failed', error);
-        }
+    const doProcessOfflineQueue = useCallback(async () => {
+        await processOfflineQueue(authFetch);
     }, [authFetch]);
 
     // Full sync with retry logic
     const sync = useCallback(async (retryCount = 0) => {
-
         if (globalSyncLock) return;
         globalSyncLock = true;
 
-        // Update sync status in store atomically
         useNotesStore.setState({ isSyncing: true });
 
         try {
-            // First upload any offline images and update note references
+            // 1. Upload any offline images
+            await doUploadOfflineImages();
 
-            await uploadOfflineImages();
+            // 2. Sync labels
+            await doPushLabels();
+            await doPullLabels();
 
-            // Sync labels
+            // 3. Process offline queue
+            await doProcessOfflineQueue();
 
-            await pushLabels();
+            // 4. Sync notes
+            await doPushChanges();
+            await doPullChanges();
 
-            await pullLabels();
-
-            // Process offline queue (unshares etc.)
-
-            await processOfflineQueue();
-
-            // Sync notes
-
-            await pushChanges();
-
-            await pullChanges();
-
-            // Atomic state update to prevent race conditions
-            // Check pending changes immediately after sync operations
+            // 5. Update state
             const pendingCount = await db.notes
                 .where('sync_status')
                 .anyOf([SYNC_STATUS.NEW, SYNC_STATUS.PENDING, SYNC_STATUS.DELETED])
@@ -828,37 +154,35 @@ export function useSync() {
             logger.error('SYNC', 'Sync failed', error);
             useNotesStore.setState({ isSyncing: false });
 
-            // Retry with exponential backoff (only if online)
+            // Retry with exponential backoff
             if (navigator.onLine && retryCount < MAX_RETRY_ATTEMPTS) {
                 const delay = INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount);
                 logger.info('SYNC', `Sync retry ${retryCount + 1}/${MAX_RETRY_ATTEMPTS} in ${delay}ms`);
-                globalSyncLock = false; // Allow retry
+                globalSyncLock = false;
                 setTimeout(() => sync(retryCount + 1), delay);
-                return; // Don't reset syncInProgress yet
+                return;
             }
         } finally {
             globalSyncLock = false;
         }
-    }, [uploadOfflineImages, pushLabels, pullLabels, pushChanges, pullChanges, processOfflineQueue]);
+    }, [doUploadOfflineImages, doPushLabels, doPullLabels, doPushChanges, doPullChanges, doProcessOfflineQueue]);
 
     // Auto-sync on mount and periodically
     useEffect(() => {
-
-        // Register sync function in store for manual trigger
+        // Register sync function in store
         useNotesStore.getState().setTriggerSync(sync);
-
 
         // Initial sync
         sync();
 
-        // Periodic sync every SYNC_INTERVAL_MS
+        // Periodic sync
         const interval = setInterval(sync, SYNC_INTERVAL_MS);
 
         // Sync on online event
         const handleOnline = () => sync();
         window.addEventListener('online', handleOnline);
 
-        // Sync on tab focus (visibility change)
+        // Sync on tab focus
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') {
                 sync();
@@ -873,5 +197,5 @@ export function useSync() {
         };
     }, [sync]);
 
-    return { sync, pushChanges, pullChanges };
+    return { sync, pushChanges: doPushChanges, pullChanges: doPullChanges };
 }
