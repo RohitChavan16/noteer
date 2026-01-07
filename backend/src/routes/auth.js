@@ -279,7 +279,7 @@ const validateRegister = [
     body('family_name').optional().trim().isLength({ max: 255 }),
 ];
 
-// Generate JWT token (no expiration - tokens are permanent)
+// Generate JWT token (expires after 90 days)
 function generateToken(user) {
     return jwt.sign(
         {
@@ -290,7 +290,8 @@ function generateToken(user) {
             family_name: user.family_name,
             isOidc: !!user.oidc_subject
         },
-        process.env.JWT_SECRET
+        process.env.JWT_SECRET,
+        { expiresIn: '90d' }
     );
 }
 
