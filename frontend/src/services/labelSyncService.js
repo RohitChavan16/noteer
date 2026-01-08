@@ -20,7 +20,10 @@ export async function pullLabels(authFetch) {
         if (!res.ok) throw new Error('Failed to fetch labels');
         const serverLabels = await res.json();
 
-        await db.transaction('rw', db.labels, db.notes, async () => {
+        // Phase 1: Sync labels in a quick transaction
+        const ghostLabels = [];
+
+        await db.transaction('rw', db.labels, async () => {
             for (const label of serverLabels) {
                 // Check if we have a pending local change
                 const local = await db.labels.get(label.id);
@@ -36,7 +39,7 @@ export async function pullLabels(authFetch) {
                 });
             }
 
-            // Delete local SYNCED labels that are missing from server (State Reconciliation)
+            // Identify ghost labels (synced locally but missing from server)
             const serverIds = new Set(serverLabels.map(l => l.id));
             const localSynced = await db.labels
                 .where('sync_status')
@@ -45,27 +48,37 @@ export async function pullLabels(authFetch) {
 
             for (const local of localSynced) {
                 if (!serverIds.has(local.id)) {
-                    logger.info('SYNC', 'Removing ghost label', { id: local.id, name: local.name });
-
-                    // 1. Delete label
+                    ghostLabels.push(local);
                     await db.labels.delete(local.id);
+                }
+            }
+        });
 
-                    // 2. Remove reference from all notes
-                    const affectedNotes = await db.notes
-                        .filter(n => Array.isArray(n.labels) && n.labels.includes(local.id))
-                        .toArray();
+        // Phase 2: Clean up ghost labels from notes (outside blocking transaction)
+        // This is done separately to avoid holding db.notes lock during network ops
+        if (ghostLabels.length > 0) {
+            const ghostIds = new Set(ghostLabels.map(l => l.id));
 
+            // Pre-fetch affected notes (single read, not inside write tx)
+            const allNotes = await db.notes.toArray();
+            const affectedNotes = allNotes.filter(n =>
+                Array.isArray(n.labels) && n.labels.some(lid => ghostIds.has(lid))
+            );
+
+            if (affectedNotes.length > 0) {
+                await db.transaction('rw', db.notes, async () => {
                     for (const note of affectedNotes) {
-                        const newLabels = note.labels.filter(lid => lid !== local.id);
+                        const newLabels = note.labels.filter(lid => !ghostIds.has(lid));
                         await db.notes.update(note.id, {
                             labels: newLabels,
                             updated_at: new Date().toISOString(),
                             sync_status: note.sync_status === SYNC_STATUS.NEW ? SYNC_STATUS.NEW : SYNC_STATUS.PENDING
                         });
                     }
-                }
+                });
+                logger.info('SYNC', `Cleaned ${affectedNotes.length} notes from ${ghostLabels.length} ghost labels`);
             }
-        });
+        }
     } catch (error) {
         logger.error('SYNC', 'Pull labels failed', error);
     }
