@@ -1,5 +1,4 @@
 import jwt from 'jsonwebtoken';
-import { query } from '../db/index.js';
 import { logger } from '../utils/logger.js';
 
 export function authenticateToken(req, res, next) {
@@ -47,22 +46,5 @@ export function requireAdmin(req, res, next) {
         return res.status(403).json({ error: 'Admin access required' });
     }
 
-    next();
-}
-
-export async function refreshUserData(req, res, next) {
-    if (req.user && req.user.id) {
-        try {
-            const result = await query(
-                'SELECT id, email, name, role FROM users WHERE id = $1',
-                [req.user.id]
-            );
-            if (result.rows.length > 0) {
-                req.user = result.rows[0];
-            }
-        } catch (_error) {
-            // Keep existing user data on error
-        }
-    }
     next();
 }
