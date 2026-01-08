@@ -2,8 +2,11 @@
  * Rate Limiting Middleware
  * 
  * Smart in-memory rate limiter for API protection.
- * Uses User ID (from JWT) when available, falls back to IP address.
+ * Uses User ID (from verified JWT via auth middleware) when available, falls back to IP address.
  * For production with multiple instances, use Redis-backed solution.
+ * 
+ * SECURITY: Only uses verified user IDs from req.user (set by auth middleware).
+ * Never parses unverified JWTs to prevent rate limit bypass attacks.
  */
 
 import { logger } from '../utils/logger.js';
@@ -20,27 +23,6 @@ setInterval(() => {
         }
     }
 }, 300000);
-
-/**
- * Extract user ID from JWT token (optimistic decode, no verification)
- * Verification happens later in auth middleware - this is just for rate limit key
- */
-function extractUserIdFromToken(req) {
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return null;
-        }
-        const token = authHeader.slice(7);
-        // Decode payload without verification (base64 decode middle part)
-        const parts = token.split('.');
-        if (parts.length !== 3) return null;
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-        return payload.userId || payload.sub || payload.id || null;
-    } catch {
-        return null;
-    }
-}
 
 /**
  * Create rate limiter middleware
@@ -60,18 +42,14 @@ export function rateLimit(options = {}) {
         keyGenerator = null,
     } = options;
 
-    // Default smart key generator: User ID (from token) -> IP address
+    // Default smart key generator: Verified User ID -> IP address
+    // SECURITY: Only use req.user which is set by auth middleware after JWT verification
     const getKey = keyGenerator || ((req) => {
-        // Try to get user ID from existing req.user (if auth ran first)
+        // Only use user ID if auth middleware has verified the token
         if (req.user && req.user.id) {
             return `user:${req.user.id}`;
         }
-        // Try optimistic JWT decode (for when limiter runs before auth)
-        const userId = extractUserIdFromToken(req);
-        if (userId) {
-            return `user:${userId}`;
-        }
-        // Fallback to IP address
+        // Fallback to IP address for unauthenticated requests
         return `ip:${req.ip}`;
     });
 
