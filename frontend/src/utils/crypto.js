@@ -388,22 +388,6 @@ export function base64ToBuffer(base64) {
     return bytes;
 }
 
-/**
- * Serialize encryption data for storage
- * @param {object} encryptedData - { ciphertext, iv, ... }
- * @returns {string} JSON string
- */
-export function serializeEncryptedData(encryptedData) {
-    return JSON.stringify(encryptedData);
-}
-
-/**
- * @returns {object}
- */
-export function deserializeEncryptedData(serialized) {
-    return JSON.parse(serialized);
-}
-
 // ============================================
 // Label Encryption (Master Key)
 // ============================================
