@@ -59,11 +59,12 @@ export async function pullLabels(authFetch) {
         if (ghostLabels.length > 0) {
             const ghostIds = new Set(ghostLabels.map(l => l.id));
 
-            // Pre-fetch affected notes (single read, not inside write tx)
-            const allNotes = await db.notes.toArray();
-            const affectedNotes = allNotes.filter(n =>
-                Array.isArray(n.labels) && n.labels.some(lid => ghostIds.has(lid))
-            );
+            // Use multiEntry index for efficient lookup (instead of full table scan)
+            const ghostIdsArray = Array.from(ghostIds);
+            const affectedNotes = await db.notes
+                .where('labels')
+                .anyOf(ghostIdsArray)
+                .toArray();
 
             if (affectedNotes.length > 0) {
                 await db.transaction('rw', db.notes, async () => {
@@ -128,8 +129,10 @@ export async function pushLabels(authFetch) {
 
                         // Update all notes that reference this temporary label ID
                         await db.transaction('rw', db.notes, db.labels, async () => {
+                            // Use multiEntry index for efficient lookup
                             const affectedNotes = await db.notes
-                                .filter(n => Array.isArray(n.labels) && n.labels.includes(label.id))
+                                .where('labels')
+                                .equals(label.id)
                                 .toArray();
 
                             for (const note of affectedNotes) {
