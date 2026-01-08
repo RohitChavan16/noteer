@@ -24,59 +24,78 @@ const EMPTY_ARRAY = [];
  */
 export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuery = '', labelId = null, limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        let notes;
+        let pinnedNotes = [];
+        let unpinnedNotes = [];
 
-        // Use indexed queries for better performance
         if (labelId) {
-            // Use *labels multiEntry index + filter for status
-            notes = await db.notes
+            // Label filter: use *labels multiEntry index, then split by pinned
+            const labelNotes = await db.notes
                 .where('labels').equals(labelId)
                 .filter(n => n.status === NOTE_STATUS.ACTIVE)
                 .toArray();
+
+            pinnedNotes = labelNotes.filter(n => n.is_pinned);
+            unpinnedNotes = labelNotes.filter(n => !n.is_pinned);
         } else {
-            // Use status index directly
-            notes = await db.notes
-                .where('status').equals(NOTE_STATUS.ACTIVE)
+            // Use compound index for optimized queries
+            // Fetch pinned and unpinned separately to leverage index ordering
+
+            // Pinned notes (status=active, is_pinned=1)
+            pinnedNotes = await db.notes
+                .where('[status+is_pinned+updated_at]')
+                .between(
+                    [NOTE_STATUS.ACTIVE, 1, ''],
+                    [NOTE_STATUS.ACTIVE, 1, '\uffff']
+                )
+                .reverse() // Most recent first
+                .toArray();
+
+            // Unpinned notes (status=active, is_pinned=0) - limited
+            unpinnedNotes = await db.notes
+                .where('[status+is_pinned+updated_at]')
+                .between(
+                    [NOTE_STATUS.ACTIVE, 0, ''],
+                    [NOTE_STATUS.ACTIVE, 0, '\uffff']
+                )
+                .reverse() // Most recent first
+                .limit(limit) // Apply limit at DB level
                 .toArray();
         }
 
-        // Filter by search query (still in-memory, search indexing would require full-text search)
+        // Filter by search query (still in-memory, would need full-text search index)
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
-            notes = notes.filter(n =>
+            const filterFn = n =>
                 (n.title && n.title.toLowerCase().includes(query)) ||
-                (n.content && n.content.toLowerCase().includes(query))
-            );
+                (n.content && n.content.toLowerCase().includes(query));
+            pinnedNotes = pinnedNotes.filter(filterFn);
+            unpinnedNotes = unpinnedNotes.filter(filterFn);
         }
 
-        // Sort (In-Memory - compound index already filters, sorting still needed for pinned)
-        const stripHtml = (html) => {
-            if (!html) return '';
-            return html.replace(/<[^>]*>/g, '').trim();
-        };
-
+        // Sort by title if requested (needs in-memory since we sort by title not updated_at)
         if (sortBy === 'title') {
-            notes.sort((a, b) => {
-                if (a.is_pinned && !b.is_pinned) return -1;
-                if (!a.is_pinned && b.is_pinned) return 1;
-
+            const stripHtml = (html) => {
+                if (!html) return '';
+                return html.replace(/<[^>]*>/g, '').trim();
+            };
+            const sortFn = (a, b) => {
                 const aText = (a.title && a.title.trim() ? a.title : stripHtml(a.content)).toLowerCase();
                 const bText = (b.title && b.title.trim() ? b.title : stripHtml(b.content)).toLowerCase();
                 const cmp = aText.localeCompare(bText);
                 return sortOrder === 'asc' ? cmp : -cmp;
-            });
-        } else {
-            notes.sort((a, b) => {
-                if (a.is_pinned && !b.is_pinned) return -1;
-                if (!a.is_pinned && b.is_pinned) return 1;
-
-                const aTime = new Date(a.created_at || 0).getTime();
-                const bTime = new Date(b.created_at || 0).getTime();
-                return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
-            });
+            };
+            pinnedNotes.sort(sortFn);
+            unpinnedNotes.sort(sortFn);
+        }
+        // For created_at, respect sortOrder
+        else if (sortOrder === 'asc') {
+            // Reverse both since we fetched desc
+            pinnedNotes.reverse();
+            unpinnedNotes.reverse();
         }
 
-        return notes.slice(0, limit);
+        // Combine: pinned first, then unpinned (already limited at DB level)
+        return [...pinnedNotes, ...unpinnedNotes].slice(0, limit);
 
     }, [sortBy, sortOrder, searchQuery, labelId, limit], EMPTY_ARRAY);
 }
@@ -90,27 +109,29 @@ export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuer
  */
 export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Use status index for efficient query
+        // Use compound index for efficient query with limit
         let notes = await db.notes
-            .where('status').equals(NOTE_STATUS.ARCHIVED)
+            .where('[status+is_pinned+updated_at]')
+            .between(
+                [NOTE_STATUS.ARCHIVED, 0, ''],
+                [NOTE_STATUS.ARCHIVED, 1, '\uffff'] // Include both pinned states
+            )
+            .reverse()
+            .limit(limit)
             .toArray();
 
-        // Sort
+        // Sort by title if requested
         if (sortBy === 'title') {
             notes.sort((a, b) => {
                 const aTitle = (a.title || '').toLowerCase();
                 const bTitle = (b.title || '').toLowerCase();
                 return sortOrder === 'asc' ? aTitle.localeCompare(bTitle) : bTitle.localeCompare(aTitle);
             });
-        } else {
-            notes.sort((a, b) => {
-                const aTime = new Date(a.updated_at || 0).getTime();
-                const bTime = new Date(b.updated_at || 0).getTime();
-                return sortOrder === 'desc' ? bTime - aTime : aTime - bTime;
-            });
+        } else if (sortOrder === 'asc') {
+            notes.reverse();
         }
 
-        return notes.slice(0, limit);
+        return notes;
     }, [sortBy, sortOrder, limit], EMPTY_ARRAY);
 }
 
@@ -122,22 +143,22 @@ export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', li
  */
 export function useTrashedNotes({ limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Use status index for efficient query
+        // Use compound index for efficient query with limit
         const notes = await db.notes
-            .where('status').equals(NOTE_STATUS.TRASHED)
-            .filter(n => n.sync_status !== 'deleted')
+            .where('[status+is_pinned+updated_at]')
+            .between(
+                [NOTE_STATUS.TRASHED, 0, ''],
+                [NOTE_STATUS.TRASHED, 1, '\uffff']
+            )
+            .reverse()
+            .limit(limit)
             .toArray();
 
-        logger.debug('HOOKS', 'useTrashedNotes found items', notes.length);
+        // Filter out deleted sync status (rare case, minimal overhead)
+        const filtered = notes.filter(n => n.sync_status !== 'deleted');
 
-        // Sort by updated_at desc
-        notes.sort((a, b) => {
-            const aTime = new Date(a.updated_at || 0).getTime();
-            const bTime = new Date(b.updated_at || 0).getTime();
-            return bTime - aTime;
-        });
-
-        return notes.slice(0, limit);
+        logger.debug('HOOKS', 'useTrashedNotes found items', filtered.length);
+        return filtered;
     }, [limit], EMPTY_ARRAY);
 }
 
