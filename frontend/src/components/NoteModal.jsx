@@ -33,6 +33,21 @@ import {
 
 import SortableChecklistItem from './SortableChecklistItem';
 
+/**
+ * Modal component for creating and editing notes.
+ * 
+ * Supports:
+ * - Text notes
+ * - Checklist notes (drag & drop)
+ * - Picture notes (upload & view)
+ * - Collaboration features (sharing)
+ * - Rich text formatting (updates content state)
+ * - Image handling via useNoteImages hook
+ * 
+ * @param {object} props
+ * @param {object|null} props.note - Note object to edit, or null. If null, modal is not rendered (but condition usually handled by parent).
+ * @param {Function} props.onClose - Callback when modal closes (handles save).
+ */
 export default function NoteModal({ note, onClose }) {
     const { colorScheme } = useMantineColorScheme();
     const isDark = colorScheme === 'dark';

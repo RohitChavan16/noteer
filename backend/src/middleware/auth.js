@@ -1,6 +1,14 @@
 import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger.js';
 
+/**
+ * Middleware to authenticate JWT token from Authorization header.
+ * Attaches decoded user data to req.user if valid.
+ * 
+ * @param {import('express').Request} req - Express Request object
+ * @param {import('express').Response} res - Express Response object
+ * @param {import('express').NextFunction} next - Express Next function
+ */
 export function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -22,6 +30,12 @@ export function authenticateToken(req, res, next) {
     }
 }
 
+/**
+ * Middleware factory to enforce role-based access control.
+ * 
+ * @param {...string} roles - Allowed roles (e.g. 'admin', 'user')
+ * @returns {Function} Express middleware
+ */
 export function requireRole(...roles) {
     return (req, res, next) => {
         if (!req.user) {
@@ -37,6 +51,13 @@ export function requireRole(...roles) {
 }
 
 // Convenience middleware for admin-only routes
+/**
+ * Middleware to require 'admin' role.
+ * 
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ */
 export function requireAdmin(req, res, next) {
     if (!req.user) {
         return res.status(401).json({ error: 'Authentication required' });

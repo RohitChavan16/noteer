@@ -56,6 +56,18 @@ const getCollabsQuery = `(SELECT json_agg(json_build_object(
 )) FROM note_shares ns JOIN users u ON ns.shared_with_id = u.id WHERE ns.note_id = n.id)`;
 
 // GET /api/notes - List notes (owned + shared with me)
+/**
+ * GET /api/notes
+ * List all notes accessible to the user (owned and shared).
+ * 
+ * Supports filtering by:
+ * - archived (true/false)
+ * - trashed (true/false)
+ * - label (label ID)
+ * - search (text query)
+ * 
+ * Supports pagination via limit/offset.
+ */
 router.get('/', async (req, res, next) => {
     try {
         const { archived, trashed, label, search } = req.query;
@@ -177,6 +189,10 @@ router.get('/', async (req, res, next) => {
 });
 
 // GET /api/notes/:id - Get single note
+/**
+ * GET /api/notes/:id
+ * Retrieve a single note by ID (if owned or shared).
+ */
 router.get('/:id', param('id').isInt(), async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -206,6 +222,11 @@ router.get('/:id', param('id').isInt(), async (req, res, next) => {
 });
 
 // POST /api/notes - Create note
+/**
+ * POST /api/notes
+ * Create a new note. 
+ * Body: { title, content, type... }
+ */
 router.post('/', validateNote, async (req, res, next) => {
     try {
         const errors = validationResult(req);
@@ -259,6 +280,11 @@ router.post('/', validateNote, async (req, res, next) => {
 });
 
 // PATCH /api/notes/:id - Update note
+/**
+ * PATCH /api/notes/:id
+ * Update an existing note.
+ * Handles update rights (owner vs shared) and versioning.
+ */
 router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, next) => {
     try {
         const errors = validationResult(req);
@@ -405,6 +431,10 @@ router.patch('/:id', [param('id').isInt(), ...validateNote], async (req, res, ne
 });
 
 // POST /api/notes/:id/trash - Move to trash
+/**
+ * POST /api/notes/:id/trash
+ * Soft delete a note (move to trash).
+ */
 router.post('/:id/trash', param('id').isInt(), async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -428,6 +458,10 @@ router.post('/:id/trash', param('id').isInt(), async (req, res, next) => {
 });
 
 // POST /api/notes/:id/restore - Restore from trash
+/**
+ * POST /api/notes/:id/restore
+ * Restore a note from trash.
+ */
 router.post('/:id/restore', param('id').isInt(), async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -451,6 +485,10 @@ router.post('/:id/restore', param('id').isInt(), async (req, res, next) => {
 });
 
 // DELETE /api/notes/:id - Permanently delete note
+/**
+ * DELETE /api/notes/:id
+ * Permanently purge a note from the database. This action is irreversible.
+ */
 router.delete('/:id', param('id').isInt(), async (req, res, next) => {
     try {
         const { id } = req.params;
