@@ -2,23 +2,79 @@ import { useState, useCallback } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
 import { generateId } from '../utils/helpers';
 
+const STORAGE_KEY = 'noteer-checklist-completed-expanded';
+
 /**
  * Custom hook for managing checklist items with drag-and-drop support
  * Extracted from NoteModal to reduce component complexity
+ * @param {Array} initialItems - Initial checklist items
+ * @param {Object} options - Hook options
+ * @param {boolean} options.persistExpanded - Whether to persist expanded state to localStorage
  */
-export function useChecklist(initialItems = []) {
+export function useChecklist(initialItems = [], { persistExpanded = true } = {}) {
     const [items, setItems] = useState(
         initialItems.map(item => ({
             ...item,
             id: item.id || generateId()
         }))
     );
-    const [completedExpanded, setCompletedExpanded] = useState(true);
+
+    // New item input state
+    const [newItemText, setNewItemText] = useState('');
+
+    // Completed section expanded state with localStorage persistence
+    const [completedExpanded, setCompletedExpanded] = useState(() => {
+        if (!persistExpanded || typeof window === 'undefined') return true;
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            return stored !== null ? JSON.parse(stored) : true;
+        } catch {
+            return true;
+        }
+    });
 
     const toggleCompletedExpanded = useCallback(() => {
-        setCompletedExpanded(prev => !prev);
-    }, []);
+        setCompletedExpanded(prev => {
+            const newVal = !prev;
+            if (persistExpanded) {
+                queueMicrotask(() => {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal));
+                });
+            }
+            return newVal;
+        });
+    }, [persistExpanded]);
 
+    /**
+     * Add an item with content (from the input field)
+     * Clears newItemText after adding
+     * @returns {string|null} New item ID or null if empty
+     */
+    const addItemWithContent = useCallback(() => {
+        const text = newItemText.trim();
+        if (!text) return null;
+
+        const newItem = { id: generateId(), content: text, is_checked: false };
+
+        setItems(currentItems => {
+            const firstCheckedIndex = currentItems.findIndex(i => i.is_checked);
+            if (firstCheckedIndex === -1) {
+                return [...currentItems, newItem];
+            }
+            const updated = [...currentItems];
+            updated.splice(firstCheckedIndex, 0, newItem);
+            return updated;
+        });
+
+        setNewItemText('');
+        return newItem.id;
+    }, [newItemText]);
+
+    /**
+     * Add an empty item (for inline editing)
+     * @param {string|null} beforeUncheckedId - Insert before this item
+     * @returns {string} New item ID
+     */
     const addItem = useCallback((beforeUncheckedId = null) => {
         const newItem = { id: generateId(), content: '', is_checked: false };
 
@@ -26,20 +82,19 @@ export function useChecklist(initialItems = []) {
             if (beforeUncheckedId) {
                 const idx = currentItems.findIndex(i => i.id === beforeUncheckedId);
                 if (idx !== -1) {
-                    const newItems = [...currentItems];
-                    newItems.splice(idx, 0, newItem);
-                    return newItems;
+                    const updated = [...currentItems];
+                    updated.splice(idx, 0, newItem);
+                    return updated;
                 }
             }
 
-            // Add at end of unchecked items (before checked ones)
             const firstCheckedIdx = currentItems.findIndex(i => i.is_checked);
             if (firstCheckedIdx === -1) {
                 return [...currentItems, newItem];
             }
-            const newItems = [...currentItems];
-            newItems.splice(firstCheckedIdx, 0, newItem);
-            return newItems;
+            const updated = [...currentItems];
+            updated.splice(firstCheckedIdx, 0, newItem);
+            return updated;
         });
 
         return newItem.id;
@@ -54,16 +109,25 @@ export function useChecklist(initialItems = []) {
             const itemIndex = currentItems.findIndex(i => i.id === id);
             if (itemIndex === -1) return currentItems;
 
-            const newItems = [...currentItems];
-            newItems[itemIndex] = {
-                ...newItems[itemIndex],
-                is_checked: !newItems[itemIndex].is_checked
-            };
+            const item = currentItems[itemIndex];
+            const newItem = { ...item, is_checked: !item.is_checked };
 
-            // Reorder: unchecked first, then checked
-            const unchecked = newItems.filter(i => !i.is_checked);
-            const checked = newItems.filter(i => i.is_checked);
-            return [...unchecked, ...checked];
+            const updated = [...currentItems];
+            updated.splice(itemIndex, 1);
+
+            if (newItem.is_checked) {
+                // Move to end (completed)
+                updated.push(newItem);
+            } else {
+                // Move back to active list
+                const firstCheckedIndex = updated.findIndex(i => i.is_checked);
+                if (firstCheckedIndex === -1) {
+                    updated.push(newItem);
+                } else {
+                    updated.splice(firstCheckedIndex, 0, newItem);
+                }
+            }
+            return updated;
         });
     }, []);
 
@@ -103,7 +167,10 @@ export function useChecklist(initialItems = []) {
         checkedItems,
         completedExpanded,
         toggleCompletedExpanded,
+        newItemText,
+        setNewItemText,
         addItem,
+        addItemWithContent,
         removeItem,
         toggleItemCheck,
         updateItemContent,
