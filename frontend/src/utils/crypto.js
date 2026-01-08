@@ -10,6 +10,7 @@
  */
 
 import * as bip39 from 'bip39';
+import { logger } from './logger';
 
 // Local implementations of bytesToHex/hexToBytes (avoiding @noble/hashes/utils subpath import issues)
 export function bytesToHex(bytes) {
@@ -433,7 +434,7 @@ export async function decryptLabel(encryptedBlob, masterKey) {
         const { ciphertext, iv } = JSON.parse(encryptedBlob);
         return await decryptContent(ciphertext, iv, masterKey);
     } catch (e) {
-        console.error('Label decryption failed:', e);
+        logger.error('CRYPTO', 'Label decryption failed', e);
         return '[Encrypted Label]';
     }
 }
