@@ -214,15 +214,18 @@ export default function NoteModal({ note, onClose }) {
                                             radius={0}
                                             style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top' }}
                                         />
-                                        <ActionIcon
-                                            variant="filled"
-                                            color="rgba(0,0,0,0.6)"
-                                            size="sm"
-                                            style={{ position: 'absolute', bottom: 4, right: 4 }}
-                                            onClick={(e) => { e.stopPropagation(); removeImage(index); }}
-                                        >
-                                            <IconTrash size={14} color="white" />
-                                        </ActionIcon>
+                                        {/* Hide delete button for picture-only notes with single image */}
+                                        {!(isPicture && images.length === 1) && (
+                                            <ActionIcon
+                                                variant="filled"
+                                                color="rgba(0,0,0,0.6)"
+                                                size="sm"
+                                                style={{ position: 'absolute', bottom: 4, right: 4 }}
+                                                onClick={(e) => { e.stopPropagation(); removeImage(index); }}
+                                            >
+                                                <IconTrash size={14} color="white" />
+                                            </ActionIcon>
+                                        )}
                                     </Box>
                                 ))}
                             </SimpleGrid>
