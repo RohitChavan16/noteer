@@ -31,10 +31,17 @@ export default function App() {
     const { loginWithToken } = useAuthStore();
     const navigate = useNavigate();
 
+    // Helper to parse hash fragment as URLSearchParams
+    const getHashParams = () => {
+        const hash = window.location.hash.slice(1); // Remove leading #
+        return new URLSearchParams(hash);
+    };
+
     // Check for token synchronously during initialization to prevent
     // ProtectedRoute from redirecting before we can verify
+    // SECURITY: Token is passed via hash fragment (not logged by servers/proxies)
     const [isVerifying, setIsVerifying] = useState(() => {
-        return !!new URLSearchParams(window.location.search).get('token');
+        return !!getHashParams().get('token');
     });
 
     useEffect(() => {
@@ -51,16 +58,15 @@ export default function App() {
     }, []);
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
+        // SECURITY: Read token from hash fragment (not visible to server)
+        const params = getHashParams();
         const token = params.get('token');
-
-
 
         if (token) {
             // Verification already active via initial state
             loginWithToken(token).then(success => {
                 if (success) {
-                    // Remove token from URL without refresh
+                    // Remove token from URL (clear hash) without refresh
                     window.history.replaceState({}, document.title, window.location.pathname);
                 } else {
                     // Token invalid/expired

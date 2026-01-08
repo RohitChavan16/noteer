@@ -252,10 +252,14 @@ router.get('/callback', async (req, res) => {
         res.clearCookie('oidc_session');
         res.clearCookie('oidc_verifier'); // Cleanup old cookie if exists
 
-        // Redirect to frontend with token and encryption status
-        // In a SPA, we usually redirect to a page that grabs the token from query param
+        // Redirect to frontend with token in hash fragment (not logged by servers/proxies)
+        // SECURITY: Using hash fragment (#) instead of query param (?) to prevent token exposure in:
+        // - Server access logs
+        // - Proxy logs  
+        // - Browser history (partially)
+        // - Referer headers
         const hasEncryptionKey = user.public_key ? '1' : '0';
-        res.redirect(`/?token=${token}&enc=${hasEncryptionKey}`);
+        res.redirect(`/#token=${token}&enc=${hasEncryptionKey}`);
 
     } catch (error) {
         logger.error('OIDC', 'Authentication failed', error);
