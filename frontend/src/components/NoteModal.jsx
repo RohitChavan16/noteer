@@ -75,6 +75,7 @@ export default function NoteModal({ note, onClose }) {
 
         // If updated_at changed, this is an external update (e.g. from sync)
         if (note.updated_at !== lastUpdatedAt.current) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setTitle(note.title || '');
             setContent(note.content || '');
             setColor(note.color || 'default');
