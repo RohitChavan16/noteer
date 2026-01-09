@@ -135,15 +135,12 @@ export async function pullChanges(authFetch, setVersionSyncQueue) {
             idsToDelete.push(id);
         }
 
-        // Phase 2: Bulk write via worker
+        // Phase 2: Bulk write to main thread DB (for useLiveQuery reactivity)
+        // Note: Using main thread db instead of workerDb so that useLiveQuery hooks
+        // in components like NoteModal can react to changes in real-time
         if (notesToWrite.length > 0) {
-            try {
-                await workerDb.notes.bulkPut(notesToWrite);
-                logger.debug('SYNC', `[pullChanges] Worker bulk-wrote ${notesToWrite.length} notes`);
-            } catch (e) {
-                logger.error('SYNC', 'Worker bulk write failed, falling back to main thread', e);
-                await db.notes.bulkPut(notesToWrite);
-            }
+            await db.notes.bulkPut(notesToWrite);
+            logger.debug('SYNC', `[pullChanges] Bulk-wrote ${notesToWrite.length} notes`);
         }
 
         // Phase 3: Handle deletions
@@ -425,6 +422,23 @@ function resolveConflicts(conflicts, authFetch) {
                         decryptedServerNote = { ...serverNote, content: '[Decryption Failed]' };
                     }
 
+                    // For shared notes (non-owners), just accept server version without creating conflict copy
+                    // Only the owner should have conflict copies as they "own" the note
+                    if (original.is_owner === false) {
+                        logger.info('SYNC', `Shared note conflict - accepting server version for ${original.id}`);
+                        let serverStatus = 'active';
+                        if (decryptedServerNote.is_trashed) serverStatus = 'trashed';
+                        else if (decryptedServerNote.is_archived) serverStatus = 'archived';
+
+                        await db.notes.put({
+                            ...decryptedServerNote,
+                            status: serverStatus,
+                            sync_status: SYNC_STATUS.SYNCED
+                        });
+                        continue;
+                    }
+
+                    // Owner - create conflict copy with their local changes
                     const conflictId = uuidv4();
                     const conflictNote = {
                         ...original,
@@ -433,7 +447,11 @@ function resolveConflicts(conflicts, authFetch) {
                         sync_status: SYNC_STATUS.NEW,
                         status: original.status || 'active',
                         version: 1,
-                        updated_at: new Date().toISOString()
+                        updated_at: new Date().toISOString(),
+                        // Don't copy sharing - this is owner's personal conflict copy
+                        is_owner: true,
+                        collaborators: [],
+                        shared_note_key: null
                     };
                     await db.notes.add(conflictNote);
 

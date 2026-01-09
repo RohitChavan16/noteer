@@ -119,9 +119,13 @@ export default function NoteRichTextEditor({ content, onChange, showToolbar, isD
         if (editor && content !== editor.getHTML()) {
             // Check if it's just a p tag wrapper difference or empty
             if (editor.isEmpty && !content) return;
-            // We generally avoid forcing content update from prop to avoid loop issues, 
-            // but for initial load it's needed. 
-            // Ideally parent handles 'initialContent' separately.
+
+            // ACTUAL FIX: Update the editor content
+            // We use emitUpdate: false to prevent triggering onUpdate loop if possible, 
+            // though Tiptap v2 might not support this option in setContent directly straightforwardly without transaction.
+            // But standard behavior is: setContent -> triggers onUpdate -> triggers onChange.
+            // We must handle the loop in the parent or ensure equality check blocks it.
+            editor.commands.setContent(content);
         }
     }, [content, editor]);
 

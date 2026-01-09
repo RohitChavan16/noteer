@@ -77,29 +77,41 @@ export default function ShareModal({ opened, onClose, note, onShareChange }) {
 
             // 1. Prepare encryption key if note is encrypted
             const { isUnlocked, getEncryptedKeyForRecipient, noteKeysCache, decryptNote } = useEncryptionStore.getState();
-            if (isUnlocked && note.encrypted) {
+
+            // If we have the note key cached, the note is encrypted and we should share the key
+            // If not cached but note.encrypted is true, try to decrypt to get the key
+            if (isUnlocked && (noteKeysCache.has(note.id) || note.encrypted)) {
                 try {
-                    // Ensure note key is cached by decrypting the note first if needed
-                    if (!noteKeysCache.has(note.id)) {
-                        await decryptNote(note);
+                    // Try to cache the note key if not already cached
+                    if (!noteKeysCache.has(note.id) && note.encrypted) {
+                        // We need to fetch fresh note data from local DB to ensure we have encrypted content
+                        try {
+                            const freshNote = await db.notes.get(note.id);
+                            if (freshNote) {
+                                await decryptNote(freshNote);
+                            }
+                        } catch (dbError) {
+                            logger.warn('UI', 'Failed to fetch fresh note from DB', dbError);
+                        }
                     }
 
-                    // Get recipient's public key
-                    const pubKeyRes = await authFetch(`${API_URL}/encryption/public-key/${userId}`);
-                    if (pubKeyRes.ok) {
-                        const { publicKey } = await pubKeyRes.json();
-                        // Encrypt note key for recipient
-                        encryptedKey = await getEncryptedKeyForRecipient(note.id, publicKey);
+                    // If we have the key cached, prepare encrypted_key for recipient
+                    if (noteKeysCache.has(note.id)) {
+                        const pubKeyRes = await authFetch(`${API_URL}/encryption/public-key/${userId}`);
+                        if (pubKeyRes.ok) {
+                            const { publicKey } = await pubKeyRes.json();
+                            encryptedKey = await getEncryptedKeyForRecipient(note.id, publicKey);
+                        } else {
+                            // Recipient doesn't have encryption set up - cannot share encrypted note
+                            setError('Cannot share encrypted note: recipient has not set up encryption');
+                            return;
+                        }
                     } else {
-                        // Recipient doesn't have encryption set up - cannot share encrypted note
-                        setError('Cannot share encrypted note: recipient has not set up encryption');
-                        return;
+                        logger.warn('UI', 'Note marked encrypted but key not available, sharing without encrypted_key');
                     }
                 } catch (encError) {
                     logger.warn('UI', 'Failed to prepare share key', encError);
-                    // Block sharing if we can't prepare the encryption key for encrypted notes
-                    setError('Failed to prepare encryption key for sharing. Please try again.');
-                    return;
+                    // Share anyway, recipient might not be able to decrypt corrupted notes
                 }
             }
 

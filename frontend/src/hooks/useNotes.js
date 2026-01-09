@@ -37,29 +37,22 @@ export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuer
             pinnedNotes = labelNotes.filter(n => n.is_pinned);
             unpinnedNotes = labelNotes.filter(n => !n.is_pinned);
         } else {
-            // Use compound index for optimized queries
-            // Fetch pinned and unpinned separately to leverage index ordering
-
-            // Pinned notes (status=active, is_pinned=1)
-            pinnedNotes = await db.notes
-                .where('[status+is_pinned+updated_at]')
-                .between(
-                    [NOTE_STATUS.ACTIVE, 1, ''],
-                    [NOTE_STATUS.ACTIVE, 1, '\uffff']
-                )
-                .reverse() // Most recent first
+            // Query by status only (avoids is_pinned type mismatch issues)
+            // Then filter by is_pinned in memory
+            const allActiveNotes = await db.notes
+                .where('status').equals(NOTE_STATUS.ACTIVE)
                 .toArray();
 
-            // Unpinned notes (status=active, is_pinned=0) - limited
-            unpinnedNotes = await db.notes
-                .where('[status+is_pinned+updated_at]')
-                .between(
-                    [NOTE_STATUS.ACTIVE, 0, ''],
-                    [NOTE_STATUS.ACTIVE, 0, '\uffff']
-                )
-                .reverse() // Most recent first
-                .limit(limit) // Apply limit at DB level
-                .toArray();
+            pinnedNotes = allActiveNotes.filter(n => n.is_pinned);
+            unpinnedNotes = allActiveNotes.filter(n => !n.is_pinned);
+
+            // Sort by updated_at descending
+            const sortByDate = (a, b) => (b.updated_at || '').localeCompare(a.updated_at || '');
+            pinnedNotes.sort(sortByDate);
+            unpinnedNotes.sort(sortByDate);
+
+            // Apply limit to unpinned
+            unpinnedNotes = unpinnedNotes.slice(0, limit);
         }
 
         // Filter by search query (still in-memory, would need full-text search index)
@@ -109,16 +102,16 @@ export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuer
  */
 export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Use compound index for efficient query with limit
+        // Query by status only (avoids is_pinned type mismatch issues)
         let notes = await db.notes
-            .where('[status+is_pinned+updated_at]')
-            .between(
-                [NOTE_STATUS.ARCHIVED, 0, ''],
-                [NOTE_STATUS.ARCHIVED, 1, '\uffff'] // Include both pinned states
-            )
-            .reverse()
-            .limit(limit)
+            .where('status').equals(NOTE_STATUS.ARCHIVED)
             .toArray();
+
+        // Sort by updated_at descending
+        notes.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+
+        // Apply limit
+        notes = notes.slice(0, limit);
 
         // Sort by title if requested
         if (sortBy === 'title') {
@@ -143,16 +136,16 @@ export function useArchivedNotes({ sortBy = 'updated_at', sortOrder = 'desc', li
  */
 export function useTrashedNotes({ limit = 20 } = {}) {
     return useLiveQuery(async () => {
-        // Use compound index for efficient query with limit
-        const notes = await db.notes
-            .where('[status+is_pinned+updated_at]')
-            .between(
-                [NOTE_STATUS.TRASHED, 0, ''],
-                [NOTE_STATUS.TRASHED, 1, '\uffff']
-            )
-            .reverse()
-            .limit(limit)
+        // Query by status only (avoids is_pinned type mismatch issues)
+        let notes = await db.notes
+            .where('status').equals(NOTE_STATUS.TRASHED)
             .toArray();
+
+        // Sort by updated_at descending
+        notes.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+
+        // Apply limit
+        notes = notes.slice(0, limit);
 
         // Filter out deleted sync status (rare case, minimal overhead)
         const filtered = notes.filter(n => n.sync_status !== 'deleted');

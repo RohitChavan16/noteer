@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Box, Text, Stack, Center } from '@mantine/core';
 import { IconNote } from '@tabler/icons-react';
+import Masonry from 'react-masonry-css';
 import NoteCard from './NoteCard';
 import NoteModal from './NoteModal';
 import VersionHistoryModal from './VersionHistoryModal';
@@ -77,9 +78,13 @@ export default function NoteGrid({ notes, showRestore, showDelete, showUnarchive
     const isTouchDevice = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
     const effectiveViewMode = isTouchDevice ? 'list' : viewMode;
 
-    const gridStyles = effectiveViewMode === 'list'
-        ? { maxWidth: 600, margin: '0 auto' }
-        : { columnCount: 4, columnGap: 16 };
+    // Masonry breakpoint columns configuration
+    const masonryBreakpointColumns = {
+        default: 4,
+        1400: 3,
+        1000: 2,
+        600: 1
+    };
 
     const handleSelectAll = useCallback(() => {
         const ids = notes.map(n => n.id);
@@ -97,31 +102,59 @@ export default function NoteGrid({ notes, showRestore, showDelete, showUnarchive
                     {title}
                 </Text>
             )}
-            <Box style={gridStyles}>
-                {noteList.map((note) => (
-                    <NoteCard
-                        key={note.id}
-                        note={note}
-                        labelsMap={labelsMap}
-                        onClick={handleNoteClick}
-                        onPin={!isTrash ? pinNote : undefined}
-                        onArchive={!isTrash && !isArchive ? archiveNote : undefined}
-                        onUnarchive={isArchive ? unarchiveNote : undefined}
-                        onRestore={isTrash ? restoreNote : undefined}
-                        onTrash={!isTrash ? trashNote : undefined}
-                        onDelete={isTrash ? deleteNote : undefined}
-                        onItemToggle={!isTrash ? handleItemToggle : undefined}
-                        onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
-                        onLabelsChange={!isTrash ? handleLabelsChange : undefined}
-                        onShare={!isTrash ? handleShare : undefined}
-
-                        // Selection Props
-                        selectionMode={isSelectionMode}
-                        isSelected={selectedNoteIds.includes(note.id)}
-                        onToggleSelect={toggleNoteSelection}
-                    />
-                ))}
-            </Box>
+            {effectiveViewMode === 'list' ? (
+                <Box style={{ maxWidth: 600, margin: '0 auto' }}>
+                    {noteList.map((note) => (
+                        <NoteCard
+                            key={note.id}
+                            note={note}
+                            labelsMap={labelsMap}
+                            onClick={handleNoteClick}
+                            onPin={!isTrash ? pinNote : undefined}
+                            onArchive={!isTrash && !isArchive ? archiveNote : undefined}
+                            onUnarchive={isArchive ? unarchiveNote : undefined}
+                            onRestore={isTrash ? restoreNote : undefined}
+                            onTrash={!isTrash ? trashNote : undefined}
+                            onDelete={isTrash ? deleteNote : undefined}
+                            onItemToggle={!isTrash ? handleItemToggle : undefined}
+                            onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
+                            onLabelsChange={!isTrash ? handleLabelsChange : undefined}
+                            onShare={!isTrash ? handleShare : undefined}
+                            selectionMode={isSelectionMode}
+                            isSelected={selectedNoteIds.includes(note.id)}
+                            onToggleSelect={toggleNoteSelection}
+                        />
+                    ))}
+                </Box>
+            ) : (
+                <Masonry
+                    breakpointCols={masonryBreakpointColumns}
+                    className="masonry-grid"
+                    columnClassName="masonry-grid-column"
+                >
+                    {noteList.map((note) => (
+                        <NoteCard
+                            key={note.id}
+                            note={note}
+                            labelsMap={labelsMap}
+                            onClick={handleNoteClick}
+                            onPin={!isTrash ? pinNote : undefined}
+                            onArchive={!isTrash && !isArchive ? archiveNote : undefined}
+                            onUnarchive={isArchive ? unarchiveNote : undefined}
+                            onRestore={isTrash ? restoreNote : undefined}
+                            onTrash={!isTrash ? trashNote : undefined}
+                            onDelete={isTrash ? deleteNote : undefined}
+                            onItemToggle={!isTrash ? handleItemToggle : undefined}
+                            onVersionHistory={!isTrash ? setVersionHistoryNoteId : undefined}
+                            onLabelsChange={!isTrash ? handleLabelsChange : undefined}
+                            onShare={!isTrash ? handleShare : undefined}
+                            selectionMode={isSelectionMode}
+                            isSelected={selectedNoteIds.includes(note.id)}
+                            onToggleSelect={toggleNoteSelection}
+                        />
+                    ))}
+                </Masonry>
+            )}
         </>
     );
 
@@ -197,14 +230,17 @@ export default function NoteGrid({ notes, showRestore, showDelete, showUnarchive
             />
 
             <style>{`
-                @media (max-width: 1400px) {
-                    .mantine-Box-root { column-count: 3 !important; }
+                .masonry-grid {
+                    display: flex;
+                    margin-left: -16px;
+                    width: auto;
                 }
-                @media (max-width: 1000px) {
-                    .mantine-Box-root { column-count: 2 !important; }
+                .masonry-grid-column {
+                    padding-left: 16px;
+                    background-clip: padding-box;
                 }
-                @media (max-width: 600px) {
-                    .mantine-Box-root { column-count: 1 !important; }
+                .masonry-grid-column > div {
+                    margin-bottom: 16px;
                 }
             `}</style>
         </>

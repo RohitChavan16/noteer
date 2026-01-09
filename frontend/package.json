@@ -38,6 +38,7 @@
         "lodash": "^4.17.21",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
+        "react-masonry-css": "^1.0.16",
         "react-router-dom": "^7.11.0",
         "uuid": "^11.1.0",
         "zustand": "^5.0.9"

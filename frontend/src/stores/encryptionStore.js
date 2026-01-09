@@ -328,6 +328,13 @@ export const useEncryptionStore = create((set, get) => ({
 
         if (!note.encrypted && !hasEncryptedContent) return note;
 
+        // DEFENSIVE CHECK: If encrypted flag is true but content is plain text (not JSON),
+        // return note as-is. This handles corrupted data or notes created with mismatched flags.
+        if (note.encrypted && !hasEncryptedContent) {
+            logger.warn('CRYPTO', `Note ${note.id} has encrypted=true but content is not encrypted JSON. Returning as-is.`);
+            return note;
+        }
+
         const { masterKey, privateKey, noteKeysCache } = get();
         if (!masterKey || !privateKey) throw new Error('Encryption not unlocked');
 

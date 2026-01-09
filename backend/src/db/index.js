@@ -169,6 +169,16 @@ export async function initializeDatabase() {
     -- Explicit composite index to satisfy query optimizer/Skeptical Dev
     CREATE INDEX IF NOT EXISTS idx_note_keys_composite ON note_keys(note_id, user_id);
 
+    -- Share tombstones (tracks when a user was unshared, for sync cleanup)
+    CREATE TABLE IF NOT EXISTS share_tombstones (
+      id SERIAL PRIMARY KEY,
+      note_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(note_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_share_tombstones_user_created ON share_tombstones(user_id, created_at);
+
     -- App settings (key-value store for runtime configuration)
     CREATE TABLE IF NOT EXISTS app_settings (
       key VARCHAR(100) PRIMARY KEY,

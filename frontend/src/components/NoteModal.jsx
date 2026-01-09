@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNotesStore } from '../stores/notesStore';
 import { useLabelsMap } from '../hooks/useLabels';
 import { useChecklist } from '../hooks/useChecklist';
@@ -55,7 +55,7 @@ export default function NoteModal({ note, onClose }) {
     const { updateNote } = useNotesStore();
     const labelsMap = useLabelsMap();
 
-    // Form state
+    // Form state - initialized from note prop
     const [title, setTitle] = useState(note?.title || '');
     const [content, setContent] = useState(note?.content || '');
     const [color, setColor] = useState(note?.color || 'default');
@@ -64,6 +64,49 @@ export default function NoteModal({ note, onClose }) {
     const [showFormatting, setShowFormatting] = useState(false);
     const [shareModalOpen, setShareModalOpen] = useState(false);
     const [isShared, setIsShared] = useState(note?.is_shared || false);
+
+    // Track if user has made local edits (to avoid overwriting with external changes)
+    const hasLocalEdits = useRef(false);
+    const lastUpdatedAt = useRef(note?.updated_at);
+
+    // Sync state when note prop changes (external updates)
+    useEffect(() => {
+        if (!note || hasLocalEdits.current) return;
+
+        // If updated_at changed, this is an external update (e.g. from sync)
+        if (note.updated_at !== lastUpdatedAt.current) {
+            setTitle(note.title || '');
+            setContent(note.content || '');
+            setColor(note.color || 'default');
+            setLabels(note.labels || []);
+            setIsShared(note.is_shared || false);
+            lastUpdatedAt.current = note.updated_at;
+        }
+    }, [note]);
+
+    // Wrap setters to track local edits
+    const handleTitleChange = (e) => {
+        const newValue = e.currentTarget.value;
+        // Verify it's actually different from current consistent state to avoid false positives
+        if (newValue !== title) {
+            hasLocalEdits.current = true;
+            setTitle(newValue);
+        }
+    };
+
+    const handleContentChange = (newContent) => {
+        // Prevent marking as local edit if content matches what we just synced
+        // This is crucial because Tiptap fires onChange when we setContent programmatically
+        if (newContent === note?.content && !hasLocalEdits.current) {
+            return;
+        }
+
+        // Also check against current state to avoid redundant updates
+        if (newContent !== content) {
+            hasLocalEdits.current = true;
+            setContent(newContent);
+        }
+    };
 
     // Checklist hook
     const {
@@ -251,7 +294,7 @@ export default function NoteModal({ note, onClose }) {
                             <TextInput
                                 placeholder="Title"
                                 value={title}
-                                onChange={(e) => setTitle(e.currentTarget.value)}
+                                onChange={handleTitleChange}
                                 variant="unstyled"
                                 maxLength={200}
                                 size="lg"
@@ -331,7 +374,7 @@ export default function NoteModal({ note, onClose }) {
                         ) : (
                             <NoteRichTextEditor
                                 content={content}
-                                onChange={setContent}
+                                onChange={handleContentChange}
                                 showToolbar={showFormatting}
                                 isDark={isDark}
                             />

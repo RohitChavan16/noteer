@@ -131,6 +131,14 @@ router.delete('/:id/share/:userId', [param('id').isInt(), param('userId').isInt(
             return res.status(404).json({ error: 'Share not found' });
         }
 
+        // Create tombstone so recipient's sync knows to delete the note
+        await query(
+            `INSERT INTO share_tombstones (note_id, user_id) 
+             VALUES ($1, $2) 
+             ON CONFLICT (note_id, user_id) DO UPDATE SET created_at = CURRENT_TIMESTAMP`,
+            [id, targetId]
+        );
+
         // Update note's updated_at for sync
         await query('UPDATE notes SET updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
 

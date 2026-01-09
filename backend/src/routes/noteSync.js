@@ -82,6 +82,7 @@ router.get('/', async (req, res, next) => {
                     n.is_pinned as is_pinned,       -- Owner uses note's is_pinned
                     n.is_archived as is_archived,   -- Owner uses note's is_archived
                     NULL::text as shared_note_key,
+                    (SELECT COUNT(*) > 0 FROM note_shares ns WHERE ns.note_id = n.id) as is_shared,
                     
                     ${subqueries.labels} as labels,
                     ${subqueries.items} as items,
@@ -105,6 +106,7 @@ router.get('/', async (req, res, next) => {
                     ns.is_pinned as is_pinned,      -- Shared user uses share's is_pinned
                     ns.is_archived as is_archived,  -- Shared user uses share's is_archived
                     nk.encrypted_key as shared_note_key,
+                    FALSE as is_shared,             -- Not relevant for recipient (they receive, not share)
                     
                     ${subqueries.labels} as labels,
                     ${subqueries.items} as items,
@@ -135,25 +137,24 @@ router.get('/', async (req, res, next) => {
         // Must check both owned notes AND shares that were removed
         let deleted = [];
         if (sinceDate) {
-            // 1. Trashed/Deleted owned notes (and confirmed deleted)
+            // 1. Trashed/Deleted owned notes
             const deletedOwned = await query(
                 `SELECT id FROM notes 
                  WHERE user_id = $1 AND deleted_at IS NOT NULL AND updated_at > $2`,
                 [userId, sinceDate]
             );
 
-            // 2. Removed shares (logic: if I previously had it but now don't, treat as deleted)
-            // This is harder in "delta" logic without a robust "tombstone" table for shares.
-            // For now, we rely on the client realizing a note is missing if they do a full sync, 
-            // OR we assume 'deleted' list includes soft-deleted items.
-            // A truly robust system needs a 'share_tombstones' table.
+            // 2. Removed shares (from tombstone table)
+            const unsharedNotes = await query(
+                `SELECT note_id FROM share_tombstones 
+                 WHERE user_id = $1 AND created_at > $2`,
+                [userId, sinceDate]
+            );
 
-            // Current compromise: Return IDs of notes that are explicitly trashed/deleted.
-            // Note: If a user is un-shared from a note, they won't see it in the list updates,
-            // but we don't strictly send a "delete" command for it yet. 
-            // (Client-side garbage collection for stale shares is a future task).
-
-            deleted = deletedOwned.rows.map(r => r.id);
+            deleted = [
+                ...deletedOwned.rows.map(r => r.id),
+                ...unsharedNotes.rows.map(r => r.note_id)
+            ];
         }
 
         res.json({
@@ -248,6 +249,40 @@ router.post('/batch', async (req, res, next) => {
                         break;
                     }
 
+                    // Check if user has access (owner OR shared)
+                    const accessCheck = await client.query(
+                        `SELECT n.id, n.user_id, n.version,
+                                (n.user_id = $2) as is_owner,
+                                EXISTS(SELECT 1 FROM note_shares ns WHERE ns.note_id = n.id AND ns.shared_with_id = $2) as is_shared
+                         FROM notes n 
+                         WHERE n.id = $1`,
+                        [id, userId]
+                    );
+
+                    if (accessCheck.rows.length === 0) {
+                        results.push({ success: false, op: 'update', id, error: 'Note not found' });
+                        break;
+                    }
+
+                    const noteAccess = accessCheck.rows[0];
+                    if (!noteAccess.is_owner && !noteAccess.is_shared) {
+                        results.push({ success: false, op: 'update', id, error: 'Access denied' });
+                        break;
+                    }
+
+                    // Version conflict check
+                    if (version !== undefined && noteAccess.version !== version) {
+                        results.push({
+                            success: false,
+                            op: 'update',
+                            id,
+                            error: 'Conflict',
+                            status: 409,
+                            serverVersion: noteAccess.version
+                        });
+                        break;
+                    }
+
                     const { title, content, color, is_pinned, is_archived, is_trashed, items, labels, label_ids, images } = data || {};
                     const updates = [];
                     const params = [];
@@ -256,53 +291,33 @@ router.post('/batch', async (req, res, next) => {
                     if (title !== undefined) { updates.push(`title = $${paramIndex++}`); params.push(title); }
                     if (content !== undefined) { updates.push(`content = $${paramIndex++}`); params.push(content); }
                     if (color !== undefined) { updates.push(`color = $${paramIndex++}`); params.push(color); }
-                    if (is_pinned !== undefined) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
-                    if (is_archived !== undefined) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
-                    if (is_trashed !== undefined) { updates.push(`is_trashed = $${paramIndex++}`); params.push(is_trashed); }
 
+                    // is_pinned and is_archived for shared notes should update note_shares, not the note itself
+                    // But for now, owner can change these on the note, shared users' changes would affect their share row
+                    if (noteAccess.is_owner) {
+                        if (is_pinned !== undefined) { updates.push(`is_pinned = $${paramIndex++}`); params.push(is_pinned); }
+                        if (is_archived !== undefined) { updates.push(`is_archived = $${paramIndex++}`); params.push(is_archived); }
+                        if (is_trashed !== undefined) { updates.push(`is_trashed = $${paramIndex++}`); params.push(is_trashed); }
+                    }
 
                     // Increment version explicitly
                     updates.push(`version = version + 1`);
                     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
                     // Save version history using current state (before this update)
-                    await saveNoteVersion(id, userId, client);
+                    await saveNoteVersion(id, noteAccess.user_id, client);
 
-
-                    params.push(id, userId);
-
-                    // If client provided a version, use it for OCC check
-                    let whereClause = `WHERE id = $${paramIndex++} AND user_id = $${paramIndex++}`;
-                    if (version !== undefined) {
-                        whereClause += ` AND version = $${paramIndex++}`;
-                        params.push(version);
-                    }
+                    params.push(id);
 
                     const result = await client.query(
                         `UPDATE notes SET ${updates.join(', ')} 
-                             ${whereClause}
-                             RETURNING *`,
+                         WHERE id = $${paramIndex++}
+                         RETURNING *`,
                         params
                     );
 
                     if (result.rows.length === 0) {
-                        // Check if it was a version conflict or just not found
-                        const exists = await client.query('SELECT version FROM notes WHERE id = $1 AND user_id = $2', [id, userId]);
-
-                        if (exists.rows.length > 0) {
-                            // Note exists but version didn't match -> Conflict!
-                            const currentVersion = exists.rows[0].version;
-                            results.push({
-                                success: false,
-                                op: 'update',
-                                id,
-                                error: 'Conflict',
-                                status: 409,
-                                serverVersion: currentVersion
-                            });
-                        } else {
-                            results.push({ success: false, op: 'update', id, error: 'Note not found' });
-                        }
+                        results.push({ success: false, op: 'update', id, error: 'Update failed' });
                     } else {
                         const updatedNote = result.rows[0];
 
