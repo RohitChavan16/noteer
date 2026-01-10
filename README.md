@@ -252,6 +252,12 @@ npm run lint:backend
 npm run lint:frontend
 ```
 
+**Frontend Tests:**
+```bash
+cd frontend
+npm test
+```
+
 ---
 
 ## 📄 License
