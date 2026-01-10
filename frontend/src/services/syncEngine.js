@@ -232,7 +232,8 @@ export async function pushChanges(authFetch) {
                         labels: [],
                         images: note.images || [],
                         encrypted: encryptedNote.encrypted,
-                        encrypted_note_key: encryptedNote.encrypted_note_key
+                        encrypted_note_key: encryptedNote.encrypted_note_key,
+                        created_at: note.created_at
                     }
                 });
             } else if (note.sync_status === SYNC_STATUS.DELETED) {

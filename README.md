@@ -219,11 +219,37 @@ npm install
 npm run dev
 ```
 
-### Testing
+## Testing
 
+**E2E Tests (Playwright):**
 ```bash
-# Run Playwright E2E tests
-npx playwright test
+# Run quick tests (Chromium only)
+npm test
+
+# Run full test suite (All browsers)
+npm run test:full
+
+# Run tests in debug mode
+npm run test:debug
+```
+
+**Backend Tests:**
+```bash
+cd backend
+npm test
+```
+
+
+**Linting:**
+```bash
+# Run all lint checks (Backend + Frontend)
+npm run lint
+
+# Run backend lint only
+npm run lint:backend
+
+# Run frontend lint only
+npm run lint:frontend
 ```
 
 ---

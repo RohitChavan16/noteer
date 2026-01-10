@@ -46,10 +46,13 @@ export function useNotes({ sortBy = 'created_at', sortOrder = 'desc', searchQuer
             pinnedNotes = allActiveNotes.filter(n => n.is_pinned);
             unpinnedNotes = allActiveNotes.filter(n => !n.is_pinned);
 
-            // Sort by updated_at descending
-            const sortByDate = (a, b) => (b.updated_at || '').localeCompare(a.updated_at || '');
-            pinnedNotes.sort(sortByDate);
-            unpinnedNotes.sort(sortByDate);
+            // Sort based on sortBy param
+            const sortFn = (a, b) => {
+                const field = sortBy === 'created_at' ? 'created_at' : 'updated_at';
+                return (b[field] || '').localeCompare(a[field] || '');
+            };
+            pinnedNotes.sort(sortFn);
+            unpinnedNotes.sort(sortFn);
 
             // Apply limit to unpinned
             unpinnedNotes = unpinnedNotes.slice(0, limit);

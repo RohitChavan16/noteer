@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, navigateTo, createNote, getNoteCard, uniqueId } from './helpers.js';
+import { registerAndSetupUser, navigateTo, createNote, getNoteCard, uniqueId } from './helpers.js';
 
 test.describe('Archive Note', () => {
 
@@ -7,8 +7,8 @@ test.describe('Archive Note', () => {
         const noteTitle = `Archive Test ${uniqueId()}`;
         const noteContent = 'Test content for archiving';
 
-        // 1. Login
-        await login(page);
+        // 1. Register new user
+        await registerAndSetupUser(page);
 
         // 2. Create note
         const noteCard = await createNote(page, noteTitle, noteContent);
@@ -24,8 +24,14 @@ test.describe('Archive Note', () => {
         // Wait for card to disappear from main view
         await expect(noteCard).not.toBeVisible({ timeout: 10000 });
 
+        // Wait for sync to complete before navigating
+        await page.waitForTimeout(1000);
+
         // 4. Navigate to Archive
         await navigateTo(page, isMobile, '/archive');
+
+        // Extra wait for archive page to load notes
+        await page.waitForTimeout(500);
 
         // 5. Verify note is in archive
         const archivedCard = getNoteCard(page, noteTitle);
@@ -45,8 +51,6 @@ test.describe('Archive Note', () => {
 
         const restoredCard = getNoteCard(page, noteTitle);
         await expect(restoredCard).toBeVisible({ timeout: 10000 });
-
-        // Test complete - archive/unarchive verified successfully
     });
 
 });

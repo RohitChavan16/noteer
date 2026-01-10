@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import {
-    login, navigateTo, createNote, getNoteCard, uniqueId
-} from './helpers.js';
+import { registerAndSetupUser, navigateTo, createNote, getNoteCard, uniqueId } from './helpers.js';
 
 test.describe('Delete Note', () => {
 
@@ -9,8 +7,8 @@ test.describe('Delete Note', () => {
         const noteTitle = `Del ${uniqueId()}`;
         const noteContent = 'Content';
 
-        // 1. Login
-        await login(page);
+        // 1. Register new user
+        await registerAndSetupUser(page);
 
         // 2. Create note
         const noteCard = await createNote(page, noteTitle, noteContent);

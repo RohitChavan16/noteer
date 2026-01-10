@@ -1,8 +1,5 @@
 import { test, expect } from '@playwright/test';
-import {
-    login, logout, navigateTo, createChecklist,
-    openNoteModal, closeNoteModal, getNoteCard, uniqueId
-} from './helpers.js';
+import { registerAndSetupUser, createChecklist, openNoteModal, closeNoteModal, uniqueId } from './helpers.js';
 
 test.describe('Checklist Move Item', () => {
 
@@ -10,8 +7,8 @@ test.describe('Checklist Move Item', () => {
         const checklistTitle = `DnD Checklist ${uniqueId()}`;
         const items = ['Item A', 'Item B', 'Item C', 'Item D', 'Item E'];
 
-        // 1. Login
-        await login(page);
+        // 1. Register new user
+        await registerAndSetupUser(page);
 
         // 2. Create checklist with 5 items
         const noteCard = await createChecklist(page, checklistTitle, items);
@@ -19,69 +16,41 @@ test.describe('Checklist Move Item', () => {
         // 3. Open checklist modal
         await openNoteModal(page, noteCard);
 
-        // Wait for modal to be fully visible
         const modal = page.locator('.mantine-Modal-content');
         await expect(modal).toBeVisible();
 
-        // Wait for items to be loaded and visible
         const itemHandles = modal.locator('[data-testid="checklist-item"]');
         await expect(itemHandles.first()).toBeVisible({ timeout: 10000 });
 
-        // Use data-testid selector for @dnd-kit
         const initialCount = await itemHandles.count();
-
-        // Debug DOM structure
-        // if (initialCount > 0) {
-        //     const innerHTML = await itemHandles.first().innerHTML();
-        // }
-
         expect(initialCount).toBe(5);
 
         // 4. Drag Item E (last, index 4) to position 2 (index 1)
-        // Expected order after: A, E, B, C, D
         const itemE = itemHandles.nth(4);
         const itemB = itemHandles.nth(1);
 
-        // Get the drag handle for item E
         const dragHandleE = itemE.locator('[data-testid="drag-handle"]');
 
-        // Get bounding boxes for drag operation
         const sourceBox = await dragHandleE.boundingBox();
         const targetBox = await itemB.boundingBox();
 
         if (sourceBox && targetBox) {
-            // Move to center of source element
             await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
             await page.mouse.down();
 
-            // Critical for dnd-kit with distance constraint:
-            // We need to move enough to trigger activation (8px constraint)
-            // But doing it too fast might be missed by some sensors on mobile emulation
             await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2 + 15, { steps: 10 });
+            await page.waitForTimeout(400);
 
-            await page.waitForTimeout(400); // Wait for sensor activation state to settle
-
-            // Perform the main drag
             await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 60 });
             await page.mouse.up();
         } else {
             console.error('Skipping drag - boxes not found');
         }
 
-        await page.waitForTimeout(1000); // Wait for animation
+        await page.waitForTimeout(1000);
 
         // Verify order: A, E, B, C, D
         const itemsAfterFirstMove = modal.locator('[data-testid="item-content"]');
-
-        // Debug
-        const contentCount = await itemsAfterFirstMove.count();
-        const genericInputCount = await modal.locator('[data-testid="checklist-item"] input').count();
-
-        // Debug actual order
-        const actualValues = [];
-        for (let i = 0; i < contentCount; i++) {
-            actualValues.push(await itemsAfterFirstMove.nth(i).inputValue());
-        }
 
         await expect(itemsAfterFirstMove.nth(0)).toHaveValue('Item A');
         await expect(itemsAfterFirstMove.nth(1)).toHaveValue('Item E');
@@ -90,7 +59,6 @@ test.describe('Checklist Move Item', () => {
         await expect(itemsAfterFirstMove.nth(4)).toHaveValue('Item D');
 
         // 5. Drag Item E from position 2 (index 1) to position 1 (index 0)
-        // Expected order after: E, A, B, C, D
         const newItemHandles = modal.locator('[data-testid="checklist-item"]');
         const itemENew = newItemHandles.nth(1);
         const itemANew = newItemHandles.nth(0);
@@ -104,7 +72,6 @@ test.describe('Checklist Move Item', () => {
             await page.mouse.move(sourceBox2.x + sourceBox2.width / 2, sourceBox2.y + sourceBox2.height / 2);
             await page.mouse.down();
 
-            // Initial move to trigger activation
             await page.mouse.move(sourceBox2.x + sourceBox2.width / 2, sourceBox2.y + sourceBox2.height / 2 + 15, { steps: 10 });
             await page.waitForTimeout(400);
 
@@ -122,9 +89,6 @@ test.describe('Checklist Move Item', () => {
         await expect(itemsAfterSecondMove.nth(3)).toHaveValue('Item C');
         await expect(itemsAfterSecondMove.nth(4)).toHaveValue('Item D');
 
-        // Close modal
         await closeNoteModal(page);
-
-        // Test complete - DnD verified successfully
     });
 });

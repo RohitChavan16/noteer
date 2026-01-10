@@ -187,12 +187,12 @@ router.post('/batch', async (req, res, next) => {
         for (const op of operations) {
             switch (op.op) {
                 case 'create': {
-                    const { title, content, type, color, is_pinned, items, labels, label_ids, images, encrypted, encrypted_note_key } = op.data || {};
+                    const { title, content, type, color, is_pinned, items, labels, label_ids, images, encrypted, encrypted_note_key, created_at } = op.data || {};
                     const result = await client.query(
-                        `INSERT INTO notes (user_id, title, content, type, color, is_pinned, encrypted, encrypted_note_key)
-                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        `INSERT INTO notes (user_id, title, content, type, color, is_pinned, encrypted, encrypted_note_key, created_at)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, CURRENT_TIMESTAMP))
                              RETURNING *`,
-                        [userId, title || '', content || '', type || 'note', color || 'default', is_pinned || false, encrypted || false, encrypted_note_key || null]
+                        [userId, title || '', content || '', type || 'note', color || 'default', is_pinned || false, encrypted || false, encrypted_note_key || null, created_at || null]
                     );
                     const note = result.rows[0];
 

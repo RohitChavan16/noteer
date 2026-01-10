@@ -1,8 +1,5 @@
 import { test, expect } from '@playwright/test';
-import {
-    login, navigateTo, createChecklist, getNoteCard, uniqueId
-} from './helpers.js';
-
+import { registerAndSetupUser, navigateTo, createChecklist, getNoteCard, uniqueId } from './helpers.js';
 
 test.describe('Archive Checklist', () => {
 
@@ -10,8 +7,8 @@ test.describe('Archive Checklist', () => {
         const checklistTitle = `Archive Checklist ${uniqueId()}`;
         const items = ['Item 1', 'Item 2', 'Item 3'];
 
-        // 1. Login
-        await login(page);
+        // 1. Register new user
+        await registerAndSetupUser(page);
 
         // 2. Create checklist
         const noteCard = await createChecklist(page, checklistTitle, items);
@@ -44,8 +41,6 @@ test.describe('Archive Checklist', () => {
 
         const restoredCard = getNoteCard(page, checklistTitle);
         await expect(restoredCard).toBeVisible({ timeout: 10000 });
-
-        // Test complete - archive/unarchive verified successfully
     });
 
 });

@@ -92,6 +92,7 @@ test.describe('Encryption Setup', () => {
         // 3. Copy the mnemonic (click copy button and get from clipboard simulation)
         // We'll extract it from the page instead
         const wordGroups = page.locator('.mantine-SimpleGrid-root .mantine-Group-root');
+        await expect(wordGroups).toHaveCount(24, { timeout: 10000 });
         const count = await wordGroups.count();
         const words = [];
         for (let i = 0; i < count; i++) {
@@ -109,6 +110,12 @@ test.describe('Encryption Setup', () => {
         await expect(page.locator('text=Take a note...')).toBeVisible({ timeout: 10000 });
 
         // 5. Logout
+        // Handle mobile navigation: open menu if burger is visible
+        const burger = page.locator('.mantine-Burger-root');
+        if (await burger.isVisible()) {
+            await burger.click();
+        }
+
         const logoutBtn = page.locator('[title="Logout"]');
         await expect(logoutBtn).toBeVisible({ timeout: 5000 });
         await logoutBtn.click();
@@ -127,7 +134,9 @@ test.describe('Encryption Setup', () => {
         await firstInput.fill(savedMnemonic);
 
         // 9. Click unlock
-        await page.getByRole('button', { name: 'Unlock' }).click();
+        // Dismiss autocomplete dropdown
+        await page.keyboard.press('Escape');
+        await page.getByRole('button', { name: 'Unlock' }).click({ force: true });
 
         // 10. Should see dashboard
         await expect(page.locator('text=Take a note...')).toBeVisible({ timeout: 30000 });
@@ -168,20 +177,13 @@ test.describe('Encryption Setup', () => {
 
         // 3. Verify note is visible and decrypted
         await expect(page.locator('text=Secret Title')).toBeVisible();
-        await expect(page.locator('text=Secret Content')).toBeVisible();
+        await expect(page.locator('text=Secret Content').first()).toBeVisible();
 
         // 4. Reload page
-        await page.reload();
+        await page.goto(page.url());
 
         // 5. Verify still unlocked (no modal) and content still visible
         await expect(page.getByRole('heading', { name: 'Unlock Notes' })).not.toBeVisible({ timeout: 5000 });
         await expect(page.locator('text=Secret Title')).toBeVisible({ timeout: 10000 });
-
-        // 6. Logout
-        const logoutBtn = page.locator('[title="Logout"]');
-        await logoutBtn.click();
-
-        // 7. Check keys cleared on logout
-        // (Implicit check: login again requiring unlock, covered by previous test)
     });
 });

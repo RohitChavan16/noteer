@@ -1,8 +1,5 @@
 import { test, expect } from '@playwright/test';
-import {
-    login, logout, navigateTo, createChecklist,
-    openNoteModal, getNoteCard, uniqueId
-} from './helpers.js';
+import { registerAndSetupUser, navigateTo, createChecklist, getNoteCard, uniqueId } from './helpers.js';
 
 test.describe('Delete Checklist', () => {
 
@@ -10,14 +7,13 @@ test.describe('Delete Checklist', () => {
         const checklistTitle = `Delete Checklist ${uniqueId()}`;
         const items = ['Delete Item 1', 'Delete Item 2'];
 
-        // 1. Login
-        await login(page);
+        // 1. Register new user
+        await registerAndSetupUser(page);
 
         // 2. Create checklist
         const noteCard = await createChecklist(page, checklistTitle, items);
 
         // 3. Delete using overview button (in 3-dots menu)
-        // On mobile, hover is not needed/possible
         if (!isMobile) {
             await noteCard.hover();
         }
@@ -47,7 +43,5 @@ test.describe('Delete Checklist', () => {
         await navigateTo(page, isMobile, '/');
         const restoredCard = getNoteCard(page, checklistTitle);
         await expect(restoredCard).toBeVisible({ timeout: 10000 });
-
-        // Test complete - delete/restore flow verified
     });
 });
