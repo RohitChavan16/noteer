@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { pullChanges, pushChanges } from './syncEngine';
 import { db, workerDb, SYNC_STATUS } from '../db/db';
 import { useEncryptionStore } from '../stores/encryptionStore';
