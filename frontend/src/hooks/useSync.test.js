@@ -6,8 +6,8 @@ import { useAuthStore } from '../stores/authStore';
 import * as syncEngine from '../services/syncEngine';
 import * as labelSync from '../services/labelSyncService';
 import * as imageSync from '../services/imageSyncService';
+
 import * as offlineQueue from '../services/offlineQueueService';
-import { db, SYNC_STATUS } from '../db/db';
 
 // Mocks
 vi.mock('../services/syncEngine');

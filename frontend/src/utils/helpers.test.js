@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { formatDate, getInitials, generateId } from './helpers';
 
 describe('Frontend Helpers', () => {
@@ -72,7 +72,7 @@ describe('Frontend Helpers', () => {
 
         it('should fallback if crypto is undefined', () => {
             // Backup original crypto
-            const originalCrypto = global.crypto;
+            const originalCrypto = globalThis.crypto;
             vi.stubGlobal('crypto', undefined);
 
             const id = generateId();
