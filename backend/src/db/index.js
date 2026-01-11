@@ -19,6 +19,11 @@ import { logger } from '../utils/logger.js';
 const { Pool } = pg;
 
 let pool;
+let mockQueryHandler = null;
+
+export function setMockQueryHandler(handler) {
+  mockQueryHandler = handler;
+}
 
 export function getPool() {
   if (!pool) {
@@ -30,6 +35,9 @@ export function getPool() {
 }
 
 export async function query(text, params) {
+  if (mockQueryHandler) {
+    return mockQueryHandler(text, params);
+  }
   const client = await getPool().connect();
   try {
     return await client.query(text, params);
